@@ -29,10 +29,6 @@ impl Viewport {
             x: (p.x - self.x) / self.zoom,
             y: (p.y - self.y) / self.zoom,
         }
-        // egui::Pos2 {
-        //     x: p.x * self.zoom - self.x,
-        //     y: p.y * self.zoom - self.y,
-        // }
     }
     pub fn translate_rect(&self, r: egui::Rect) -> egui::Rect {
         egui::Rect {
@@ -84,9 +80,81 @@ impl<F: DrawingFeature> Default for Data<F> {
     }
 }
 
+impl<F: DrawingFeature> Data<F> {
+    pub fn find_point_at(&self, p: egui::Pos2) -> Option<slotmap::DefaultKey> {
+        for (k, v) in self.features.iter() {
+            if v.bb(self).center().distance_sq(p) < 1. {
+                return Some(k);
+            }
+        }
+        None
+    }
+
+    pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(slotmap::DefaultKey, F)> {
+        let mut closest: Option<(slotmap::DefaultKey, f32)> = None;
+        for (k, v) in self.features.iter() {
+            let dist = v.screen_dist(self, hp, &self.vp);
+
+            if dist < MAX_HOVER_DISTANCE {
+                closest = Some(
+                    closest
+                        .map(|c| if c.1 > dist { (k, dist) } else { c })
+                        .unwrap_or((k, dist)),
+                );
+            }
+        }
+
+        match closest {
+            Some((k, _dist)) => Some((k, self.features.get(k).unwrap().clone())),
+            None => None,
+        }
+    }
+
+    pub fn delete_feature(&mut self, k: slotmap::DefaultKey) -> bool {
+        match self.features.remove(k) {
+            Some(v) => {
+                // Find and also remove any features dependent on what we just removed.
+                let to_delete: std::collections::HashSet<slotmap::DefaultKey> = self
+                    .features
+                    .iter()
+                    .map(|(k2, v2)| {
+                        let dependent_deleted = v2
+                            .depends_on()
+                            .into_iter()
+                            .filter_map(|d| d.map(|d| d == k))
+                            .reduce(|p, f| p || f);
+
+                        match dependent_deleted {
+                            Some(true) => Some(k2),
+                            _ => None,
+                        }
+                    })
+                    .filter_map(|d| d)
+                    .collect();
+
+                for k in to_delete {
+                    self.delete_feature(k);
+                }
+
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn delete_selection(&mut self) {
+        let elements: Vec<_> = self.selected_map.drain().map(|(k, _)| k).collect();
+        for k in elements {
+            self.delete_feature(k);
+        }
+    }
+}
+
+/// Colors describes the colors with which different elements should be styled.
 #[derive(Clone, Debug, Default)]
 pub struct Colors {
     point: egui::Color32,
+    line: egui::Color32,
     selected: egui::Color32,
     hover: egui::Color32,
     text: egui::Color32,
@@ -105,9 +173,17 @@ pub struct PaintParams {
 
 /// DrawingFeature describes elements which can make up a drawing.
 pub trait DrawingFeature: std::fmt::Debug + Clone + Sized {
-    fn bb(&self) -> egui::Rect;
-    fn screen_dist(&self, hp: egui::Pos2, vp: &Viewport) -> f32;
-    fn paint(&self, k: slotmap::DefaultKey, params: &PaintParams, painter: &egui::Painter);
+    fn is_point(&self) -> bool;
+    fn depends_on(&self) -> [Option<slotmap::DefaultKey>; 2];
+    fn bb(&self, drawing: &Data<Self>) -> egui::Rect;
+    fn screen_dist(&self, drawing: &Data<Self>, hp: egui::Pos2, vp: &Viewport) -> f32;
+    fn paint(
+        &self,
+        drawing: &Data<Self>,
+        k: slotmap::DefaultKey,
+        params: &PaintParams,
+        painter: &egui::Painter,
+    );
 }
 
 /// ToolController implements tools which can be used to manipulate the drawing.
@@ -221,7 +297,7 @@ where
                             self.drawing.selected_map.clear();
                         }
                         for (k, v) in self.drawing.features.iter() {
-                            if s.contains_rect(v.bb())
+                            if s.contains_rect(v.bb(self.drawing))
                                 && !self.drawing.selected_map.contains_key(&k)
                             {
                                 let next_idx = if !shift_held {
@@ -293,9 +369,7 @@ where
             && self.drawing.selected_map.len() > 0
             && ui.input(|i| i.key_pressed(egui::Key::Delete))
         {
-            for (k, _) in self.drawing.selected_map.drain() {
-                self.drawing.features.remove(k);
-            }
+            self.drawing.delete_selection();
         }
 
         current_drag
@@ -310,20 +384,26 @@ where
         current_drag: Option<egui::Rect>,
         base_params: &PaintParams,
     ) {
-        for (k, v) in self.drawing.features.iter() {
-            let hovered = hf.as_ref().map(|(hk, _dist)| hk == &k).unwrap_or(false)
-                || current_drag
-                    .as_ref()
-                    .map(|dr| dr.contains_rect(v.bb()))
-                    .unwrap_or(false);
-            let selected = self.drawing.selected_map.get(&k).is_some();
+        for point_pass in [true, false] {
+            for (k, v) in self.drawing.features.iter() {
+                if point_pass != v.is_point() {
+                    continue;
+                }
 
-            let pp = PaintParams {
-                hovered,
-                selected,
-                ..base_params.clone()
-            };
-            v.paint(k, &pp, painter);
+                let hovered = hf.as_ref().map(|(hk, _dist)| hk == &k).unwrap_or(false)
+                    || current_drag
+                        .as_ref()
+                        .map(|dr| dr.contains_rect(v.bb(self.drawing)))
+                        .unwrap_or(false);
+                let selected = self.drawing.selected_map.get(&k).is_some();
+
+                let pp = PaintParams {
+                    hovered,
+                    selected,
+                    ..base_params.clone()
+                };
+                v.paint(self.drawing, k, &pp, painter);
+            }
         }
 
         if let Some(current_drag) = current_drag {
@@ -387,30 +467,6 @@ where
         ));
     }
 
-    fn find_hover_feature(&mut self, hp: Option<egui::Pos2>) -> Option<(slotmap::DefaultKey, F)> {
-        if let Some(hp) = hp {
-            let mut closest: Option<(slotmap::DefaultKey, f32)> = None;
-            for (k, v) in self.drawing.features.iter() {
-                let dist = v.screen_dist(hp, &self.drawing.vp);
-
-                if dist < MAX_HOVER_DISTANCE {
-                    closest = Some(
-                        closest
-                            .map(|c| if c.1 > dist { (k, dist) } else { c })
-                            .unwrap_or((k, dist)),
-                    );
-                }
-            }
-
-            match closest {
-                Some((k, _dist)) => Some((k, self.drawing.features.get(k).unwrap().clone())),
-                None => None,
-            }
-        } else {
-            None
-        }
-    }
-
     pub fn show(mut self, ui: &mut egui::Ui) -> DrawResponse {
         use egui::Sense;
         let (rect, response) = ui.allocate_exact_size(
@@ -432,7 +488,9 @@ where
 
         // Find hover feature, if any
         let hp = response.hover_pos();
-        let hf = self.find_hover_feature(hp);
+        let hf = hp
+            .map(|hp| self.drawing.find_screen_feature(hp))
+            .unwrap_or(None);
 
         // Handle input
         let current_drag = if let Some(c) = self.tools.handle_input(ui, hp, &hf, &response) {
@@ -447,6 +505,7 @@ where
             vp: self.drawing.vp.clone(),
             colors: Colors {
                 point: egui::Color32::GREEN,
+                line: egui::Color32::LIGHT_GRAY,
                 selected: egui::Color32::RED,
                 hover: egui::Color32::YELLOW,
                 text: ui.visuals().text_color(),

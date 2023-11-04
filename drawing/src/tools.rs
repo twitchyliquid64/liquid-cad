@@ -72,20 +72,20 @@ fn line_tool_icon(b: egui::Rect, painter: &egui::Painter) {
 enum Tool {
     #[default]
     Point,
-    Line,
+    Line(Option<egui::Pos2>),
 }
 
 impl Tool {
     pub fn same_tool(&self, other: &Self) -> bool {
         match (self, other) {
             (Tool::Point, Tool::Point) => true,
-            (Tool::Line, Tool::Line) => true,
+            (Tool::Line(_), Tool::Line(_)) => true,
             _ => false,
         }
     }
 
     pub fn all<'a>() -> &'a [Tool] {
-        &[Tool::Point, Tool::Line]
+        &[Tool::Point, Tool::Line(None)]
     }
 
     pub fn toolbar_size() -> egui::Pos2 {
@@ -118,20 +118,69 @@ impl Tool {
                 ) {
                     (None, true, _) => Some(ToolResponse::NewPoint(hp)),
                     (Some(_), true, _) => None,
-                    (_, _, true) => Some(ToolResponse::Handled),
+                    (_, _, true) => Some(ToolResponse::Handled), // catch drag events
 
                     (_, false, false) => None,
                 }
             }
 
-            _ => None,
+            Tool::Line(p1) => {
+                let c = match (hf, &p1, response.clicked()) {
+                    // No first point, clicked on a point
+                    (Some((_, crate::Feature::Point(x, y))), None, true) => {
+                        *p1 = Some(egui::Pos2 { x: *x, y: *y });
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first point, clicked on a point
+                    (Some((_, crate::Feature::Point(x2, y2))), Some(starting_point), true) => {
+                        let starting_point = starting_point.clone();
+                        *p1 = None;
+                        Some(ToolResponse::NewLineSegment(
+                            starting_point,
+                            egui::Pos2 { x: *x2, y: *y2 },
+                        ))
+                    }
+                    (None, Some(_), true) => {
+                        *p1 = None;
+                        Some(ToolResponse::Handled)
+                    }
+
+                    _ => None,
+                };
+                if c.is_some() {
+                    return c;
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+
+                None
+            }
+        }
+    }
+
+    pub fn draw_active(&self, painter: &egui::Painter, hp: egui::Pos2, params: &PaintParams) {
+        match self {
+            Tool::Line(Some(start)) => painter.line_segment(
+                [params.vp.translate_point(*start), hp],
+                egui::Stroke {
+                    width: TOOL_ICON_STROKE,
+                    color: egui::Color32::WHITE,
+                },
+            ),
+
+            _ => {}
         }
     }
 
     fn icon_painter(&self) -> impl FnOnce(egui::Rect, &egui::Painter) {
         match self {
             Tool::Point => point_tool_icon,
-            Tool::Line => line_tool_icon,
+            Tool::Line(_) => line_tool_icon,
         }
     }
 
@@ -184,6 +233,7 @@ impl Tool {
 pub enum ToolResponse {
     Handled,
     NewPoint(egui::Pos2),
+    NewLineSegment(egui::Pos2, egui::Pos2),
 }
 
 #[derive(Debug, Default)]
@@ -261,6 +311,10 @@ impl super::ToolController for Toolbar {
                 .map(|t| t.same_tool(tool))
                 .unwrap_or(false);
             tool.paint_icon(painter, hp, params, active, i);
+        }
+
+        if let (Some(hp), Some(tool)) = (hp, self.current.as_ref()) {
+            tool.draw_active(painter, hp, params);
         }
     }
 }
