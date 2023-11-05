@@ -93,25 +93,21 @@ impl<F: DrawingFeature> Data<F> {
     pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(slotmap::DefaultKey, F)> {
         let mut closest: Option<(slotmap::DefaultKey, f32, bool)> = None;
         for (k, v) in self.features.iter() {
-            let dist = v.screen_dist(self, hp, &self.vp);
             let is_point = v.is_point();
+
+            // Points get a head-start in terms of being considered closer, so
+            // they are chosen over a line segment when hovering near the end of
+            // a line segment.
+            let dist = if is_point {
+                v.screen_dist(self, hp, &self.vp) - (MAX_HOVER_DISTANCE / 2.)
+            } else {
+                v.screen_dist(self, hp, &self.vp)
+            };
 
             if dist < MAX_HOVER_DISTANCE {
                 closest = Some(
                     closest
-                        .map(|c| {
-                            // Distance to a line segment and one of its defining points will
-                            // read equal. If that happens, prefer the point.
-                            if is_point && !c.2 && dist - (MAX_HOVER_DISTANCE / 2.) < c.1 {
-                                (k, dist, is_point)
-                            } else if !is_point && c.2 && dist < c.1 - (MAX_HOVER_DISTANCE / 2.) {
-                                (k, dist, is_point)
-                            } else if dist < c.1 {
-                                (k, dist, is_point)
-                            } else {
-                                c
-                            }
-                        })
+                        .map(|c| if dist < c.1 { (k, dist, is_point) } else { c })
                         .unwrap_or((k, dist, is_point)),
                 );
             }
