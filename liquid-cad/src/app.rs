@@ -17,10 +17,20 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         let mut drawing = drawing::Data::default();
-        drawing.features.insert(drawing::Feature::Point(-88., -88.));
-        drawing.features.insert(drawing::Feature::Point(188., -88.));
-        drawing.features.insert(drawing::Feature::Point(188., 188.));
-        drawing.features.insert(drawing::Feature::Point(-88., 188.));
+        // drawing.features.insert(drawing::Feature::Point(-88., -88.));
+        // drawing.features.insert(drawing::Feature::Point(188., -88.));
+        // drawing.features.insert(drawing::Feature::Point(188., 188.));
+        // drawing.features.insert(drawing::Feature::Point(-88., 188.));
+
+        let p1 = drawing.features.insert(drawing::Feature::Point(-88., 0.));
+        let p2 = drawing.features.insert(drawing::Feature::Point(0., 0.));
+        let p3 = drawing.features.insert(drawing::Feature::Point(88., 0.));
+        drawing
+            .features
+            .insert(drawing::Feature::LineSegment(p1, p2));
+        drawing
+            .features
+            .insert(drawing::Feature::LineSegment(p2, p3));
 
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();

@@ -378,6 +378,22 @@ where
             self.drawing.selected_map.clear();
         }
 
+        // Handle: Ctrl-A selects all
+        if hp.is_some() && ui.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
+            for k in self.drawing.features.keys() {
+                if !self.drawing.selected_map.contains_key(&k) {
+                    let next_idx = self
+                        .drawing
+                        .selected_map
+                        .values()
+                        .fold(0, |acc, x| acc.max(*x))
+                        + 1;
+
+                    self.drawing.selected_map.insert(k, next_idx);
+                }
+            }
+        }
+
         // Handle: delete selection
         if hp.is_some()
             && self.drawing.selected_map.len() > 0

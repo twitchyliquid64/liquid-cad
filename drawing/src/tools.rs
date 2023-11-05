@@ -1,6 +1,6 @@
 use super::PaintParams;
 
-const TOOL_ICON_SIZE: egui::Vec2 = egui::Vec2 { x: 25.0, y: 25.0 };
+const TOOL_ICON_SIZE: egui::Vec2 = egui::Vec2 { x: 32.0, y: 32.0 };
 const TOOL_ICON_STROKE: f32 = 1.;
 
 fn tool_icon_offsets(idx: usize) -> (f32, f32) {
