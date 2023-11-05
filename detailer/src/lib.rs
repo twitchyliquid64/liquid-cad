@@ -128,7 +128,10 @@ impl<'a> Widget<'a> {
                 egui::Label::new(format!("Line {:?}", k.data().as_ffi())).wrap(false),
             );
 
-            ui.allocate_exact_size([r.x / 3. + ui.spacing().item_spacing.x, text_height * 1.4].into(), egui::Sense::click());
+            ui.allocate_exact_size(
+                [r.x / 3. + ui.spacing().item_spacing.x, text_height * 1.4].into(),
+                egui::Sense::click(),
+            );
 
             if ui.button("⊗").clicked() {
                 commands.push(ToolResponse::Delete(*k));

@@ -351,18 +351,23 @@ where
 
             // feature clicked: add-to or replace selection
             if let Some((k, _)) = hf {
-                let next_idx = if !shift_held {
-                    self.drawing.selected_map.clear();
-                    0
+                // Allow deselect when holding shift
+                if shift_held && self.drawing.selected_map.contains_key(k) {
+                    self.drawing.selected_map.remove(k);
                 } else {
-                    self.drawing
-                        .selected_map
-                        .values()
-                        .fold(0, |acc, x| acc.max(*x))
-                        + 1
-                };
+                    let next_idx = if !shift_held {
+                        self.drawing.selected_map.clear();
+                        0
+                    } else {
+                        self.drawing
+                            .selected_map
+                            .values()
+                            .fold(0, |acc, x| acc.max(*x))
+                            + 1
+                    };
 
-                self.drawing.selected_map.insert(k.clone(), next_idx);
+                    self.drawing.selected_map.insert(k.clone(), next_idx);
+                }
             } else if !shift_held {
                 // empty space clicked, clear selection.
                 self.drawing.selected_map.clear();
