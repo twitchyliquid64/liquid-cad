@@ -120,6 +120,8 @@ impl<F: DrawingFeature> Data<F> {
     }
 
     pub fn delete_feature(&mut self, k: slotmap::DefaultKey) -> bool {
+        self.selected_map.remove(&k);
+
         match self.features.remove(k) {
             Some(_v) => {
                 // Find and also remove any features dependent on what we just removed.
@@ -151,11 +153,42 @@ impl<F: DrawingFeature> Data<F> {
         }
     }
 
-    pub fn delete_selection(&mut self) {
+    pub fn selection_delete(&mut self) {
         let elements: Vec<_> = self.selected_map.drain().map(|(k, _)| k).collect();
         for k in elements {
             self.delete_feature(k);
         }
+    }
+
+    pub fn select_feature(&mut self, feature: &slotmap::DefaultKey, select: bool) {
+        let currently_selected = self.selected_map.contains_key(feature);
+        if currently_selected && !select {
+            self.selected_map.remove(feature);
+        } else if !currently_selected && select {
+            let next_idx = self.selected_map.values().fold(0, |acc, x| acc.max(*x)) + 1;
+            self.selected_map.insert(feature.clone(), next_idx);
+        }
+    }
+
+    pub fn select_features_in_rect(&mut self, rect: egui::Rect, select: bool) {
+        let keys: Vec<_> = self
+            .features
+            .iter()
+            .filter(|(_, v)| rect.contains_rect(v.bb(self)))
+            .map(|(k, _)| k)
+            .collect();
+
+        for k in keys.into_iter() {
+            self.select_feature(&k, select);
+        }
+    }
+
+    pub fn selection_clear(&mut self) {
+        self.selected_map.clear();
+    }
+
+    pub fn feature_selected(&self, feature: &slotmap::DefaultKey) -> bool {
+        self.selected_map.get(feature).is_some()
     }
 }
 
@@ -303,25 +336,9 @@ where
                     if s.area() > 200. {
                         let shift_held = ui.input(|i| i.modifiers.shift);
                         if !shift_held {
-                            self.drawing.selected_map.clear();
+                            self.drawing.selection_clear();
                         }
-                        for (k, v) in self.drawing.features.iter() {
-                            if s.contains_rect(v.bb(self.drawing))
-                                && !self.drawing.selected_map.contains_key(&k)
-                            {
-                                let next_idx = if !shift_held {
-                                    0
-                                } else {
-                                    self.drawing
-                                        .selected_map
-                                        .values()
-                                        .fold(0, |acc, x| acc.max(*x))
-                                        + 1
-                                };
-
-                                self.drawing.selected_map.insert(k, next_idx);
-                            }
-                        }
+                        self.drawing.select_features_in_rect(s, true);
                     }
                     ui.memory_mut(|mem| mem.data.remove::<egui::Pos2>(state_id));
                     None
@@ -347,26 +364,14 @@ where
 
             // feature clicked: add-to or replace selection
             if let Some((k, _)) = hf {
-                // Allow deselect when holding shift
-                if shift_held && self.drawing.selected_map.contains_key(k) {
-                    self.drawing.selected_map.remove(k);
-                } else {
-                    let next_idx = if !shift_held {
-                        self.drawing.selected_map.clear();
-                        0
-                    } else {
-                        self.drawing
-                            .selected_map
-                            .values()
-                            .fold(0, |acc, x| acc.max(*x))
-                            + 1
-                    };
-
-                    self.drawing.selected_map.insert(k.clone(), next_idx);
+                if !shift_held {
+                    self.drawing.selection_clear();
                 }
+                self.drawing
+                    .select_feature(k, !self.drawing.feature_selected(k));
             } else if !shift_held {
                 // empty space clicked, clear selection.
-                self.drawing.selected_map.clear();
+                self.drawing.selection_clear();
             }
         }
 
@@ -375,7 +380,7 @@ where
             && self.drawing.selected_map.len() > 0
             && ui.input(|i| i.key_pressed(egui::Key::Escape))
         {
-            self.drawing.selected_map.clear();
+            self.drawing.selection_clear();
         }
 
         // Handle: Ctrl-A selects all
@@ -399,7 +404,7 @@ where
             && self.drawing.selected_map.len() > 0
             && ui.input(|i| i.key_pressed(egui::Key::Delete))
         {
-            self.drawing.delete_selection();
+            self.drawing.selection_delete();
         }
 
         current_drag
