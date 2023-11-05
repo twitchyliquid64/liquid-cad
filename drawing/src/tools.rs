@@ -134,7 +134,7 @@ impl Tool {
                     // Has first point, clicked on a point
                     (Some((_, crate::Feature::Point(x2, y2))), Some(starting_point), true) => {
                         let starting_point = starting_point.clone();
-                        *p1 = None;
+                        *p1 = Some(egui::Pos2 { x: *x2, y: *y2 });
                         Some(ToolResponse::NewLineSegment(
                             starting_point,
                             egui::Pos2 { x: *x2, y: *y2 },
@@ -252,9 +252,26 @@ impl super::ToolController for Toolbar {
         hf: &Option<(slotmap::DefaultKey, Self::Features)>,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
+        // Escape to exit use of a tool
         if self.current.is_some() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.current = None;
             return Some(ToolResponse::Handled);
+        }
+
+        // Hotkeys for switching tools
+        if hp.is_some() && !response.dragged() {
+            let (l, p) = ui.input(|i| (i.key_pressed(egui::Key::L), i.key_pressed(egui::Key::P)));
+            match (l, p) {
+                (true, _) => {
+                    self.current = Some(Tool::Line(None));
+                    return Some(ToolResponse::Handled);
+                }
+                (_, true) => {
+                    self.current = Some(Tool::Point);
+                    return Some(ToolResponse::Handled);
+                }
+                _ => {}
+            }
         }
 
         if let (Some(hp), true) = (
@@ -278,7 +295,6 @@ impl super::ToolController for Toolbar {
                 return current.handle_input(ui, hp, hf, response);
             }
         }
-
         None
     }
 

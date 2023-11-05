@@ -10,7 +10,16 @@ impl super::CommandHandler<Feature, ToolResponse> for Handler {
             ToolResponse::Handled => {}
             ToolResponse::NewPoint(pos) => {
                 let pos = drawing.vp.screen_to_point(pos);
-                drawing.features.insert(Feature::Point(pos.x, pos.y));
+                let p = Feature::Point(pos.x, pos.y);
+
+                // Make sure it doesnt already exist
+                for v in drawing.features.values() {
+                    if v == &p {
+                        return;
+                    }
+                }
+
+                drawing.features.insert(p);
             }
 
             ToolResponse::NewLineSegment(p1, p2) => {
@@ -19,6 +28,13 @@ impl super::CommandHandler<Feature, ToolResponse> for Handler {
                     drawing.find_point_at(p1).unwrap(),
                     drawing.find_point_at(p2).unwrap(),
                 );
+
+                // Make sure it doesnt already exist
+                for v in drawing.features.values() {
+                    if v == &Feature::LineSegment(f1, f2) || v == &Feature::LineSegment(f2, f1) {
+                        return;
+                    }
+                }
 
                 drawing.features.insert(Feature::LineSegment(f1, f2));
             }

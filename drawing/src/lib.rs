@@ -8,7 +8,7 @@ mod handler;
 pub use handler::Handler;
 pub mod tools;
 
-const MAX_HOVER_DISTANCE: f32 = 90.0;
+const MAX_HOVER_DISTANCE: f32 = 160.0;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Viewport {
@@ -83,7 +83,7 @@ impl<F: DrawingFeature> Default for Data<F> {
 impl<F: DrawingFeature> Data<F> {
     pub fn find_point_at(&self, p: egui::Pos2) -> Option<slotmap::DefaultKey> {
         for (k, v) in self.features.iter() {
-            if v.bb(self).center().distance_sq(p) < 1. {
+            if v.bb(self).center().distance_sq(p) < 0.0001 {
                 return Some(k);
             }
         }
@@ -91,28 +91,41 @@ impl<F: DrawingFeature> Data<F> {
     }
 
     pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(slotmap::DefaultKey, F)> {
-        let mut closest: Option<(slotmap::DefaultKey, f32)> = None;
+        let mut closest: Option<(slotmap::DefaultKey, f32, bool)> = None;
         for (k, v) in self.features.iter() {
             let dist = v.screen_dist(self, hp, &self.vp);
+            let is_point = v.is_point();
 
             if dist < MAX_HOVER_DISTANCE {
                 closest = Some(
                     closest
-                        .map(|c| if c.1 > dist { (k, dist) } else { c })
-                        .unwrap_or((k, dist)),
+                        .map(|c| {
+                            // Distance to a line segment and one of its defining points will
+                            // read equal. If that happens, prefer the point.
+                            if is_point && !c.2 && dist - (MAX_HOVER_DISTANCE / 2.) < c.1 {
+                                (k, dist, is_point)
+                            } else if !is_point && c.2 && dist < c.1 - (MAX_HOVER_DISTANCE / 2.) {
+                                (k, dist, is_point)
+                            } else if dist < c.1 {
+                                (k, dist, is_point)
+                            } else {
+                                c
+                            }
+                        })
+                        .unwrap_or((k, dist, is_point)),
                 );
             }
         }
 
         match closest {
-            Some((k, _dist)) => Some((k, self.features.get(k).unwrap().clone())),
+            Some((k, _dist, _is_point)) => Some((k, self.features.get(k).unwrap().clone())),
             None => None,
         }
     }
 
     pub fn delete_feature(&mut self, k: slotmap::DefaultKey) -> bool {
         match self.features.remove(k) {
-            Some(v) => {
+            Some(_v) => {
                 // Find and also remove any features dependent on what we just removed.
                 let to_delete: std::collections::HashSet<slotmap::DefaultKey> = self
                     .features

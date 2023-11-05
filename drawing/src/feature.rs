@@ -39,7 +39,7 @@ impl LineSegment {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum Feature {
     Point(f32, f32),
     LineSegment(K, K),
