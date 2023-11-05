@@ -1,3 +1,4 @@
+use detailer;
 use drawing;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -9,6 +10,8 @@ pub struct App {
     handler: drawing::Handler,
     #[serde(skip)]
     tools: drawing::tools::Toolbar,
+    #[serde(skip)]
+    detailer_state: detailer::State,
 }
 
 impl Default for App {
@@ -21,11 +24,13 @@ impl Default for App {
 
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();
+        let detailer_state = detailer::State::default();
 
         Self {
             drawing,
             handler,
             tools,
+            detailer_state,
         }
     }
 }
@@ -67,15 +72,13 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             drawing::Widget::new(&mut self.drawing, &mut self.handler, &mut self.tools).show(ui);
-
-            egui::warn_if_debug_build(
-                &mut ui.child_ui(
-                    ui.max_rect()
-                        .split_left_right_at_x(ui.max_rect().max.x - 85.)
-                        .1,
-                    egui::Layout::default(),
-                ),
-            );
         });
+
+        detailer::Widget::new(
+            &mut self.detailer_state,
+            &mut self.drawing,
+            &mut self.handler,
+        )
+        .show(ctx);
     }
 }

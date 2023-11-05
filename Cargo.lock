@@ -658,6 +658,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "detailer"
+version = "0.1.0"
+dependencies = [
+ "drawing",
+ "egui",
+ "serde",
+ "slotmap",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1350,6 +1360,7 @@ checksum = "da2479e8c062e40bf0066ffa0bc823de0a9368974af99c9f6df941d2c231e03f"
 name = "liquid-cad"
 version = "0.1.0"
 dependencies = [
+ "detailer",
  "drawing",
  "eframe",
  "egui",

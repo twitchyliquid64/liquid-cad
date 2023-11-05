@@ -38,6 +38,10 @@ impl super::CommandHandler<Feature, ToolResponse> for Handler {
 
                 drawing.features.insert(Feature::LineSegment(f1, f2));
             }
+
+            ToolResponse::Delete(k) => {
+                drawing.delete_feature(k);
+            }
         }
     }
 }

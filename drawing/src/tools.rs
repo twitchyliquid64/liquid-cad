@@ -234,6 +234,7 @@ pub enum ToolResponse {
     Handled,
     NewPoint(egui::Pos2),
     NewLineSegment(egui::Pos2, egui::Pos2),
+    Delete(slotmap::DefaultKey),
 }
 
 #[derive(Debug, Default)]
