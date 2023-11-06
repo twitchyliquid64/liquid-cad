@@ -1,4 +1,4 @@
-use super::{Data, Feature, FeatureMeta};
+use super::{Data, Feature, FeatureKey, FeatureMeta};
 use crate::tools::Toolbar;
 
 #[derive(Debug)]
@@ -7,7 +7,7 @@ pub enum ToolResponse {
     SwitchToPointer,
     NewPoint(egui::Pos2),
     NewLineSegment(egui::Pos2, egui::Pos2),
-    Delete(slotmap::DefaultKey),
+    Delete(FeatureKey),
 }
 
 #[derive(Debug, Default)]

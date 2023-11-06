@@ -3,7 +3,9 @@
 mod data;
 pub use data::{Data, Viewport};
 mod feature;
-pub use feature::{Feature, FeatureMeta};
+pub use feature::{Feature, FeatureKey, FeatureMeta};
+mod constraints;
+pub use constraints::{Constraint, ConstraintKey, ConstraintMeta};
 pub mod handler;
 pub use handler::Handler;
 pub mod tools;
@@ -55,7 +57,7 @@ impl<'a> Widget<'a> {
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
-        hf: &Option<(slotmap::DefaultKey, Feature)>,
+        hf: &Option<(FeatureKey, Feature)>,
         response: &egui::Response,
     ) -> Option<egui::Rect> {
         // Handle: zooming
@@ -180,7 +182,7 @@ impl<'a> Widget<'a> {
         ui: &egui::Ui,
         painter: &egui::Painter,
         hp: Option<egui::Pos2>,
-        hf: Option<(slotmap::DefaultKey, Feature)>,
+        hf: Option<(FeatureKey, Feature)>,
         current_drag: Option<egui::Rect>,
         base_params: &PaintParams,
     ) {

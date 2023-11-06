@@ -1,5 +1,4 @@
-use drawing::{handler::ToolResponse, tools, Data, Feature, Handler};
-use slotmap::DefaultKey as K;
+use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, Handler};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
@@ -75,7 +74,7 @@ impl<'a> Widget<'a> {
 
     fn show_selection_tab(&mut self, ui: &mut egui::Ui) {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(12);
-        let selected: Vec<K> = self.drawing.selected_map.keys().map(|k| *k).collect();
+        let selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
         for k in selected {
             if let Some(v) = self.drawing.features.get_mut(k) {
                 match v {
@@ -97,7 +96,7 @@ impl<'a> Widget<'a> {
     fn show_selection_entry_point(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
-        k: &K,
+        k: &FeatureKey,
         px: &mut f32,
         py: &mut f32,
     ) {
@@ -119,7 +118,11 @@ impl<'a> Widget<'a> {
         });
     }
 
-    fn show_selection_entry_line(ui: &mut egui::Ui, commands: &mut Vec<ToolResponse>, k: &K) {
+    fn show_selection_entry_line(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        k: &FeatureKey,
+    ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;

@@ -106,7 +106,7 @@ impl Tool {
         &mut self,
         _ui: &mut egui::Ui,
         hp: egui::Pos2,
-        hf: &Option<(slotmap::DefaultKey, crate::Feature)>,
+        hf: &Option<(crate::FeatureKey, crate::Feature)>,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
         match self {
@@ -249,7 +249,7 @@ impl Toolbar {
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
-        hf: &Option<(slotmap::DefaultKey, crate::Feature)>,
+        hf: &Option<(crate::FeatureKey, crate::Feature)>,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
         // Escape to exit use of a tool

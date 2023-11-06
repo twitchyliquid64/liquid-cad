@@ -1,6 +1,7 @@
-use crate::Feature;
+use crate::{Constraint, ConstraintKey};
+use crate::{Feature, FeatureKey};
 use slotmap::HopSlotMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const MAX_HOVER_DISTANCE: f32 = 160.0;
 
@@ -42,19 +43,46 @@ impl Default for Viewport {
     }
 }
 
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+pub struct ConstraintData {
+    constraints: HopSlotMap<ConstraintKey, Constraint>,
+
+    #[serde(skip)]
+    by_feature: HashMap<FeatureKey, HashSet<ConstraintKey>>,
+}
+
+impl ConstraintData {
+    pub fn populate_cache(&mut self) {
+        let mut by_feature = HashMap::with_capacity(2 * self.constraints.len());
+        for (ck, c) in self.constraints.iter() {
+            for fk in c.affecting_features() {
+                if by_feature.contains_key(&fk) {
+                    by_feature.insert(fk, HashSet::from([ck]));
+                } else {
+                    by_feature.get_mut(&fk).unwrap().insert(ck);
+                }
+            }
+        }
+
+        self.by_feature = by_feature;
+    }
+}
+
 /// Data stores state about the drawing and what it is composed of.
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Data {
-    pub features: HopSlotMap<slotmap::DefaultKey, Feature>,
+    pub features: HopSlotMap<FeatureKey, Feature>,
+    pub constraints: ConstraintData,
     pub vp: Viewport,
 
-    pub selected_map: HashMap<slotmap::DefaultKey, usize>,
+    pub selected_map: HashMap<FeatureKey, usize>,
 }
 
 impl Default for Data {
     fn default() -> Self {
         Self {
             features: HopSlotMap::default(),
+            constraints: ConstraintData::default(),
             vp: Viewport::default(),
             selected_map: HashMap::default(),
         }
@@ -62,7 +90,7 @@ impl Default for Data {
 }
 
 impl Data {
-    pub fn find_point_at(&self, p: egui::Pos2) -> Option<slotmap::DefaultKey> {
+    pub fn find_point_at(&self, p: egui::Pos2) -> Option<FeatureKey> {
         for (k, v) in self.features.iter() {
             if v.bb(self).center().distance_sq(p) < 0.0001 {
                 return Some(k);
@@ -71,8 +99,8 @@ impl Data {
         None
     }
 
-    pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(slotmap::DefaultKey, Feature)> {
-        let mut closest: Option<(slotmap::DefaultKey, f32, bool)> = None;
+    pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(FeatureKey, Feature)> {
+        let mut closest: Option<(FeatureKey, f32, bool)> = None;
         for (k, v) in self.features.iter() {
             let is_point = v.is_point();
 
@@ -100,13 +128,13 @@ impl Data {
         }
     }
 
-    pub fn delete_feature(&mut self, k: slotmap::DefaultKey) -> bool {
+    pub fn delete_feature(&mut self, k: FeatureKey) -> bool {
         self.selected_map.remove(&k);
 
         match self.features.remove(k) {
             Some(_v) => {
                 // Find and also remove any features dependent on what we just removed.
-                let to_delete: std::collections::HashSet<slotmap::DefaultKey> = self
+                let to_delete: std::collections::HashSet<FeatureKey> = self
                     .features
                     .iter()
                     .map(|(k2, v2)| {
@@ -141,7 +169,7 @@ impl Data {
         }
     }
 
-    pub fn select_feature(&mut self, feature: &slotmap::DefaultKey, select: bool) {
+    pub fn select_feature(&mut self, feature: &FeatureKey, select: bool) {
         let currently_selected = self.selected_map.contains_key(feature);
         if currently_selected && !select {
             self.selected_map.remove(feature);
@@ -168,7 +196,7 @@ impl Data {
         self.selected_map.clear();
     }
 
-    pub fn feature_selected(&self, feature: &slotmap::DefaultKey) -> bool {
+    pub fn feature_selected(&self, feature: &FeatureKey) -> bool {
         self.selected_map.get(feature).is_some()
     }
 }

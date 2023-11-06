@@ -1,5 +1,8 @@
 use super::{Data, PaintParams, Viewport};
-use slotmap::DefaultKey as K;
+
+slotmap::new_key_type! {
+    pub struct FeatureKey;
+}
 
 const POINT_SIZE: egui::Vec2 = egui::Vec2 { x: 4.5, y: 4.5 };
 
@@ -45,7 +48,7 @@ pub struct FeatureMeta {}
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Feature {
     Point(FeatureMeta, f32, f32),
-    LineSegment(FeatureMeta, K, K),
+    LineSegment(FeatureMeta, FeatureKey, FeatureKey),
 }
 
 impl Default for Feature {
@@ -72,7 +75,7 @@ impl Feature {
         matches!(self, Feature::Point(_, _, _))
     }
 
-    pub fn depends_on(&self) -> [Option<K>; 2] {
+    pub fn depends_on(&self) -> [Option<FeatureKey>; 2] {
         match self {
             Feature::Point(_, _, _) => [None, None],
             Feature::LineSegment(_, p1, p2) => [Some(*p1), Some(*p2)],
@@ -123,7 +126,7 @@ impl Feature {
     pub fn paint(
         &self,
         drawing: &Data,
-        _k: slotmap::DefaultKey,
+        _k: FeatureKey,
         params: &PaintParams,
         painter: &egui::Painter,
     ) {

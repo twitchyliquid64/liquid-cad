@@ -42,6 +42,7 @@ impl Default for App {
         let handler = drawing::Handler::default();
         let detailer_state = detailer::State::default();
 
+        drawing.constraints.populate_cache();
         Self {
             drawing,
             handler,
