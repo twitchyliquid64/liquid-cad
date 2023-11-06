@@ -1,4 +1,4 @@
-use super::{Data, Feature};
+use super::{Data, Feature, FeatureMeta};
 use crate::tools::ToolResponse;
 
 #[derive(Debug, Default)]
@@ -10,7 +10,7 @@ impl Handler {
             ToolResponse::Handled => {}
             ToolResponse::NewPoint(pos) => {
                 let pos = drawing.vp.screen_to_point(pos);
-                let p = Feature::Point(pos.x, pos.y);
+                let p = Feature::Point(FeatureMeta::default(), pos.x, pos.y);
 
                 // Make sure it doesnt already exist
                 for v in drawing.features.values() {
@@ -28,15 +28,16 @@ impl Handler {
                     drawing.find_point_at(p1).unwrap(),
                     drawing.find_point_at(p2).unwrap(),
                 );
+                let l = Feature::LineSegment(FeatureMeta::default(), f2, f1);
 
                 // Make sure it doesnt already exist
                 for v in drawing.features.values() {
-                    if v == &Feature::LineSegment(f1, f2) || v == &Feature::LineSegment(f2, f1) {
+                    if v == &l {
                         return;
                     }
                 }
 
-                drawing.features.insert(Feature::LineSegment(f1, f2));
+                drawing.features.insert(l);
             }
 
             ToolResponse::Delete(k) => {

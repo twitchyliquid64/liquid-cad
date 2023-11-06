@@ -72,10 +72,10 @@ impl<'a> Widget<'a> {
         for k in selected {
             if let Some(v) = self.drawing.features.get_mut(k) {
                 match v {
-                    Feature::Point(x, y) => {
+                    Feature::Point(_, x, y) => {
                         Widget::show_selection_entry_point(ui, &mut commands, &k, x, y)
                     }
-                    Feature::LineSegment(p1, p2) => {
+                    Feature::LineSegment(_, p1, p2) => {
                         Widget::show_selection_entry_line(ui, &mut commands, &k)
                     }
                 }

@@ -3,7 +3,7 @@
 mod data;
 pub use data::{Data, Viewport};
 mod feature;
-pub use feature::Feature;
+pub use feature::{Feature, FeatureMeta};
 mod handler;
 pub use handler::Handler;
 pub mod tools;

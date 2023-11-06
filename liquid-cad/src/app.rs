@@ -1,5 +1,5 @@
 use detailer;
-use drawing;
+use drawing::{self, Feature, FeatureMeta};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -22,15 +22,21 @@ impl Default for App {
         // drawing.features.insert(drawing::Feature::Point(188., 188.));
         // drawing.features.insert(drawing::Feature::Point(-88., 188.));
 
-        let p1 = drawing.features.insert(drawing::Feature::Point(-88., 0.));
-        let p2 = drawing.features.insert(drawing::Feature::Point(0., 0.));
-        let p3 = drawing.features.insert(drawing::Feature::Point(88., 0.));
+        let p1 = drawing
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), -88., 0.));
+        let p2 = drawing
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 0., 0.));
+        let p3 = drawing
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 88., 0.));
         drawing
             .features
-            .insert(drawing::Feature::LineSegment(p1, p2));
+            .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
         drawing
             .features
-            .insert(drawing::Feature::LineSegment(p2, p3));
+            .insert(Feature::LineSegment(FeatureMeta::default(), p2, p3));
 
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();

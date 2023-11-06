@@ -39,37 +39,53 @@ impl LineSegment {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct FeatureMeta {}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Feature {
-    Point(f32, f32),
-    LineSegment(K, K),
+    Point(FeatureMeta, f32, f32),
+    LineSegment(FeatureMeta, K, K),
 }
 
 impl Default for Feature {
     fn default() -> Self {
-        Feature::Point(0., 0.)
+        Feature::Point(FeatureMeta::default(), 0., 0.)
+    }
+}
+
+impl PartialEq<Feature> for Feature {
+    fn eq(&self, other: &Feature) -> bool {
+        use Feature::{LineSegment, Point};
+        match (self, other) {
+            (Point(_, x1, y1), Point(_, x2, y2)) => x1 == x2 && y1 == y2,
+            (LineSegment(_, p00, p01), LineSegment(_, p10, p11)) => {
+                (p00 == p10 && p01 == p11) || (p00 == p11 && p01 == p10)
+            }
+            _ => false,
+        }
     }
 }
 
 impl Feature {
     pub fn is_point(&self) -> bool {
-        matches!(self, Feature::Point(_, _))
+        matches!(self, Feature::Point(_, _, _))
     }
 
     pub fn depends_on(&self) -> [Option<K>; 2] {
         match self {
-            Feature::Point(_, _) => [None, None],
-            Feature::LineSegment(p1, p2) => [Some(*p1), Some(*p2)],
+            Feature::Point(_, _, _) => [None, None],
+            Feature::LineSegment(_, p1, p2) => [Some(*p1), Some(*p2)],
         }
     }
 
     pub fn bb(&self, drawing: &Data) -> egui::Rect {
         match self {
-            Feature::Point(x, y) => egui::Rect {
+            Feature::Point(_, x, y) => egui::Rect {
                 min: egui::Pos2 { x: *x, y: *y },
                 max: egui::Pos2 { x: *x, y: *y },
             },
-            Feature::LineSegment(p1, p2) => {
+            Feature::LineSegment(_, p1, p2) => {
                 let (p1, p2) = (
                     drawing.features.get(*p1).unwrap(),
                     drawing.features.get(*p2).unwrap(),
@@ -82,17 +98,17 @@ impl Feature {
 
     pub fn screen_dist(&self, drawing: &Data, hp: egui::Pos2, vp: &Viewport) -> f32 {
         match self {
-            Feature::Point(x, y) => vp
+            Feature::Point(_, x, y) => vp
                 .translate_point(egui::Pos2 { x: *x, y: *y })
                 .distance_sq(hp),
 
-            Feature::LineSegment(p1, p2) => {
+            Feature::LineSegment(_, p1, p2) => {
                 let (f1, f2) = (
                     drawing.features.get(*p1).unwrap(),
                     drawing.features.get(*p2).unwrap(),
                 );
                 let (p1, p2) = match (f1, f2) {
-                    (Feature::Point(x1, y1), Feature::Point(x2, y2)) => (
+                    (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => (
                         vp.translate_point(egui::Pos2 { x: *x1, y: *y1 }),
                         vp.translate_point(egui::Pos2 { x: *x2, y: *y2 }),
                     ),
@@ -112,7 +128,7 @@ impl Feature {
         painter: &egui::Painter,
     ) {
         match self {
-            Feature::Point(_, _) => {
+            Feature::Point(_, _, _) => {
                 painter.rect_filled(
                     params
                         .vp
@@ -131,13 +147,13 @@ impl Feature {
                 );
             }
 
-            Feature::LineSegment(p1, p2) => {
+            Feature::LineSegment(_, p1, p2) => {
                 let (f1, f2) = (
                     drawing.features.get(*p1).unwrap(),
                     drawing.features.get(*p2).unwrap(),
                 );
                 let (p1, p2) = match (f1, f2) {
-                    (Feature::Point(x1, y1), Feature::Point(x2, y2)) => (
+                    (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => (
                         params.vp.translate_point(egui::Pos2 { x: *x1, y: *y1 }),
                         params.vp.translate_point(egui::Pos2 { x: *x2, y: *y2 }),
                     ),

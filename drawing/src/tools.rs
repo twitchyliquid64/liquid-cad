@@ -127,12 +127,12 @@ impl Tool {
             Tool::Line(p1) => {
                 let c = match (hf, &p1, response.clicked()) {
                     // No first point, clicked on a point
-                    (Some((_, crate::Feature::Point(x, y))), None, true) => {
+                    (Some((_, crate::Feature::Point(_, x, y))), None, true) => {
                         *p1 = Some(egui::Pos2 { x: *x, y: *y });
                         Some(ToolResponse::Handled)
                     }
                     // Has first point, clicked on a point
-                    (Some((_, crate::Feature::Point(x2, y2))), Some(starting_point), true) => {
+                    (Some((_, crate::Feature::Point(_, x2, y2))), Some(starting_point), true) => {
                         let starting_point = starting_point.clone();
                         *p1 = Some(egui::Pos2 { x: *x2, y: *y2 });
                         Some(ToolResponse::NewLineSegment(
