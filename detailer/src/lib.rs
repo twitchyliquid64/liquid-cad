@@ -15,16 +15,12 @@ pub struct State {
 
 pub struct Widget<'a> {
     state: &'a mut State,
-    drawing: &'a mut Data<Feature>,
+    drawing: &'a mut Data,
     handler: &'a mut Handler,
 }
 
 impl<'a> Widget<'a> {
-    pub fn new(
-        state: &'a mut State,
-        drawing: &'a mut Data<Feature>,
-        handler: &'a mut Handler,
-    ) -> Self {
+    pub fn new(state: &'a mut State, drawing: &'a mut Data, handler: &'a mut Handler) -> Self {
         Widget {
             state,
             drawing,
@@ -33,7 +29,7 @@ impl<'a> Widget<'a> {
     }
 
     pub fn show(mut self, ctx: &egui::Context) {
-        let mut window = egui::Window::new("Liquid CAD")
+        let window = egui::Window::new("Liquid CAD")
             .id(egui::Id::new("detailer_window"))
             .resizable(false)
             .constrain(true)
@@ -86,7 +82,6 @@ impl<'a> Widget<'a> {
             }
         }
 
-        use drawing::CommandHandler;
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, c);
         }

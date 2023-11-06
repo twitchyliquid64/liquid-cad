@@ -4,7 +4,7 @@ use drawing;
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
-    drawing: drawing::Data<drawing::Feature>,
+    drawing: drawing::Data,
 
     #[serde(skip)]
     handler: drawing::Handler,

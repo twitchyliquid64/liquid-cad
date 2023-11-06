@@ -242,15 +242,12 @@ pub struct Toolbar {
     current: Option<Tool>,
 }
 
-impl super::ToolController for Toolbar {
-    type Command = ToolResponse;
-    type Features = crate::Feature;
-
-    fn handle_input(
+impl Toolbar {
+    pub fn handle_input(
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
-        hf: &Option<(slotmap::DefaultKey, Self::Features)>,
+        hf: &Option<(slotmap::DefaultKey, crate::Feature)>,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
         // Escape to exit use of a tool
@@ -299,7 +296,7 @@ impl super::ToolController for Toolbar {
         None
     }
 
-    fn paint(
+    pub fn paint(
         &self,
         ui: &egui::Ui,
         painter: &egui::Painter,

@@ -4,8 +4,8 @@ use crate::tools::ToolResponse;
 #[derive(Debug, Default)]
 pub struct Handler {}
 
-impl super::CommandHandler<Feature, ToolResponse> for Handler {
-    fn handle(&mut self, drawing: &mut Data<Feature>, c: ToolResponse) {
+impl Handler {
+    pub fn handle(&mut self, drawing: &mut Data, c: ToolResponse) {
         match c {
             ToolResponse::Handled => {}
             ToolResponse::NewPoint(pos) => {

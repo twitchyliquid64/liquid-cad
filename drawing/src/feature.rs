@@ -51,19 +51,19 @@ impl Default for Feature {
     }
 }
 
-impl super::DrawingFeature for Feature {
-    fn is_point(&self) -> bool {
+impl Feature {
+    pub fn is_point(&self) -> bool {
         matches!(self, Feature::Point(_, _))
     }
 
-    fn depends_on(&self) -> [Option<K>; 2] {
+    pub fn depends_on(&self) -> [Option<K>; 2] {
         match self {
             Feature::Point(_, _) => [None, None],
             Feature::LineSegment(p1, p2) => [Some(*p1), Some(*p2)],
         }
     }
 
-    fn bb(&self, drawing: &Data<Self>) -> egui::Rect {
+    pub fn bb(&self, drawing: &Data) -> egui::Rect {
         match self {
             Feature::Point(x, y) => egui::Rect {
                 min: egui::Pos2 { x: *x, y: *y },
@@ -80,7 +80,7 @@ impl super::DrawingFeature for Feature {
         }
     }
 
-    fn screen_dist(&self, drawing: &Data<Self>, hp: egui::Pos2, vp: &Viewport) -> f32 {
+    pub fn screen_dist(&self, drawing: &Data, hp: egui::Pos2, vp: &Viewport) -> f32 {
         match self {
             Feature::Point(x, y) => vp
                 .translate_point(egui::Pos2 { x: *x, y: *y })
@@ -104,9 +104,9 @@ impl super::DrawingFeature for Feature {
         }
     }
 
-    fn paint(
+    pub fn paint(
         &self,
-        drawing: &Data<Self>,
+        drawing: &Data,
         _k: slotmap::DefaultKey,
         params: &PaintParams,
         painter: &egui::Painter,
