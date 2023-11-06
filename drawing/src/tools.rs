@@ -1,4 +1,5 @@
 use super::PaintParams;
+use crate::handler::ToolResponse;
 
 const TOOL_ICON_SIZE: egui::Vec2 = egui::Vec2 { x: 32.0, y: 32.0 };
 const TOOL_ICON_STROKE: f32 = 1.;
@@ -144,6 +145,11 @@ impl Tool {
                         *p1 = None;
                         Some(ToolResponse::Handled)
                     }
+                    // No first point, clicked empty space or line
+                    (None, None, true)
+                    | (Some((_, crate::Feature::LineSegment(_, _, _))), None, true) => {
+                        Some(ToolResponse::SwitchToPointer)
+                    }
 
                     _ => None,
                 };
@@ -229,20 +235,16 @@ impl Tool {
     }
 }
 
-#[derive(Debug)]
-pub enum ToolResponse {
-    Handled,
-    NewPoint(egui::Pos2),
-    NewLineSegment(egui::Pos2, egui::Pos2),
-    Delete(slotmap::DefaultKey),
-}
-
 #[derive(Debug, Default)]
 pub struct Toolbar {
     current: Option<Tool>,
 }
 
 impl Toolbar {
+    pub fn clear(&mut self) {
+        self.current = None;
+    }
+
     pub fn handle_input(
         &mut self,
         ui: &mut egui::Ui,

@@ -93,6 +93,7 @@ impl eframe::App for App {
         detailer::Widget::new(
             &mut self.detailer_state,
             &mut self.drawing,
+            &mut self.tools,
             &mut self.handler,
         )
         .show(ctx);

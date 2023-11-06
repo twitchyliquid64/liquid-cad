@@ -1,13 +1,25 @@
 use super::{Data, Feature, FeatureMeta};
-use crate::tools::ToolResponse;
+use crate::tools::Toolbar;
+
+#[derive(Debug)]
+pub enum ToolResponse {
+    Handled,
+    SwitchToPointer,
+    NewPoint(egui::Pos2),
+    NewLineSegment(egui::Pos2, egui::Pos2),
+    Delete(slotmap::DefaultKey),
+}
 
 #[derive(Debug, Default)]
 pub struct Handler {}
 
 impl Handler {
-    pub fn handle(&mut self, drawing: &mut Data, c: ToolResponse) {
+    pub fn handle(&mut self, drawing: &mut Data, tools: &mut Toolbar, c: ToolResponse) {
         match c {
             ToolResponse::Handled => {}
+            ToolResponse::SwitchToPointer => {
+                tools.clear();
+            }
             ToolResponse::NewPoint(pos) => {
                 let pos = drawing.vp.screen_to_point(pos);
                 let p = Feature::Point(FeatureMeta::default(), pos.x, pos.y);

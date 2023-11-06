@@ -1,4 +1,4 @@
-use drawing::{tools::ToolResponse, Data, Feature, Handler};
+use drawing::{handler::ToolResponse, tools, Data, Feature, Handler};
 use slotmap::DefaultKey as K;
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -17,14 +17,21 @@ pub struct Widget<'a> {
     state: &'a mut State,
     drawing: &'a mut Data,
     handler: &'a mut Handler,
+    tools: &'a mut tools::Toolbar,
 }
 
 impl<'a> Widget<'a> {
-    pub fn new(state: &'a mut State, drawing: &'a mut Data, handler: &'a mut Handler) -> Self {
+    pub fn new(
+        state: &'a mut State,
+        drawing: &'a mut Data,
+        tools: &'a mut tools::Toolbar,
+        handler: &'a mut Handler,
+    ) -> Self {
         Widget {
             state,
             drawing,
             handler,
+            tools,
         }
     }
 
@@ -83,7 +90,7 @@ impl<'a> Widget<'a> {
         }
 
         for c in commands.drain(..) {
-            self.handler.handle(self.drawing, c);
+            self.handler.handle(self.drawing, self.tools, c);
         }
     }
 

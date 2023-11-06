@@ -4,7 +4,7 @@ mod data;
 pub use data::{Data, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureMeta};
-mod handler;
+pub mod handler;
 pub use handler::Handler;
 pub mod tools;
 
@@ -294,7 +294,7 @@ impl<'a> Widget<'a> {
 
         // Handle input
         let current_drag = if let Some(c) = self.tools.handle_input(ui, hp, &hf, &response) {
-            self.handler.handle(self.drawing, c);
+            self.handler.handle(self.drawing, self.tools, c);
             None
         } else {
             self.handle_input(ui, hp, &hf, &response)
