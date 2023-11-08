@@ -69,11 +69,29 @@ fn line_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn fixed_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "(x,y)".into(),
+        egui::FontId::monospace(8.),
+        egui::Color32::WHITE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
     Point,
     Line(Option<egui::Pos2>),
+    Fixed,
 }
 
 impl Tool {
@@ -81,12 +99,13 @@ impl Tool {
         match (self, other) {
             (Tool::Point, Tool::Point) => true,
             (Tool::Line(_), Tool::Line(_)) => true,
+            (Tool::Fixed, Tool::Fixed) => true,
             _ => false,
         }
     }
 
     pub fn all<'a>() -> &'a [Tool] {
-        &[Tool::Point, Tool::Line(None)]
+        &[Tool::Point, Tool::Line(None), Tool::Fixed]
     }
 
     pub fn toolbar_size() -> egui::Pos2 {
@@ -166,20 +185,62 @@ impl Tool {
 
                 None
             }
+
+            Tool::Fixed => {
+                if response.clicked() {
+                    return match hf {
+                        Some((k, crate::Feature::Point(_, _, _))) => {
+                            Some(ToolResponse::NewFixedConstraint(k.clone()))
+                        }
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
         }
     }
 
-    pub fn draw_active(&self, painter: &egui::Painter, hp: egui::Pos2, params: &PaintParams) {
+    pub fn draw_active(
+        &self,
+        painter: &egui::Painter,
+        response: &egui::Response,
+        hp: egui::Pos2,
+        params: &PaintParams,
+    ) {
         match self {
-            Tool::Line(Some(start)) => painter.line_segment(
-                [params.vp.translate_point(*start), hp],
-                egui::Stroke {
-                    width: TOOL_ICON_STROKE,
-                    color: egui::Color32::WHITE,
-                },
-            ),
+            Tool::Line(None) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("new line: click 1st point");
+            }
+            Tool::Line(Some(start)) => {
+                painter.line_segment(
+                    [params.vp.translate_point(*start), hp],
+                    egui::Stroke {
+                        width: TOOL_ICON_STROKE,
+                        color: egui::Color32::WHITE,
+                    },
+                );
 
-            _ => {}
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("new line: click 2nd point");
+            }
+
+            Tool::Point => {
+                response.clone().on_hover_text_at_pointer("new point");
+            }
+
+            Tool::Fixed => {
+                response.clone().on_hover_text_at_pointer("constrain (x,y)");
+            }
         }
     }
 
@@ -187,6 +248,7 @@ impl Tool {
         match self {
             Tool::Point => point_tool_icon,
             Tool::Line(_) => line_tool_icon,
+            Tool::Fixed => fixed_tool_icon,
         }
     }
 
@@ -222,15 +284,6 @@ impl Tool {
 
         self.icon_painter()(bounds, painter);
 
-        // painter.rect_stroke(
-        //     bounds,
-        //     egui::Rounding::ZERO,
-        //     egui::Stroke {
-        //         width: TOOL_ICON_STROKE,
-        //         color: params.colors.text,
-        //     },
-        // );
-
         bounds
     }
 }
@@ -260,14 +313,24 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if hp.is_some() && !response.dragged() {
-            let (l, p) = ui.input(|i| (i.key_pressed(egui::Key::L), i.key_pressed(egui::Key::P)));
-            match (l, p) {
-                (true, _) => {
+            let (l, p, s) = ui.input(|i| {
+                (
+                    i.key_pressed(egui::Key::L),
+                    i.key_pressed(egui::Key::P),
+                    i.key_pressed(egui::Key::S),
+                )
+            });
+            match (l, p, s) {
+                (true, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true) => {
+                (_, true, _) => {
                     self.current = Some(Tool::Point);
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, true) => {
+                    self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}
@@ -302,6 +365,7 @@ impl Toolbar {
         &self,
         ui: &egui::Ui,
         painter: &egui::Painter,
+        response: &egui::Response,
         hp: Option<egui::Pos2>,
         params: &PaintParams,
     ) {
@@ -330,7 +394,7 @@ impl Toolbar {
         }
 
         if let (Some(hp), Some(tool)) = (hp, self.current.as_ref()) {
-            tool.draw_active(painter, hp, params);
+            tool.draw_active(painter, response, hp, params);
         }
     }
 }

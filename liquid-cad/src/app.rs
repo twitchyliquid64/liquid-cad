@@ -79,6 +79,9 @@ impl eframe::App for App {
                         if ui.button("Quit").clicked() {
                             _frame.close();
                         }
+                        if ui.button("Reset egui state").clicked() {
+                            ctx.memory_mut(|mem| *mem = Default::default());
+                        }
                     });
                     ui.add_space(16.0);
                 }

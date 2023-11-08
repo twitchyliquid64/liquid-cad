@@ -56,7 +56,7 @@ impl ConstraintData {
         let mut by_feature = HashMap::with_capacity(2 * self.constraints.len());
         for (ck, c) in self.constraints.iter() {
             for fk in c.affecting_features() {
-                if by_feature.contains_key(&fk) {
+                if !by_feature.contains_key(&fk) {
                     by_feature.insert(fk, HashSet::from([ck]));
                 } else {
                     by_feature.get_mut(&fk).unwrap().insert(ck);
@@ -65,6 +65,54 @@ impl ConstraintData {
         }
 
         self.by_feature = by_feature;
+    }
+
+    pub fn add(&mut self, c: Constraint) {
+        for c2 in self.constraints.values() {
+            if c.conflicts(c2) {
+                return;
+            }
+        }
+
+        let k = self.constraints.insert(c.clone());
+        for fk in c.affecting_features() {
+            if !self.by_feature.contains_key(&fk) {
+                self.by_feature.insert(fk, HashSet::from([k]));
+            } else {
+                self.by_feature.get_mut(&fk).unwrap().insert(k);
+            }
+        }
+    }
+
+    pub fn delete(&mut self, ck: ConstraintKey) {
+        match self.constraints.remove(ck) {
+            Some(c) => {
+                for fk in c.affecting_features() {
+                    let remaining_entries = if let Some(set) = self.by_feature.get_mut(&fk) {
+                        set.remove(&ck);
+                        set.len()
+                    } else {
+                        99999
+                    };
+
+                    if remaining_entries == 0 {
+                        self.by_feature.remove(&fk);
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+
+    pub fn by_feature(&self, k: &FeatureKey) -> Vec<ConstraintKey> {
+        match self.by_feature.get(k) {
+            Some(set) => set.iter().map(|ck| ck.clone()).collect(),
+            None => vec![],
+        }
+    }
+
+    pub fn get_mut<'a>(&'a mut self, ck: ConstraintKey) -> Option<&'a mut Constraint> {
+        self.constraints.get_mut(ck)
     }
 }
 
@@ -90,6 +138,28 @@ impl Default for Data {
 }
 
 impl Data {
+    pub fn feature_mut<'a>(&'a mut self, k: FeatureKey) -> Option<&'a mut Feature> {
+        let Data { features, .. } = self;
+
+        features.get_mut(k)
+    }
+
+    pub fn constraint_mut<'a>(&'a mut self, ck: ConstraintKey) -> Option<&'a mut Constraint> {
+        self.constraints.get_mut(ck)
+    }
+
+    pub fn constraints_by_feature(&self, k: &FeatureKey) -> Vec<ConstraintKey> {
+        self.constraints.by_feature(k)
+    }
+
+    pub fn add_constraint(&mut self, c: Constraint) {
+        self.constraints.add(c);
+    }
+
+    pub fn delete_constraint(&mut self, k: ConstraintKey) {
+        self.constraints.delete(k);
+    }
+
     pub fn find_point_at(&self, p: egui::Pos2) -> Option<FeatureKey> {
         for (k, v) in self.features.iter() {
             if v.bb(self).center().distance_sq(p) < 0.0001 {

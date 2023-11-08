@@ -26,4 +26,12 @@ impl Constraint {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
         }
     }
+
+    pub fn conflicts(&self, other: &Constraint) -> bool {
+        use Constraint::Fixed;
+        match (self, other) {
+            (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
+            _ => false,
+        }
+    }
 }

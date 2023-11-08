@@ -1,5 +1,6 @@
 use super::{Data, Feature, FeatureKey, FeatureMeta};
 use crate::tools::Toolbar;
+use crate::{Constraint, ConstraintKey, ConstraintMeta};
 
 #[derive(Debug)]
 pub enum ToolResponse {
@@ -8,6 +9,9 @@ pub enum ToolResponse {
     NewPoint(egui::Pos2),
     NewLineSegment(egui::Pos2, egui::Pos2),
     Delete(FeatureKey),
+
+    NewFixedConstraint(FeatureKey),
+    ConstraintDelete(ConstraintKey),
 }
 
 #[derive(Debug, Default)]
@@ -55,6 +59,18 @@ impl Handler {
             ToolResponse::Delete(k) => {
                 drawing.delete_feature(k);
             }
+            ToolResponse::ConstraintDelete(k) => {
+                drawing.delete_constraint(k);
+            }
+
+            ToolResponse::NewFixedConstraint(k) => match drawing.features.get(k) {
+                Some(Feature::Point(..)) => {
+                    drawing.add_constraint(Constraint::Fixed(ConstraintMeta::default(), k, 0., 0.));
+
+                    tools.clear();
+                }
+                _ => {}
+            },
         }
     }
 }

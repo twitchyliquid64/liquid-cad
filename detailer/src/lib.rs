@@ -1,4 +1,5 @@
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, Handler};
+use drawing::{Constraint, ConstraintKey};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
@@ -59,7 +60,7 @@ impl<'a> Widget<'a> {
                 };
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                    ui.add_space(4.);
+                    ui.add_space(2.);
                     egui::warn_if_debug_build(ui);
                 });
             });
@@ -73,24 +74,70 @@ impl<'a> Widget<'a> {
     }
 
     fn show_selection_tab(&mut self, ui: &mut egui::Ui) {
-        let mut commands: Vec<ToolResponse> = Vec::with_capacity(12);
+        let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
         let selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
         for k in selected {
-            if let Some(v) = self.drawing.features.get_mut(k) {
-                match v {
-                    Feature::Point(_, x, y) => {
+            ui.push_id(k, |ui| {
+                match self.drawing.feature_mut(k) {
+                    Some(Feature::Point(_, x, y)) => {
                         Widget::show_selection_entry_point(ui, &mut commands, &k, x, y)
                     }
-                    Feature::LineSegment(_, p1, p2) => {
+                    Some(Feature::LineSegment(_, _p1, _p2)) => {
                         Widget::show_selection_entry_line(ui, &mut commands, &k)
                     }
+                    None => {}
                 }
-            }
+
+                let constraints = self.drawing.constraints_by_feature(&k);
+                if constraints.len() > 0 {
+                    egui::CollapsingHeader::new("Constraints")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            for ck in constraints {
+                                match self.drawing.constraint_mut(ck) {
+                                    Some(Constraint::Fixed(_, _, x, y)) => {
+                                        Widget::show_constraint_fixed(ui, &mut commands, &ck, x, y)
+                                    }
+                                    None => {}
+                                }
+                            }
+                        });
+                }
+            });
         }
 
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, self.tools, c);
         }
+    }
+
+    fn show_constraint_fixed(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        k: &ConstraintKey,
+        px: &mut f32,
+        py: &mut f32,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            let text_rect = ui
+                .add_sized(
+                    [r.x / 2., text_height],
+                    egui::Label::new("Fixed").wrap(false),
+                )
+                .rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(px));
+            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(py));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
     }
 
     fn show_selection_entry_point(
@@ -100,21 +147,53 @@ impl<'a> Widget<'a> {
         px: &mut f32,
         py: &mut f32,
     ) {
+        // use egui_extras::{Size, StripBuilder};
+
+        // StripBuilder::new(ui)
+        //     .size(Size::relative(0.42)) // name cell
+        //     .size(Size::relative(0.23)) // x cell
+        //     .size(Size::relative(0.23)) // y cell
+        //     .size(Size::remainder().at_least(25.0))
+        //     .horizontal(|mut strip| {
+        //         use slotmap::Key;
+        //         strip.cell(|ui| {
+        //             ui.label(format!("Point {:?}", k.data().as_ffi()));
+        //         });
+        //         strip.cell(|ui| {
+        //             ui.add(egui::DragValue::new(px));
+        //         });
+        //         strip.cell(|ui| {
+        //             ui.add(egui::DragValue::new(py));
+        //         });
+        //         strip.cell(|ui| {
+        //             if ui.button("⊗").clicked() {
+        //                 commands.push(ToolResponse::Delete(*k));
+        //             }
+        //         });
+        //     });
+
         ui.horizontal(|ui| {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [r.x / 2., text_height],
-                egui::Label::new(format!("Point {:?}", k.data().as_ffi())).wrap(false),
-            );
-
-            ui.add_sized([r.x / 6., text_height * 1.4], egui::DragValue::new(px));
-            ui.add_sized([r.x / 6., text_height * 1.4], egui::DragValue::new(py));
-            if ui.button("⊗").clicked() {
-                commands.push(ToolResponse::Delete(*k));
+            let text_rect = ui
+                .add_sized(
+                    [r.x / 2., text_height],
+                    egui::Label::new(format!("Point {:?}", k.data())).wrap(false),
+                )
+                .rect;
+            if text_rect.width() < r.x / 2. {
+                ui.add_space(r.x / 2. - text_rect.width());
             }
+
+            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(px));
+            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(py));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::Delete(*k));
+                }
+            });
         });
     }
 
@@ -130,17 +209,14 @@ impl<'a> Widget<'a> {
             use slotmap::Key;
             ui.add_sized(
                 [r.x / 2., text_height],
-                egui::Label::new(format!("Line {:?}", k.data().as_ffi())).wrap(false),
+                egui::Label::new(format!("Line {:?}", k.data())).wrap(false),
             );
 
-            ui.allocate_exact_size(
-                [r.x / 3. + ui.spacing().item_spacing.x, text_height * 1.4].into(),
-                egui::Sense::click(),
-            );
-
-            if ui.button("⊗").clicked() {
-                commands.push(ToolResponse::Delete(*k));
-            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::Delete(*k));
+                }
+            });
         });
     }
 

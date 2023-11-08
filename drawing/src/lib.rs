@@ -183,6 +183,7 @@ impl<'a> Widget<'a> {
         painter: &egui::Painter,
         hp: Option<egui::Pos2>,
         hf: Option<(FeatureKey, Feature)>,
+        response: &egui::Response,
         current_drag: Option<egui::Rect>,
         base_params: &PaintParams,
     ) {
@@ -225,7 +226,7 @@ impl<'a> Widget<'a> {
             );
         }
 
-        self.tools.paint(ui, painter, hp, &base_params);
+        self.tools.paint(ui, painter, response, hp, &base_params);
 
         self.draw_debug(ui, painter, hp, &base_params);
     }
@@ -307,7 +308,11 @@ impl<'a> Widget<'a> {
             vp: self.drawing.vp.clone(),
             colors: Colors {
                 point: egui::Color32::GREEN,
-                line: egui::Color32::LIGHT_GRAY,
+                line: if ui.visuals().dark_mode {
+                    egui::Color32::LIGHT_GRAY
+                } else {
+                    egui::Color32::DARK_GRAY
+                },
                 selected: egui::Color32::RED,
                 hover: egui::Color32::YELLOW,
                 text: ui.visuals().text_color(),
@@ -319,7 +324,7 @@ impl<'a> Widget<'a> {
         };
         let painter = ui.painter();
 
-        self.draw(ui, painter, hp, hf, current_drag, &base_params);
+        self.draw(ui, painter, hp, hf, &response, current_drag, &base_params);
         DrawResponse {}
     }
 }
