@@ -77,47 +77,50 @@ impl<'a> Widget<'a> {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
         let mut changed = false;
         let selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
-        for k in selected {
-            ui.push_id(k, |ui| {
-                match self.drawing.feature_mut(k) {
-                    Some(Feature::Point(_, x, y)) => Widget::show_selection_entry_point(
-                        ui,
-                        &mut commands,
-                        &mut changed,
-                        &k,
-                        x,
-                        y,
-                    ),
-                    Some(Feature::LineSegment(_, _p1, _p2)) => {
-                        Widget::show_selection_entry_line(ui, &mut commands, &mut changed, &k)
-                    }
-                    None => {}
-                }
 
-                let constraints = self.drawing.constraints_by_feature(&k);
-                if constraints.len() > 0 {
-                    egui::CollapsingHeader::new("Constraints")
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            for ck in constraints {
-                                match self.drawing.constraint_mut(ck) {
-                                    Some(Constraint::Fixed(_, _, x, y)) => {
-                                        Widget::show_constraint_fixed(
-                                            ui,
-                                            &mut commands,
-                                            &mut changed,
-                                            &ck,
-                                            x,
-                                            y,
-                                        )
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for k in selected {
+                ui.push_id(k, |ui| {
+                    match self.drawing.feature_mut(k) {
+                        Some(Feature::Point(_, x, y)) => Widget::show_selection_entry_point(
+                            ui,
+                            &mut commands,
+                            &mut changed,
+                            &k,
+                            x,
+                            y,
+                        ),
+                        Some(Feature::LineSegment(_, _p1, _p2)) => {
+                            Widget::show_selection_entry_line(ui, &mut commands, &mut changed, &k)
+                        }
+                        None => {}
+                    }
+
+                    let constraints = self.drawing.constraints_by_feature(&k);
+                    if constraints.len() > 0 {
+                        egui::CollapsingHeader::new("Constraints")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                for ck in constraints {
+                                    match self.drawing.constraint_mut(ck) {
+                                        Some(Constraint::Fixed(_, _, x, y)) => {
+                                            Widget::show_constraint_fixed(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                                x,
+                                                y,
+                                            )
+                                        }
+                                        None => {}
                                     }
-                                    None => {}
                                 }
-                            }
-                        });
-                }
-            });
-        }
+                            });
+                    }
+                });
+            }
+        });
 
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, self.tools, c);

@@ -248,6 +248,12 @@ impl Data {
 
         let out = match self.features.remove(k) {
             Some(_v) => {
+                // Find and remove any constraints dependent on what we just removed.
+                let dependent_constraints = self.constraints.by_feature(&k);
+                for c in dependent_constraints {
+                    self.constraints.delete(c);
+                }
+
                 // Find and also remove any features dependent on what we just removed.
                 let to_delete: std::collections::HashSet<FeatureKey> = self
                     .features
