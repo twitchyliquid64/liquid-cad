@@ -75,15 +75,21 @@ impl<'a> Widget<'a> {
 
     fn show_selection_tab(&mut self, ui: &mut egui::Ui) {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
+        let mut changed = false;
         let selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
         for k in selected {
             ui.push_id(k, |ui| {
                 match self.drawing.feature_mut(k) {
-                    Some(Feature::Point(_, x, y)) => {
-                        Widget::show_selection_entry_point(ui, &mut commands, &k, x, y)
-                    }
+                    Some(Feature::Point(_, x, y)) => Widget::show_selection_entry_point(
+                        ui,
+                        &mut commands,
+                        &mut changed,
+                        &k,
+                        x,
+                        y,
+                    ),
                     Some(Feature::LineSegment(_, _p1, _p2)) => {
-                        Widget::show_selection_entry_line(ui, &mut commands, &k)
+                        Widget::show_selection_entry_line(ui, &mut commands, &mut changed, &k)
                     }
                     None => {}
                 }
@@ -96,7 +102,14 @@ impl<'a> Widget<'a> {
                             for ck in constraints {
                                 match self.drawing.constraint_mut(ck) {
                                     Some(Constraint::Fixed(_, _, x, y)) => {
-                                        Widget::show_constraint_fixed(ui, &mut commands, &ck, x, y)
+                                        Widget::show_constraint_fixed(
+                                            ui,
+                                            &mut commands,
+                                            &mut changed,
+                                            &ck,
+                                            x,
+                                            y,
+                                        )
                                     }
                                     None => {}
                                 }
@@ -109,11 +122,15 @@ impl<'a> Widget<'a> {
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, self.tools, c);
         }
+        if changed {
+            self.drawing.changed_in_ui();
+        }
     }
 
     fn show_constraint_fixed(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
         k: &ConstraintKey,
         px: &mut f32,
         py: &mut f32,
@@ -130,8 +147,12 @@ impl<'a> Widget<'a> {
                 .rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
-            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(px));
-            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(py));
+            *changed |= ui
+                .add_sized([50., text_height * 1.4], egui::DragValue::new(px))
+                .changed();
+            *changed |= ui
+                .add_sized([50., text_height * 1.4], egui::DragValue::new(py))
+                .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::ConstraintDelete(*k));
@@ -143,6 +164,7 @@ impl<'a> Widget<'a> {
     fn show_selection_entry_point(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
         k: &FeatureKey,
         px: &mut f32,
         py: &mut f32,
@@ -187,8 +209,12 @@ impl<'a> Widget<'a> {
                 ui.add_space(r.x / 2. - text_rect.width());
             }
 
-            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(px));
-            ui.add_sized([50., text_height * 1.4], egui::DragValue::new(py));
+            *changed |= ui
+                .add_sized([50., text_height * 1.4], egui::DragValue::new(px))
+                .changed();
+            *changed |= ui
+                .add_sized([50., text_height * 1.4], egui::DragValue::new(py))
+                .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::Delete(*k));
@@ -200,6 +226,7 @@ impl<'a> Widget<'a> {
     fn show_selection_entry_line(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
+        _changed: &mut bool,
         k: &FeatureKey,
     ) {
         ui.horizontal(|ui| {

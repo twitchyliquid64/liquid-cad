@@ -114,6 +114,9 @@ impl ConstraintData {
     pub fn get_mut<'a>(&'a mut self, ck: ConstraintKey) -> Option<&'a mut Constraint> {
         self.constraints.get_mut(ck)
     }
+    pub fn get(&self, ck: ConstraintKey) -> Option<&Constraint> {
+        self.constraints.get(ck)
+    }
 }
 
 /// Data stores state about the drawing and what it is composed of.
@@ -138,6 +141,31 @@ impl Default for Data {
 }
 
 impl Data {
+    /// changed_in_ui should be called when feature or constraint fields have changed,
+    /// independently of the drawing space or a handled event.
+    pub fn changed_in_ui(&mut self) {
+        self.solve_and_apply();
+    }
+
+    fn solve_and_apply(&mut self) {
+        // quick hack before we have a solver:
+        let Data {
+            features,
+            constraints,
+            ..
+        } = self;
+        for (k, f) in features.iter_mut() {
+            for ck in constraints.by_feature(&k) {
+                if let Some(Constraint::Fixed(_, _, x, y)) = constraints.get(ck) {
+                    if let Feature::Point(_, px, py) = f {
+                        *px = *x;
+                        *py = *y;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn feature_mut<'a>(&'a mut self, k: FeatureKey) -> Option<&'a mut Feature> {
         let Data { features, .. } = self;
 
@@ -154,10 +182,12 @@ impl Data {
 
     pub fn add_constraint(&mut self, c: Constraint) {
         self.constraints.add(c);
+        self.solve_and_apply();
     }
 
     pub fn delete_constraint(&mut self, k: ConstraintKey) {
         self.constraints.delete(k);
+        self.solve_and_apply();
     }
 
     pub fn find_point_at(&self, p: egui::Pos2) -> Option<FeatureKey> {
@@ -198,10 +228,25 @@ impl Data {
         }
     }
 
+    pub fn move_feature(&mut self, k: FeatureKey, pos: egui::Pos2) {
+        let did_move_something = match self.feature_mut(k) {
+            Some(Feature::Point(_, x, y)) => {
+                *x = pos.x;
+                *y = pos.y;
+                true
+            }
+            _ => false,
+        };
+
+        if did_move_something {
+            self.solve_and_apply();
+        }
+    }
+
     pub fn delete_feature(&mut self, k: FeatureKey) -> bool {
         self.selected_map.remove(&k);
 
-        match self.features.remove(k) {
+        let out = match self.features.remove(k) {
             Some(_v) => {
                 // Find and also remove any features dependent on what we just removed.
                 let to_delete: std::collections::HashSet<FeatureKey> = self
@@ -229,7 +274,13 @@ impl Data {
                 true
             }
             None => false,
+        };
+
+        if out {
+            self.solve_and_apply();
         }
+
+        out
     }
 
     pub fn selection_delete(&mut self) {

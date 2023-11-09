@@ -31,6 +31,18 @@ pub struct PaintParams {
     font_id: egui::FontId,
 }
 
+#[derive(Clone, Debug, Copy)]
+enum DragState {
+    SelectBox(egui::Pos2),
+    Feature(FeatureKey, egui::Vec2),
+}
+
+#[derive(Clone, Debug, Copy)]
+enum Input {
+    Selection(egui::Rect),
+    FeatureDrag(FeatureKey, egui::Pos2),
+}
+
 /// Widget implements the egui drawing widget.
 #[derive(Debug)]
 pub struct Widget<'a> {
@@ -52,14 +64,14 @@ impl<'a> Widget<'a> {
         }
     }
 
-    // handle_inputs returns the bounds of the in-progress selection, if any.
+    // handle_inputs returns the what the user is interacting with in the drawing, if any.
     fn handle_input(
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
         hf: &Option<(FeatureKey, Feature)>,
         response: &egui::Response,
-    ) -> Option<egui::Rect> {
+    ) -> Option<Input> {
         // Handle: zooming
         if let Some(hp) = hp {
             // println!("hp: {:?}", hp);
@@ -93,20 +105,34 @@ impl<'a> Widget<'a> {
             self.drawing.vp.y -= y * self.drawing.vp.zoom;
         }
 
-        // Handle: dragging a box to select
-        let current_drag = if let Some(hp) = hp {
-            let state_id = ui.make_persistent_id("select_box_start");
-            let drag_start_pos = if response.drag_started_by(egui::PointerButton::Primary) {
-                let dp = self.drawing.vp.screen_to_point(hp);
-                ui.memory_mut(|mem| mem.data.insert_temp(state_id, dp));
-                Some(dp)
+        // Handle: selection, dragging
+        let current_input = if let Some(hp) = hp {
+            let select_id = ui.make_persistent_id("select_box_start");
+            let drag_state = if response.drag_started_by(egui::PointerButton::Primary) {
+                match hf {
+                    // dragging a box to select
+                    None => {
+                        let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
+                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                        Some(state)
+                    }
+                    // Dragging a point
+                    Some((fk, Feature::Point(_, px, py))) => {
+                        let offset =
+                            self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
+                        let state = DragState::Feature(*fk, offset);
+                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                        Some(state)
+                    }
+                    Some(_) => None,
+                }
             } else {
-                ui.memory(|mem| mem.data.get_temp(state_id))
+                ui.memory(|mem| mem.data.get_temp(select_id))
             };
 
             let released = response.drag_released_by(egui::PointerButton::Primary);
-            match (drag_start_pos, released) {
-                (Some(drag_start), true) => {
+            match (drag_state, released) {
+                (Some(DragState::SelectBox(drag_start)), true) => {
                     let s =
                         egui::Rect::from_two_pos(drag_start, self.drawing.vp.screen_to_point(hp));
                     if s.area() > 200. {
@@ -116,18 +142,28 @@ impl<'a> Widget<'a> {
                         }
                         self.drawing.select_features_in_rect(s, true);
                     }
-                    ui.memory_mut(|mem| mem.data.remove::<egui::Pos2>(state_id));
+                    ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
                     None
                 }
-                (Some(drag_start), false) => {
+                (Some(DragState::SelectBox(drag_start)), false) => {
                     let s =
                         egui::Rect::from_two_pos(drag_start, self.drawing.vp.screen_to_point(hp));
                     if s.area() > 200. {
-                        Some(s)
+                        Some(Input::Selection(s))
                     } else {
                         None
                     }
                 }
+
+                (Some(DragState::Feature(fk, offset)), _) => {
+                    if released {
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    }
+                    let new_pos = self.drawing.vp.screen_to_point(hp) - offset;
+                    self.drawing.move_feature(fk, new_pos);
+                    Some(Input::FeatureDrag(fk, new_pos))
+                }
+
                 (None, _) => None,
             }
         } else {
@@ -174,7 +210,7 @@ impl<'a> Widget<'a> {
             self.drawing.selection_delete();
         }
 
-        current_drag
+        current_input
     }
 
     fn draw(
@@ -184,7 +220,7 @@ impl<'a> Widget<'a> {
         hp: Option<egui::Pos2>,
         hf: Option<(FeatureKey, Feature)>,
         response: &egui::Response,
-        current_drag: Option<egui::Rect>,
+        current_input: Option<Input>,
         base_params: &PaintParams,
     ) {
         for point_pass in [true, false] {
@@ -194,9 +230,15 @@ impl<'a> Widget<'a> {
                 }
 
                 let hovered = hf.as_ref().map(|(hk, _dist)| hk == &k).unwrap_or(false)
-                    || current_drag
+                    || current_input
                         .as_ref()
-                        .map(|dr| dr.contains_rect(v.bb(self.drawing)))
+                        .map(|dr| {
+                            if let Input::Selection(b) = dr {
+                                b.contains_rect(v.bb(self.drawing))
+                            } else {
+                                false
+                            }
+                        })
                         .unwrap_or(false);
                 let selected = self.drawing.selected_map.get(&k).is_some();
 
@@ -209,7 +251,7 @@ impl<'a> Widget<'a> {
             }
         }
 
-        if let Some(current_drag) = current_drag {
+        if let Some(Input::Selection(current_drag)) = current_input {
             let screen_rect = self.drawing.vp.translate_rect(current_drag);
             painter.rect_filled(
                 screen_rect.shrink(1.),
@@ -296,7 +338,7 @@ impl<'a> Widget<'a> {
             .unwrap_or(None);
 
         // Handle input
-        let current_drag = if let Some(c) = self.tools.handle_input(ui, hp, &hf, &response) {
+        let current_input = if let Some(c) = self.tools.handle_input(ui, hp, &hf, &response) {
             self.handler.handle(self.drawing, self.tools, c);
             None
         } else {
@@ -324,7 +366,7 @@ impl<'a> Widget<'a> {
         };
         let painter = ui.painter();
 
-        self.draw(ui, painter, hp, hf, &response, current_drag, &base_params);
+        self.draw(ui, painter, hp, hf, &response, current_input, &base_params);
         DrawResponse {}
     }
 }
