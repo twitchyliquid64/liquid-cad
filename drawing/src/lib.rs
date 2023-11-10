@@ -197,9 +197,7 @@ impl<'a> Widget<'a> {
 
         // Handle: Ctrl-A selects all
         if hp.is_some() && ui.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
-            for k in self.drawing.features.keys().collect::<Vec<_>>() {
-                self.drawing.select_feature(&k, true);
-            }
+            self.drawing.select_all();
         }
 
         // Handle: delete selection
@@ -224,7 +222,7 @@ impl<'a> Widget<'a> {
         base_params: &PaintParams,
     ) {
         for point_pass in [true, false] {
-            for (k, v) in self.drawing.features.iter() {
+            for (k, v) in self.drawing.features_iter() {
                 if point_pass != v.is_point() {
                     continue;
                 }
