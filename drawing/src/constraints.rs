@@ -34,4 +34,35 @@ impl Constraint {
             _ => false,
         }
     }
+
+    pub fn paint(
+        &self,
+        drawing: &crate::Data,
+        _k: ConstraintKey,
+        params: &crate::PaintParams,
+        painter: &egui::Painter,
+    ) {
+        use Constraint::Fixed;
+        match self {
+            Fixed(_, k, _, _) => {
+                if let Some(Feature::Point(_, x, y)) = drawing.features.get(*k) {
+                    let layout = painter.layout_no_wrap(
+                        "( )".to_string(),
+                        egui::FontId::monospace(12.),
+                        params.colors.text,
+                    );
+
+                    let c = params.vp.translate_point(egui::Pos2 { x: *x, y: *y });
+                    painter.circle_stroke(
+                        c,
+                        7.,
+                        egui::Stroke {
+                            width: 1.,
+                            color: params.colors.text,
+                        },
+                    );
+                };
+            }
+        }
+    }
 }

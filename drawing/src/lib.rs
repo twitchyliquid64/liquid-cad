@@ -221,6 +221,7 @@ impl<'a> Widget<'a> {
         current_input: Option<Input>,
         base_params: &PaintParams,
     ) {
+        // Draw features, points first
         for point_pass in [true, false] {
             for (k, v) in self.drawing.features_iter() {
                 if point_pass != v.is_point() {
@@ -247,6 +248,11 @@ impl<'a> Widget<'a> {
                 };
                 v.paint(self.drawing, k, &pp, painter);
             }
+        }
+
+        // Draw constraints
+        for (k, v) in self.drawing.constraints_iter() {
+            v.paint(self.drawing, k, &base_params, painter);
         }
 
         if let Some(Input::Selection(current_drag)) = current_input {

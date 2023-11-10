@@ -27,6 +27,10 @@ impl ConstraintData {
         self.by_feature = by_feature;
     }
 
+    pub fn iter(&self) -> slotmap::hop::Iter<'_, ConstraintKey, Constraint> {
+        self.constraints.iter()
+    }
+
     pub fn add(&mut self, c: Constraint) {
         for c2 in self.constraints.values() {
             if c.conflicts(c2) {

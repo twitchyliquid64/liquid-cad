@@ -65,7 +65,7 @@ impl Data {
     }
 
     /// Iterates through the features.
-    pub fn features_iter(&self) -> slotmap::hop::Iter<FeatureKey, Feature> {
+    pub fn features_iter(&self) -> slotmap::hop::Iter<'_, FeatureKey, Feature> {
         self.features.iter()
     }
 
@@ -74,6 +74,11 @@ impl Data {
         let Data { features, .. } = self;
 
         features.get_mut(k)
+    }
+
+    /// Iterates through the constraints.
+    pub fn constraints_iter(&self) -> slotmap::hop::Iter<'_, ConstraintKey, Constraint> {
+        self.constraints.iter()
     }
 
     /// Returns the mutable constraint based on the given key, if known.
