@@ -113,6 +113,16 @@ impl<'a> Widget<'a> {
                                                 y,
                                             )
                                         }
+                                        Some(Constraint::LineLength(_, _, d, ref_pt)) => {
+                                            Widget::show_constraint_line_length(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                                d,
+                                                ref_pt,
+                                            )
+                                        }
                                         None => {}
                                     }
                                 }
@@ -155,6 +165,41 @@ impl<'a> Widget<'a> {
                 .changed();
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(py))
+                .changed();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_line_length(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &ConstraintKey,
+        d: &mut f32,
+        ref_pt: &mut (f32, f32),
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            let text_rect = ui
+                .add_sized(
+                    [r.x / 2., text_height],
+                    egui::Label::new("Length").wrap(false),
+                )
+                .rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+            ui.add_sized(
+                [50., text_height],
+                egui::Label::new(format!("{:?}", ref_pt)).wrap(false),
+            );
+            *changed |= ui
+                .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
                 .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {

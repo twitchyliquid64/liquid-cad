@@ -11,6 +11,7 @@ pub enum ToolResponse {
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
+    NewLineLengthConstraint(FeatureKey),
     ConstraintDelete(ConstraintKey),
 }
 
@@ -66,6 +67,32 @@ impl Handler {
             ToolResponse::NewFixedConstraint(k) => match drawing.features.get(k) {
                 Some(Feature::Point(..)) => {
                     drawing.add_constraint(Constraint::Fixed(ConstraintMeta::default(), k, 0., 0.));
+
+                    tools.clear();
+                }
+                _ => {}
+            },
+            ToolResponse::NewLineLengthConstraint(k) => match drawing.features.get(k) {
+                Some(Feature::LineSegment(_, f1, f2)) => {
+                    let (f1, f2) = (
+                        drawing.features.get(*f1).unwrap(),
+                        drawing.features.get(*f2).unwrap(),
+                    );
+                    let (p1, p2) = match (f1, f2) {
+                        (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                            (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                        }
+                        _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                    };
+
+                    let d = p1.distance(p2);
+
+                    drawing.add_constraint(Constraint::LineLength(
+                        ConstraintMeta::default(),
+                        k,
+                        d,
+                        (0., 35.0),
+                    ));
 
                     tools.clear();
                 }

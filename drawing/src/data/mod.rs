@@ -124,9 +124,9 @@ impl Data {
             // they are chosen over a line segment when hovering near the end of
             // a line segment.
             let dist = if is_point {
-                v.screen_dist(self, hp, &self.vp) - (MAX_HOVER_DISTANCE / 2.)
+                v.screen_dist_sq(self, hp, &self.vp) - (MAX_HOVER_DISTANCE / 2.)
             } else {
-                v.screen_dist(self, hp, &self.vp)
+                v.screen_dist_sq(self, hp, &self.vp)
             };
 
             if dist < MAX_HOVER_DISTANCE {

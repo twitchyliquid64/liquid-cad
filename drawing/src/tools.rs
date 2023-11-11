@@ -86,12 +86,41 @@ fn fixed_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn dim_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    painter.vline(
+        c.x - 10.,
+        (c.y - 7.)..=(c.y + 7.),
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::LIGHT_BLUE,
+        },
+    );
+    painter.vline(
+        c.x + 10.,
+        (c.y - 7.)..=(c.y + 7.),
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::LIGHT_BLUE,
+        },
+    );
+    painter.hline(
+        (c.x - 9.)..=(c.x + 10.),
+        c.y,
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::WHITE,
+        },
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
     Point,
     Line(Option<egui::Pos2>),
     Fixed,
+    Dimension,
 }
 
 impl Tool {
@@ -100,12 +129,13 @@ impl Tool {
             (Tool::Point, Tool::Point) => true,
             (Tool::Line(_), Tool::Line(_)) => true,
             (Tool::Fixed, Tool::Fixed) => true,
+            (Tool::Dimension, Tool::Dimension) => true,
             _ => false,
         }
     }
 
     pub fn all<'a>() -> &'a [Tool] {
-        &[Tool::Point, Tool::Line(None), Tool::Fixed]
+        &[Tool::Point, Tool::Line(None), Tool::Fixed, Tool::Dimension]
     }
 
     pub fn toolbar_size() -> egui::Pos2 {
@@ -204,6 +234,25 @@ impl Tool {
                 }
                 None
             }
+
+            Tool::Dimension => {
+                if response.clicked() {
+                    return match hf {
+                        Some((k, crate::Feature::LineSegment(_, _, _))) => {
+                            Some(ToolResponse::NewLineLengthConstraint(k.clone()))
+                        }
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
         }
     }
 
@@ -241,6 +290,10 @@ impl Tool {
             Tool::Fixed => {
                 response.clone().on_hover_text_at_pointer("constrain (x,y)");
             }
+
+            Tool::Dimension => {
+                response.clone().on_hover_text_at_pointer("constrain d");
+            }
         }
     }
 
@@ -249,6 +302,7 @@ impl Tool {
             Tool::Point => point_tool_icon,
             Tool::Line(_) => line_tool_icon,
             Tool::Fixed => fixed_tool_icon,
+            Tool::Dimension => dim_tool_icon,
         }
     }
 
@@ -313,24 +367,29 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if hp.is_some() && !response.dragged() {
-            let (l, p, s) = ui.input(|i| {
+            let (l, p, s, d) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
                     i.key_pressed(egui::Key::S),
+                    i.key_pressed(egui::Key::D),
                 )
             });
-            match (l, p, s) {
-                (true, _, _) => {
+            match (l, p, s, d) {
+                (true, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _) => {
+                (_, true, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true) => {
+                (_, _, true, _) => {
                     self.current = Some(Tool::Fixed);
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, true) => {
+                    self.current = Some(Tool::Dimension);
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}
