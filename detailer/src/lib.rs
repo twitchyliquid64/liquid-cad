@@ -152,12 +152,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
-            let text_rect = ui
-                .add_sized(
-                    [r.x / 2., text_height],
-                    egui::Label::new("Fixed").wrap(false),
-                )
-                .rect;
+            let text_rect = ui.add(egui::Label::new("Fixed").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
             *changed |= ui
@@ -186,12 +181,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
-            let text_rect = ui
-                .add_sized(
-                    [r.x / 2., text_height],
-                    egui::Label::new("Length").wrap(false),
-                )
-                .rect;
+            let text_rect = ui.add(egui::Label::new("Length").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
             *changed |= ui
@@ -244,10 +234,7 @@ impl<'a> Widget<'a> {
 
             use slotmap::Key;
             let text_rect = ui
-                .add_sized(
-                    [r.x / 2., text_height],
-                    egui::Label::new(format!("Point {:?}", k.data())).wrap(false),
-                )
+                .add(egui::Label::new(format!("Point {:?}", k.data())).wrap(false))
                 .rect;
             if text_rect.width() < r.x / 2. {
                 ui.add_space(r.x / 2. - text_rect.width());
@@ -278,10 +265,7 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [r.x / 2., text_height],
-                egui::Label::new(format!("Line {:?}", k.data())).wrap(false),
-            );
+            ui.add(egui::Label::new(format!("Line {:?}", k.data())).wrap(false));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
