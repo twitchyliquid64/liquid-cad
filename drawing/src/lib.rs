@@ -37,12 +37,14 @@ pub struct PaintParams {
 enum DragState {
     SelectBox(egui::Pos2),
     Feature(FeatureKey, egui::Vec2),
+    Constraint(ConstraintKey, egui::Vec2),
 }
 
 #[derive(Clone, Debug, Copy)]
 enum Input {
     Selection(egui::Rect),
     FeatureDrag(FeatureKey, egui::Pos2),
+    ConstraintDrag(ConstraintKey, egui::Pos2),
 }
 
 /// Widget implements the egui drawing widget.
@@ -134,6 +136,15 @@ impl<'a> Widget<'a> {
                         k: _,
                         feature: Feature::LineSegment(..),
                     } => None,
+                    Hover::Constraint {
+                        k,
+                        constraint: Constraint::LineLength(_, _, _, (x, y)),
+                    } => {
+                        let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*x, *y);
+                        let state = DragState::Constraint(*k, offset);
+                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                        Some(state)
+                    }
                     Hover::Constraint { .. } => None,
                 }
             } else {
@@ -172,6 +183,14 @@ impl<'a> Widget<'a> {
                     let new_pos = self.drawing.vp.screen_to_point(hp) - offset;
                     self.drawing.move_feature(fk, new_pos);
                     Some(Input::FeatureDrag(fk, new_pos))
+                }
+
+                (Some(DragState::Constraint(ck, offset)), _) => {
+                    if released {
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    }
+                    self.drawing.move_constraint(ck, hp);
+                    Some(Input::ConstraintDrag(ck, hp))
                 }
 
                 (None, _) => None,
@@ -265,7 +284,18 @@ impl<'a> Widget<'a> {
 
         // Draw constraints
         for (k, v) in self.drawing.constraints_iter() {
-            v.paint(self.drawing, k, &base_params, painter);
+            let hovered = match hover {
+                Hover::Constraint { k: hk, .. } => hk == k,
+                _ => false,
+            };
+            let selected = false;
+
+            let pp = PaintParams {
+                hovered,
+                selected,
+                ..base_params.clone()
+            };
+            v.paint(self.drawing, k, &pp, painter);
         }
 
         if let Some(Input::Selection(current_drag)) = current_input {

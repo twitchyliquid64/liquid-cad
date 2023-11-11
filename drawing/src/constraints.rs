@@ -46,7 +46,33 @@ impl Constraint {
         hp: egui::Pos2,
         vp: &crate::Viewport,
     ) -> Option<f32> {
-        None
+        use Constraint::{Fixed, LineLength};
+        match self {
+            Fixed(..) => None,
+            LineLength(_, fk, _, (ref_x, ref_y)) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*fk) {
+                    let (a, b) = match (
+                        drawing.features.get(*f1).unwrap(),
+                        drawing.features.get(*f2).unwrap(),
+                    ) {
+                        (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                            (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                        }
+                        _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                    };
+
+                    let reference = egui::Vec2::new(*ref_x, *ref_y);
+                    let t = (a - b).angle() + reference.angle();
+                    let text_center = vp.translate_point(a.lerp(b, 0.5))
+                        + egui::Vec2::angled(t) * reference.length();
+
+                    let bounds = egui::Rect::from_center_size(text_center, (60., 15.).into());
+                    Some(bounds.distance_sq_to_pos(hp))
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn paint(
@@ -60,12 +86,6 @@ impl Constraint {
         match self {
             Fixed(_, k, _, _) => {
                 if let Some(Feature::Point(_, x, y)) = drawing.features.get(*k) {
-                    let layout = painter.layout_no_wrap(
-                        "( )".to_string(),
-                        egui::FontId::monospace(12.),
-                        params.colors.text,
-                    );
-
                     let c = params.vp.translate_point(egui::Pos2 { x: *x, y: *y });
                     painter.circle_stroke(
                         c,
@@ -95,8 +115,10 @@ impl Constraint {
                         b,
                         val: d,
                         reference: egui::Vec2::new(*ref_x, *ref_y),
+                        hovered: params.hovered,
+                        selected: params.selected,
                     }
-                    .draw(painter, &params.vp);
+                    .draw(painter, params);
                 }
             }
         }
@@ -109,26 +131,37 @@ struct DimensionLengthOverlay<'a> {
     a: egui::Pos2,
     b: egui::Pos2,
     reference: egui::Vec2,
+    hovered: bool,
+    selected: bool,
 }
 
 impl<'a> DimensionLengthOverlay<'a> {
     const LINE_STOP_OFFSET: f32 = 5.5;
 
-    pub fn draw(&self, painter: &egui::Painter, vp: &crate::Viewport) {
+    pub fn draw(&self, painter: &egui::Painter, params: &crate::PaintParams) {
+        let vp = &params.vp;
         let t = (self.a - self.b).angle() + self.reference.angle();
         let (sa, sb) = (vp.translate_point(self.a), vp.translate_point(self.b));
 
-        self.draw_stop_lines(t, sa, sb, painter, vp);
+        self.draw_stop_lines(t, sa, sb, painter);
+
+        let color = if self.selected {
+            params.colors.selected
+        } else if self.hovered {
+            params.colors.hover
+        } else {
+            egui::Color32::LIGHT_BLUE
+        };
 
         let layout = painter.layout_no_wrap(
             format!("{:.3}", self.val).into(),
             egui::FontId::monospace(10.),
-            egui::Color32::LIGHT_BLUE,
+            color,
         );
         let text_pos = vp.translate_point(self.a.lerp(self.b, 0.5))
             + egui::Vec2::angled(t) * self.reference.length();
 
-        self.draw_parallel_arrows(t, sa, sb, text_pos, &layout.rect, painter, vp);
+        self.draw_parallel_arrows(t, sa, sb, text_pos, &layout.rect, color, painter);
         painter.galley(
             text_pos
                 - egui::Vec2 {
@@ -146,8 +179,8 @@ impl<'a> DimensionLengthOverlay<'a> {
         sb: egui::Pos2,
         text_pos: egui::Pos2,
         text_bounds: &egui::Rect,
+        color: egui::Color32,
         painter: &egui::Painter,
-        vp: &crate::Viewport,
     ) {
         let v = egui::Vec2::angled(t) * self.reference.length();
         let text_offset = text_pos.to_vec2()
@@ -163,14 +196,11 @@ impl<'a> DimensionLengthOverlay<'a> {
         if let Some(end) = arrow_line_1
             .intersection_rect(&text_bounds.expand2((12., 2.).into()).translate(text_offset))
         {
-            if sa.distance_sq(end) > 1890. {
+            if sa.distance_sq(end) > 1950. {
                 painter.arrow(
                     end,
                     egui::Vec2::angled((sa - sb).angle()) * 20.,
-                    egui::Stroke {
-                        width: 1.,
-                        color: egui::Color32::LIGHT_BLUE,
-                    },
+                    egui::Stroke { width: 1., color },
                 );
             }
         }
@@ -182,27 +212,17 @@ impl<'a> DimensionLengthOverlay<'a> {
         if let Some(end) = arrow_line_2
             .intersection_rect(&text_bounds.expand2((12., 2.).into()).translate(text_offset))
         {
-            if sb.distance_sq(end) > 1890. {
+            if sb.distance_sq(end) > 1950. {
                 painter.arrow(
                     end,
                     egui::Vec2::angled((sb - sa).angle()) * 20.,
-                    egui::Stroke {
-                        width: 1.,
-                        color: egui::Color32::LIGHT_BLUE,
-                    },
+                    egui::Stroke { width: 1., color },
                 );
             }
         }
     }
 
-    fn draw_stop_lines(
-        &self,
-        t: f32,
-        sa: egui::Pos2,
-        sb: egui::Pos2,
-        painter: &egui::Painter,
-        vp: &crate::Viewport,
-    ) {
+    fn draw_stop_lines(&self, t: f32, sa: egui::Pos2, sb: egui::Pos2, painter: &egui::Painter) {
         let l = self.reference.length();
 
         painter.line_segment(
