@@ -199,6 +199,12 @@ impl<'a> Widget<'a> {
             None
         };
 
+        // All clicks get keyboard focus.
+        // println!("focus-w: {:?}", response.ctx.memory(|mem| mem.focus()));
+        if response.clicked() && !response.lost_focus() {
+            ui.memory_mut(|mem| mem.request_focus(response.id));
+        }
+
         // Handle: clicks altering selection
         if hp.is_some() && response.clicked_by(egui::PointerButton::Primary) {
             let shift_held = ui.input(|i| i.modifiers.shift);
@@ -216,7 +222,7 @@ impl<'a> Widget<'a> {
             }
         }
 
-        // Handle: escape clears collection
+        // Handle: escape clears collection - cant use focus check here?
         if hp.is_some()
             && self.drawing.selected_map.len() > 0
             && ui.input(|i| i.key_pressed(egui::Key::Escape))
@@ -225,12 +231,13 @@ impl<'a> Widget<'a> {
         }
 
         // Handle: Ctrl-A selects all
-        if hp.is_some() && ui.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
+        if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
             self.drawing.select_all();
         }
 
         // Handle: delete selection
-        if hp.is_some()
+        if response.has_focus()
+            && hp.is_some()
             && self.drawing.selected_map.len() > 0
             && ui.input(|i| i.key_pressed(egui::Key::Delete))
         {
@@ -363,7 +370,11 @@ impl<'a> Widget<'a> {
         use egui::Sense;
         let (rect, response) = ui.allocate_exact_size(
             ui.available_size(),
-            Sense::click_and_drag().union(Sense::hover()),
+            Sense {
+                click: true,
+                drag: true,
+                focusable: true,
+            },
         );
         ui.set_clip_rect(rect);
 
@@ -375,7 +386,10 @@ impl<'a> Widget<'a> {
         if !has_init {
             self.drawing.vp.x = -rect.width() / 2.;
             self.drawing.vp.y = -rect.height() / 2.;
-            ui.memory_mut(|mem| mem.data.insert_temp(state_id, true));
+            ui.memory_mut(|mem| {
+                mem.data.insert_temp(state_id, true);
+                mem.request_focus(response.id); // request focus initially
+            });
         }
 
         // Find hover feature, if any

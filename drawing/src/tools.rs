@@ -388,7 +388,7 @@ impl Toolbar {
         }
 
         // Hotkeys for switching tools
-        if hp.is_some() && !response.dragged() {
+        if response.has_focus() && !response.dragged() {
             let (l, p, s, d) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),

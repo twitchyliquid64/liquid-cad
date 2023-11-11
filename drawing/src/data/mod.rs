@@ -117,6 +117,7 @@ impl Data {
         self.solve_and_apply();
     }
 
+    /// NOTE: Only supports LineLength constraints atm, and consumes a SCREEN coordinate.
     pub fn move_constraint(&mut self, k: ConstraintKey, pos: egui::Pos2) {
         if let Some(Constraint::LineLength(_, fk, _, _)) = self.constraints.get(k) {
             let (a, b) = match self.features.get(*fk) {
@@ -140,7 +141,7 @@ impl Data {
 
             if let Some(Constraint::LineLength(_, fk, _, (ref_x, ref_y))) = self.constraint_mut(k) {
                 let c = a.lerp(b, 0.5);
-                let mut v = c.to_vec2() - pos.to_vec2();
+                let v = c.to_vec2() - pos.to_vec2();
                 let reference = egui::Vec2::angled((a - b).angle() - v.angle()) * v.length();
                 *ref_x = -reference.x;
                 *ref_y = reference.y;

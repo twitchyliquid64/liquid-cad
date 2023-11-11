@@ -180,7 +180,7 @@ impl<'a> Widget<'a> {
         changed: &mut bool,
         k: &ConstraintKey,
         d: &mut f32,
-        ref_pt: &mut (f32, f32),
+        _ref_pt: &mut (f32, f32),
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
@@ -194,10 +194,6 @@ impl<'a> Widget<'a> {
                 .rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
-            ui.add_sized(
-                [50., text_height],
-                egui::Label::new(format!("{:?}", ref_pt)).wrap(false),
-            );
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
                 .changed();

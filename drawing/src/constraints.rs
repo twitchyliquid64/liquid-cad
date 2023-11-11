@@ -136,7 +136,7 @@ struct DimensionLengthOverlay<'a> {
 }
 
 impl<'a> DimensionLengthOverlay<'a> {
-    const LINE_STOP_OFFSET: f32 = 5.5;
+    const LINE_STOP_OFFSET: f32 = 8.5;
 
     pub fn draw(&self, painter: &egui::Painter, params: &crate::PaintParams) {
         let vp = &params.vp;
@@ -194,9 +194,9 @@ impl<'a> DimensionLengthOverlay<'a> {
             p2: text_pos,
         };
         if let Some(end) = arrow_line_1
-            .intersection_rect(&text_bounds.expand2((12., 2.).into()).translate(text_offset))
+            .intersection_rect(&text_bounds.expand2((10., 2.).into()).translate(text_offset))
         {
-            if sa.distance_sq(end) > 1950. {
+            if arrow_line_1.p1.distance_sq(end) > 750. {
                 painter.arrow(
                     end,
                     egui::Vec2::angled((sa - sb).angle()) * 20.,
@@ -210,9 +210,9 @@ impl<'a> DimensionLengthOverlay<'a> {
             p2: sb + v,
         };
         if let Some(end) = arrow_line_2
-            .intersection_rect(&text_bounds.expand2((12., 2.).into()).translate(text_offset))
+            .intersection_rect(&text_bounds.expand2((10., 2.).into()).translate(text_offset))
         {
-            if sb.distance_sq(end) > 1950. {
+            if arrow_line_2.p2.distance_sq(end) > 750. {
                 painter.arrow(
                     end,
                     egui::Vec2::angled((sb - sa).angle()) * 20.,
