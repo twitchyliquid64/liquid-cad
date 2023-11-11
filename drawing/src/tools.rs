@@ -1,4 +1,5 @@
 use super::PaintParams;
+use crate::data::Hover;
 use crate::handler::ToolResponse;
 
 const TOOL_ICON_SIZE: egui::Vec2 = egui::Vec2 { x: 32.0, y: 32.0 };
@@ -155,19 +156,19 @@ impl Tool {
         &mut self,
         _ui: &mut egui::Ui,
         hp: egui::Pos2,
-        hf: &Option<(crate::FeatureKey, crate::Feature)>,
+        hover: &Hover,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
         match self {
             Tool::Point => {
                 match (
-                    hf,
+                    hover,
                     response.clicked(),
                     response.drag_started_by(egui::PointerButton::Primary)
                         || response.drag_released_by(egui::PointerButton::Primary),
                 ) {
-                    (None, true, _) => Some(ToolResponse::NewPoint(hp)),
-                    (Some(_), true, _) => None,
+                    (Hover::None, true, _) => Some(ToolResponse::NewPoint(hp)),
+                    (Hover::Feature { .. } | Hover::Constraint { .. }, true, _) => None,
                     (_, _, true) => Some(ToolResponse::Handled), // catch drag events
 
                     (_, false, false) => None,
@@ -175,14 +176,28 @@ impl Tool {
             }
 
             Tool::Line(p1) => {
-                let c = match (hf, &p1, response.clicked()) {
+                let c = match (hover, &p1, response.clicked()) {
                     // No first point, clicked on a point
-                    (Some((_, crate::Feature::Point(_, x, y))), None, true) => {
+                    (
+                        Hover::Feature {
+                            k: _,
+                            feature: crate::Feature::Point(_, x, y),
+                        },
+                        None,
+                        true,
+                    ) => {
                         *p1 = Some(egui::Pos2 { x: *x, y: *y });
                         Some(ToolResponse::Handled)
                     }
                     // Has first point, clicked on a point
-                    (Some((_, crate::Feature::Point(_, x2, y2))), Some(starting_point), true) => {
+                    (
+                        Hover::Feature {
+                            k: _,
+                            feature: crate::Feature::Point(_, x2, y2),
+                        },
+                        Some(starting_point),
+                        true,
+                    ) => {
                         let starting_point = starting_point.clone();
                         *p1 = Some(egui::Pos2 { x: *x2, y: *y2 });
                         Some(ToolResponse::NewLineSegment(
@@ -190,15 +205,20 @@ impl Tool {
                             egui::Pos2 { x: *x2, y: *y2 },
                         ))
                     }
-                    (None, Some(_), true) => {
+                    (Hover::None, Some(_), true) => {
                         *p1 = None;
                         Some(ToolResponse::Handled)
                     }
                     // No first point, clicked empty space or line
-                    (None, None, true)
-                    | (Some((_, crate::Feature::LineSegment(_, _, _))), None, true) => {
-                        Some(ToolResponse::SwitchToPointer)
-                    }
+                    (Hover::None, None, true)
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::LineSegment(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    ) => Some(ToolResponse::SwitchToPointer),
 
                     _ => None,
                 };
@@ -218,10 +238,11 @@ impl Tool {
 
             Tool::Fixed => {
                 if response.clicked() {
-                    return match hf {
-                        Some((k, crate::Feature::Point(_, _, _))) => {
-                            Some(ToolResponse::NewFixedConstraint(k.clone()))
-                        }
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Point(..),
+                        } => Some(ToolResponse::NewFixedConstraint(k.clone())),
                         _ => Some(ToolResponse::SwitchToPointer),
                     };
                 }
@@ -237,10 +258,11 @@ impl Tool {
 
             Tool::Dimension => {
                 if response.clicked() {
-                    return match hf {
-                        Some((k, crate::Feature::LineSegment(_, _, _))) => {
-                            Some(ToolResponse::NewLineLengthConstraint(k.clone()))
-                        }
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        } => Some(ToolResponse::NewLineLengthConstraint(k.clone())),
                         _ => Some(ToolResponse::SwitchToPointer),
                     };
                 }
@@ -356,7 +378,7 @@ impl Toolbar {
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
-        hf: &Option<(crate::FeatureKey, crate::Feature)>,
+        hover: &Hover,
         response: &egui::Response,
     ) -> Option<ToolResponse> {
         // Escape to exit use of a tool
@@ -414,7 +436,7 @@ impl Toolbar {
             }
 
             if let Some(current) = self.current.as_mut() {
-                return current.handle_input(ui, hp, hf, response);
+                return current.handle_input(ui, hp, hover, response);
             }
         }
         None

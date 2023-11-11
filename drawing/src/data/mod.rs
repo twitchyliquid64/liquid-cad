@@ -3,7 +3,7 @@ use crate::{Feature, FeatureKey};
 use slotmap::HopSlotMap;
 use std::collections::HashMap;
 
-const MAX_HOVER_DISTANCE: f32 = 160.0;
+const MAX_HOVER_DISTANCE: f32 = 120.0;
 
 mod viewport;
 pub use viewport::Viewport;
@@ -13,6 +13,19 @@ pub use constraint_data::ConstraintData;
 
 mod terms;
 pub use terms::{TermAllocator, TermRef};
+
+#[derive(Clone, Debug)]
+pub enum Hover {
+    None,
+    Feature {
+        k: FeatureKey,
+        feature: Feature,
+    },
+    Constraint {
+        k: ConstraintKey,
+        constraint: Constraint,
+    },
+}
 
 /// Data stores state about the drawing and what it is composed of.
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -114,8 +127,19 @@ impl Data {
         None
     }
 
+    /// Returns the 'thing' the screen coordinates are hovering over, if any.
+    pub fn find_screen_hover(&self, hp: egui::Pos2) -> Hover {
+        match self.find_screen_feature(hp) {
+            Some((k, feature)) => Hover::Feature { k, feature },
+            None => match self.find_screen_constraint(hp) {
+                Some((k, constraint)) => Hover::Constraint { k, constraint },
+                None => Hover::None,
+            },
+        }
+    }
+
     /// Returns the feature the screen coordinates are hovering over, if any.
-    pub fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(FeatureKey, Feature)> {
+    fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(FeatureKey, Feature)> {
         let mut closest: Option<(FeatureKey, f32, bool)> = None;
         for (k, v) in self.features.iter() {
             let is_point = v.is_point();
@@ -140,6 +164,30 @@ impl Data {
 
         match closest {
             Some((k, _dist, _is_point)) => Some((k, self.features.get(k).unwrap().clone())),
+            None => None,
+        }
+    }
+
+    /// Returns the constraint the screen coordinates are hovering over, if any.
+    fn find_screen_constraint(&self, hp: egui::Pos2) -> Option<(ConstraintKey, Constraint)> {
+        let mut closest: Option<(ConstraintKey, f32)> = None;
+        for (k, c) in self.constraints_iter() {
+            let dist = match c.screen_dist_sq(self, hp, &self.vp) {
+                Some(dist) => dist,
+                None => continue,
+            };
+
+            if dist < MAX_HOVER_DISTANCE {
+                closest = Some(
+                    closest
+                        .map(|c| if dist < c.1 { (k, dist) } else { c })
+                        .unwrap_or((k, dist)),
+                );
+            }
+        }
+
+        match closest {
+            Some((k, _dist)) => Some((k, self.constraints.get(k).unwrap().clone())),
             None => None,
         }
     }

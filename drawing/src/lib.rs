@@ -3,7 +3,7 @@
 pub mod l;
 
 mod data;
-pub use data::{Data, Viewport};
+pub use data::{Data, Hover, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta};
 mod constraints;
@@ -71,7 +71,7 @@ impl<'a> Widget<'a> {
         &mut self,
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
-        hf: &Option<(FeatureKey, Feature)>,
+        hover: &Hover,
         response: &egui::Response,
     ) -> Option<Input> {
         // Handle: zooming
@@ -111,22 +111,30 @@ impl<'a> Widget<'a> {
         let current_input = if let Some(hp) = hp {
             let select_id = ui.make_persistent_id("select_box_start");
             let drag_state = if response.drag_started_by(egui::PointerButton::Primary) {
-                match hf {
+                match hover {
                     // dragging a box to select
-                    None => {
+                    Hover::None => {
                         let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
                         ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
                         Some(state)
                     }
                     // Dragging a point
-                    Some((fk, Feature::Point(_, px, py))) => {
+                    Hover::Feature {
+                        k,
+                        feature: Feature::Point(_, px, py),
+                    } => {
                         let offset =
                             self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
-                        let state = DragState::Feature(*fk, offset);
+                        let state = DragState::Feature(*k, offset);
                         ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
                         Some(state)
                     }
-                    Some(_) => None,
+                    // TODO: dragging a line
+                    Hover::Feature {
+                        k: _,
+                        feature: Feature::LineSegment(..),
+                    } => None,
+                    Hover::Constraint { .. } => None,
                 }
             } else {
                 ui.memory(|mem| mem.data.get_temp(select_id))
@@ -177,7 +185,7 @@ impl<'a> Widget<'a> {
             let shift_held = ui.input(|i| i.modifiers.shift);
 
             // feature clicked: add-to or replace selection
-            if let Some((k, _)) = hf {
+            if let Hover::Feature { k, .. } = hover {
                 if !shift_held {
                     self.drawing.selection_clear();
                 }
@@ -218,7 +226,7 @@ impl<'a> Widget<'a> {
         ui: &egui::Ui,
         painter: &egui::Painter,
         hp: Option<egui::Pos2>,
-        hf: Option<(FeatureKey, Feature)>,
+        hover: Hover,
         response: &egui::Response,
         current_input: Option<Input>,
         base_params: &PaintParams,
@@ -230,17 +238,20 @@ impl<'a> Widget<'a> {
                     continue;
                 }
 
-                let hovered = hf.as_ref().map(|(hk, _dist)| hk == &k).unwrap_or(false)
-                    || current_input
-                        .as_ref()
-                        .map(|dr| {
-                            if let Input::Selection(b) = dr {
-                                b.contains_rect(v.bb(self.drawing))
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap_or(false);
+                let hovered = match hover {
+                    Hover::Feature { k: hk, .. } => hk == k,
+                    _ => false,
+                } || current_input
+                    .as_ref()
+                    .map(|dr| {
+                        if let Input::Selection(b) = dr {
+                            b.contains_rect(v.bb(self.drawing))
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or(false);
+
                 let selected = self.drawing.selected_map.get(&k).is_some();
 
                 let pp = PaintParams {
@@ -339,16 +350,16 @@ impl<'a> Widget<'a> {
 
         // Find hover feature, if any
         let hp = response.hover_pos();
-        let hf = hp
-            .map(|hp| self.drawing.find_screen_feature(hp))
-            .unwrap_or(None);
+        let hover = hp
+            .map(|hp| self.drawing.find_screen_hover(hp))
+            .unwrap_or(Hover::None);
 
         // Handle input
-        let current_input = if let Some(c) = self.tools.handle_input(ui, hp, &hf, &response) {
+        let current_input = if let Some(c) = self.tools.handle_input(ui, hp, &hover, &response) {
             self.handler.handle(self.drawing, self.tools, c);
             None
         } else {
-            self.handle_input(ui, hp, &hf, &response)
+            self.handle_input(ui, hp, &hover, &response)
         };
 
         let base_params = PaintParams {
@@ -372,7 +383,15 @@ impl<'a> Widget<'a> {
         };
         let painter = ui.painter();
 
-        self.draw(ui, painter, hp, hf, &response, current_input, &base_params);
+        self.draw(
+            ui,
+            painter,
+            hp,
+            hover,
+            &response,
+            current_input,
+            &base_params,
+        );
         DrawResponse {}
     }
 }

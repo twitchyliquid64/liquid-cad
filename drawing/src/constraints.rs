@@ -40,6 +40,15 @@ impl Constraint {
         }
     }
 
+    pub fn screen_dist_sq(
+        &self,
+        drawing: &crate::Data,
+        hp: egui::Pos2,
+        vp: &crate::Viewport,
+    ) -> Option<f32> {
+        None
+    }
+
     pub fn paint(
         &self,
         drawing: &crate::Data,
