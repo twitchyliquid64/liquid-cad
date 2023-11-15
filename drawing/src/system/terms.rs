@@ -47,10 +47,41 @@ impl Into<eq::Variable> for &TermRef {
 pub struct TermAllocator {
     top: usize,
     by_feature: HashMap<FeatureKey, usize>,
+    by_base: HashMap<usize, FeatureKey>,
     free: Vec<usize>,
 }
 
 impl TermAllocator {
+    pub fn get_var_ref(&self, v: &eq::Variable) -> Option<TermRef> {
+        match (v.as_str().get(..1), v.as_str().get(1..)) {
+            (Some("d"), Some(base)) => {
+                let base: usize = base.parse().ok()?;
+                Some(TermRef {
+                    t: TermType::ScalarDistance,
+                    base,
+                    for_feature: self.by_base.get(&base).copied(),
+                })
+            }
+            (Some("x"), Some(base)) => {
+                let base: usize = base.parse().ok()?;
+                Some(TermRef {
+                    t: TermType::PositionX,
+                    base,
+                    for_feature: self.by_base.get(&base).copied(),
+                })
+            }
+            (Some("y"), Some(base)) => {
+                let base: usize = base.parse().ok()?;
+                Some(TermRef {
+                    t: TermType::PositionY,
+                    base,
+                    for_feature: self.by_base.get(&base).copied(),
+                })
+            }
+            _ => None,
+        }
+    }
+
     pub fn get_feature_term(&mut self, fk: FeatureKey, t: TermType) -> TermRef {
         if let Some(base) = self.by_feature.get(&fk) {
             return TermRef {
@@ -62,6 +93,7 @@ impl TermAllocator {
 
         let base = self.alloc_base();
         self.by_feature.insert(fk, base);
+        self.by_base.insert(base, fk);
         TermRef {
             t,
             base,
@@ -82,6 +114,7 @@ impl TermAllocator {
     /// Records deletion of a feature, so its index can be used.
     pub fn delete_feature(&mut self, fk: FeatureKey) {
         if let Some(base) = self.by_feature.remove(&fk) {
+            self.by_base.remove(&base);
             self.free.push(base);
         }
     }

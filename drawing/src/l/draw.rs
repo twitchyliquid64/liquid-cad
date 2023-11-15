@@ -1,6 +1,6 @@
 // all input dimensions are in drawing-space.
 pub struct DimensionLengthOverlay<'a> {
-    pub val: &'a f32,
+    pub val: &'a str,
     pub a: egui::Pos2,
     pub b: egui::Pos2,
     pub reference: egui::Vec2,
@@ -26,11 +26,7 @@ impl<'a> DimensionLengthOverlay<'a> {
             egui::Color32::LIGHT_BLUE
         };
 
-        let layout = painter.layout_no_wrap(
-            format!("{:.3}", self.val).into(),
-            egui::FontId::monospace(10.),
-            color,
-        );
+        let layout = painter.layout_no_wrap(self.val.into(), egui::FontId::monospace(10.), color);
         let text_pos = vp.translate_point(self.a.lerp(self.b, 0.5))
             + egui::Vec2::angled(t) * self.reference.length();
 

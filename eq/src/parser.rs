@@ -34,12 +34,16 @@ pub(super) fn parse_expr<'a>() -> impl Parser<'a, &'a str, Expression> {
         let sqrt_pm = text::keyword("sqrt_pm")
             .then(expr.clone().delimited_by(just('('), just(')')))
             .map(|(_, e)| Expression::Sqrt(Box::new(e), true));
+        let abs = text::keyword("abs")
+            .then(expr.clone().delimited_by(just('('), just(')')))
+            .map(|(_, e)| Expression::Abs(Box::new(e)));
 
         let atom = number
             .or(var_with_coeff)
             .or(int)
             .or(sqrt)
             .or(sqrt_pm)
+            .or(abs)
             .or(expr.delimited_by(just('('), just(')')))
             .or(ident.map(|i: &str| Expression::Variable(i.into())))
             .padded();
@@ -156,6 +160,10 @@ mod tests {
                 )),
                 false
             ))
+        );
+        assert_eq!(
+            Expression::parse("abs(2)", false),
+            Ok(Expression::Abs(Box::new(Expression::Integer(2.into()))))
         );
     }
 

@@ -123,6 +123,17 @@ impl<'a> Widget<'a> {
                                                 ref_pt,
                                             )
                                         }
+                                        Some(Constraint::LineAlongCardinal(
+                                            _,
+                                            _,
+                                            is_horizontal,
+                                        )) => Widget::show_constraint_line_cardinal_align(
+                                            ui,
+                                            &mut commands,
+                                            &mut changed,
+                                            &ck,
+                                            is_horizontal,
+                                        ),
                                         None => {}
                                     }
                                 }
@@ -187,6 +198,40 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
                 .changed();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_line_cardinal_align(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &ConstraintKey,
+        is_horizontal: &mut bool,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            let text_rect = ui
+                .add(
+                    egui::Label::new(if *is_horizontal {
+                        "Horizontal"
+                    } else {
+                        "Vertical"
+                    })
+                    .wrap(false),
+                )
+                .rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+            // *changed |= ui
+            //     .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
+            //     .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::ConstraintDelete(*k));

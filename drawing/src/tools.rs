@@ -115,6 +115,40 @@ fn dim_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn horizontal_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "H".into(),
+        egui::FontId::monospace(10.),
+        egui::Color32::LIGHT_BLUE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
+fn vertical_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "V".into(),
+        egui::FontId::monospace(10.),
+        egui::Color32::LIGHT_BLUE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -122,6 +156,8 @@ enum Tool {
     Line(Option<egui::Pos2>),
     Fixed,
     Dimension,
+    Horizontal,
+    Vertical,
 }
 
 impl Tool {
@@ -131,12 +167,21 @@ impl Tool {
             (Tool::Line(_), Tool::Line(_)) => true,
             (Tool::Fixed, Tool::Fixed) => true,
             (Tool::Dimension, Tool::Dimension) => true,
+            (Tool::Horizontal, Tool::Horizontal) => true,
+            (Tool::Vertical, Tool::Vertical) => true,
             _ => false,
         }
     }
 
     pub fn all<'a>() -> &'a [Tool] {
-        &[Tool::Point, Tool::Line(None), Tool::Fixed, Tool::Dimension]
+        &[
+            Tool::Point,
+            Tool::Line(None),
+            Tool::Fixed,
+            Tool::Dimension,
+            Tool::Horizontal,
+            Tool::Vertical,
+        ]
     }
 
     pub fn toolbar_size() -> egui::Pos2 {
@@ -275,6 +320,45 @@ impl Tool {
                 }
                 None
             }
+
+            Tool::Horizontal => {
+                if response.clicked() {
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        } => Some(ToolResponse::NewLineCardinalConstraint(k.clone(), true)),
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
+            Tool::Vertical => {
+                if response.clicked() {
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        } => Some(ToolResponse::NewLineCardinalConstraint(k.clone(), false)),
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
         }
     }
 
@@ -316,6 +400,16 @@ impl Tool {
             Tool::Dimension => {
                 response.clone().on_hover_text_at_pointer("constrain d");
             }
+            Tool::Horizontal => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain horizontal");
+            }
+            Tool::Vertical => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain vertical");
+            }
         }
     }
 
@@ -325,6 +419,8 @@ impl Tool {
             Tool::Line(_) => line_tool_icon,
             Tool::Fixed => fixed_tool_icon,
             Tool::Dimension => dim_tool_icon,
+            Tool::Horizontal => horizontal_tool_icon,
+            Tool::Vertical => vertical_tool_icon,
         }
     }
 
@@ -389,29 +485,39 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d) = ui.input(|i| {
+            let (l, p, s, d, v, h) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
                     i.key_pressed(egui::Key::S),
                     i.key_pressed(egui::Key::D),
+                    i.key_pressed(egui::Key::V),
+                    i.key_pressed(egui::Key::H),
                 )
             });
-            match (l, p, s, d) {
-                (true, _, _, _) => {
+            match (l, p, s, d, v, h) {
+                (true, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _, _) => {
+                (_, true, _, _, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true, _) => {
+                (_, _, true, _, _, _) => {
                     self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, true) => {
+                (_, _, _, true, _, _) => {
                     self.current = Some(Tool::Dimension);
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, true, _) => {
+                    self.current = Some(Tool::Vertical);
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, _, true) => {
+                    self.current = Some(Tool::Horizontal);
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}

@@ -1,6 +1,6 @@
-use crate::l::LineSegment;
 use crate::system::{self, TermAllocator, TermRef, TermType};
 use crate::{Feature, FeatureKey};
+use eq::{Expression, Rational};
 use slotmap::HopSlotMap;
 
 slotmap::new_key_type! {
@@ -14,30 +14,34 @@ pub struct ConstraintMeta {}
 pub enum Constraint {
     Fixed(ConstraintMeta, FeatureKey, f32, f32),
     LineLength(ConstraintMeta, FeatureKey, f32, (f32, f32)),
+    LineAlongCardinal(ConstraintMeta, FeatureKey, bool), // true = horizontal
 }
 
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
-        use Constraint::{Fixed, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
-            Fixed(_, fk, _, _) => vec![fk.clone()],
+            Fixed(_, fk, ..) => vec![fk.clone()],
             LineLength(_, fk, ..) => vec![fk.clone()],
+            LineAlongCardinal(_, fk, ..) => vec![fk.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
-        use Constraint::{Fixed, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
             LineLength(..) => matches!(ft, &Feature::LineSegment(..)),
+            LineAlongCardinal(_, fk, ..) => matches!(ft, &Feature::LineSegment(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
-        use Constraint::{Fixed, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
             (LineLength(_, f1, ..), LineLength(_, f2, ..)) => f1 == f2,
+            (LineAlongCardinal(_, f1, ..), LineAlongCardinal(_, f2, ..)) => f1 == f2,
             _ => false,
         }
     }
@@ -48,7 +52,7 @@ impl Constraint {
         hp: egui::Pos2,
         vp: &crate::Viewport,
     ) -> Option<f32> {
-        use Constraint::{Fixed, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
             Fixed(..) => None,
             LineLength(_, fk, _, (ref_x, ref_y)) => {
@@ -71,7 +75,26 @@ impl Constraint {
                     let bounds = egui::Rect::from_center_size(text_center, (60., 15.).into());
                     Some(bounds.distance_sq_to_pos(hp))
                 } else {
-                    None
+                    unreachable!();
+                }
+            }
+            LineAlongCardinal(_, fk, ..) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*fk) {
+                    let (a, b) = match (
+                        drawing.features.get(*f1).unwrap(),
+                        drawing.features.get(*f2).unwrap(),
+                    ) {
+                        (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                            (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                        }
+                        _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                    };
+
+                    let text_center = vp.translate_point(a.lerp(b, 0.5));
+                    let bounds = egui::Rect::from_center_size(text_center, (20., 15.).into());
+                    Some(bounds.distance_sq_to_pos(hp))
+                } else {
+                    unreachable!();
                 }
             }
         }
@@ -84,7 +107,7 @@ impl Constraint {
         params: &crate::PaintParams,
         painter: &egui::Painter,
     ) {
-        use Constraint::{Fixed, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
             Fixed(_, k, _, _) => {
                 if let Some(Feature::Point(_, x, y)) = drawing.features.get(*k) {
@@ -115,7 +138,7 @@ impl Constraint {
                     crate::l::draw::DimensionLengthOverlay {
                         a,
                         b,
-                        val: d,
+                        val: &format!("{:.3}", d),
                         reference: egui::Vec2::new(*ref_x, *ref_y),
                         hovered: params.hovered,
                         selected: params.selected,
@@ -123,8 +146,133 @@ impl Constraint {
                     .draw(painter, params);
                 }
             }
+
+            LineAlongCardinal(_, k, is_horizontal) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
+                    let (a, b) = match (
+                        drawing.features.get(*f1).unwrap(),
+                        drawing.features.get(*f2).unwrap(),
+                    ) {
+                        (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                            (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                        }
+                        _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                    };
+
+                    let mid = params.vp.translate_point(a.lerp(b, 0.5));
+                    painter.text(
+                        mid,
+                        egui::Align2::CENTER_CENTER,
+                        if *is_horizontal { "H" } else { "V" },
+                        params.font_id.clone(),
+                        egui::Color32::WHITE,
+                    );
+                }
+            }
         }
     }
+
+    pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
+        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        match self {
+            Fixed(_, k, x, y) => {
+                let (tx, ty) = (
+                    &drawing.terms.get_feature_term(*k, TermType::PositionX),
+                    &drawing.terms.get_feature_term(*k, TermType::PositionY),
+                );
+                vec![
+                    Expression::Equal(
+                        Box::new(Expression::Variable(tx.into())),
+                        Box::new(Expression::Rational(
+                            Rational::from_float(*x).unwrap(),
+                            true,
+                        )),
+                    ),
+                    Expression::Equal(
+                        Box::new(Expression::Variable(ty.into())),
+                        Box::new(Expression::Rational(
+                            Rational::from_float(*y).unwrap(),
+                            true,
+                        )),
+                    ),
+                ]
+            }
+            LineLength(_, k, d, _) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
+                    let td = &drawing.terms.get_feature_term(*k, TermType::ScalarDistance);
+                    let (x1, y1, x2, y2) = (
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionY),
+                    );
+
+                    vec![
+                        Expression::Equal(
+                            Box::new(Expression::Variable(td.into())),
+                            Box::new(Expression::Rational(
+                                Rational::from_float(*d).unwrap(),
+                                true,
+                            )),
+                        ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(td.into())),
+                            Box::new(distance_eq(td, x1, y1, x2, y2)),
+                        ),
+                    ]
+                } else {
+                    unreachable!();
+                }
+            }
+
+            LineAlongCardinal(_, k, is_horizontal) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
+                    let (x1, y1, x2, y2) = (
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionY),
+                    );
+
+                    if *is_horizontal {
+                        vec![Expression::Equal(
+                            Box::new(Expression::Variable(y1.into())),
+                            Box::new(Expression::Variable(y2.into())),
+                        )]
+                    } else {
+                        vec![Expression::Equal(
+                            Box::new(Expression::Variable(x1.into())),
+                            Box::new(Expression::Variable(x2.into())),
+                        )]
+                    }
+                } else {
+                    unreachable!();
+                }
+            }
+        }
+    }
+}
+
+fn distance_eq(d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &TermRef) -> Expression {
+    Expression::Sqrt(
+        Box::new(Expression::Sum(
+            Box::new(Expression::Power(
+                Box::new(Expression::Difference(
+                    Box::new(Expression::Variable(x2.into())),
+                    Box::new(Expression::Variable(x1.into())),
+                )),
+                Box::new(Expression::Integer(2.into())),
+            )),
+            Box::new(Expression::Power(
+                Box::new(Expression::Difference(
+                    Box::new(Expression::Variable(y2.into())),
+                    Box::new(Expression::Variable(y1.into())),
+                )),
+                Box::new(Expression::Integer(2.into())),
+            )),
+        )),
+        true,
+    )
 }
 
 impl system::ConstraintProvider<ConstraintResidualIter> for Constraint {
@@ -181,11 +329,10 @@ pub(crate) enum ConstraintResidualIter {
 }
 
 impl Iterator for ConstraintResidualIter {
-    type Item = system::ResidualConstraint;
+    type Item = system::ResidualEq;
 
     // next() is the only required method
     fn next(&mut self) -> Option<Self::Item> {
-        use eq::{Expression, Rational};
         match self {
             ConstraintResidualIter::Fixed {
                 x_ref,
@@ -197,22 +344,17 @@ impl Iterator for ConstraintResidualIter {
                 0 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        false,
                         x_ref.clone(),
                         Expression::Rational(Rational::from_float(*x_val).unwrap(), true),
                     ))
-                    // Expression::Difference(
-                    //     Box::new(Expression::Variable("x".into())),
-                    //     Box::new(Expression::Rational(
-                    //         Rational::from_float(*x_val).unwrap(),
-                    //         true,
-                    //     )),
-                    // ),
                 }
                 1 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        false,
                         y_ref.clone(),
                         Expression::Rational(Rational::from_float(*y_val).unwrap(), true),
                     ))
@@ -231,19 +373,19 @@ impl Iterator for ConstraintResidualIter {
                 0 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        true,
                         x2_ref.clone(),
                         Expression::Difference(
-                            Box::new(Expression::Variable((&x1_ref.clone()).into())),
+                            Box::new(Expression::Power(
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*distance).unwrap(),
+                                    true,
+                                )),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
                             Box::new(Expression::Sqrt(
-                                Box::new(Expression::Difference(
-                                    Box::new(Expression::Power(
-                                        Box::new(Expression::Rational(
-                                            Rational::from_float(*distance).unwrap(),
-                                            true,
-                                        )),
-                                        Box::new(Expression::Integer(2.into())),
-                                    )),
+                                Box::new(Expression::Sum(
                                     Box::new(Expression::Power(
                                         Box::new(Expression::Difference(
                                             Box::new(Expression::Variable(
@@ -251,6 +393,17 @@ impl Iterator for ConstraintResidualIter {
                                             )),
                                             Box::new(Expression::Variable(
                                                 (&y1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&x2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&x1_ref.clone()).into(),
                                             )),
                                         )),
                                         Box::new(Expression::Integer(2.into())),
@@ -264,19 +417,19 @@ impl Iterator for ConstraintResidualIter {
                 1 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        true,
                         x1_ref.clone(),
                         Expression::Difference(
-                            Box::new(Expression::Variable((&x2_ref.clone()).into())),
+                            Box::new(Expression::Power(
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*distance).unwrap(),
+                                    true,
+                                )),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
                             Box::new(Expression::Sqrt(
-                                Box::new(Expression::Difference(
-                                    Box::new(Expression::Power(
-                                        Box::new(Expression::Rational(
-                                            Rational::from_float(*distance).unwrap(),
-                                            true,
-                                        )),
-                                        Box::new(Expression::Integer(2.into())),
-                                    )),
+                                Box::new(Expression::Sum(
                                     Box::new(Expression::Power(
                                         Box::new(Expression::Difference(
                                             Box::new(Expression::Variable(
@@ -284,6 +437,17 @@ impl Iterator for ConstraintResidualIter {
                                             )),
                                             Box::new(Expression::Variable(
                                                 (&y1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&x2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&x1_ref.clone()).into(),
                                             )),
                                         )),
                                         Box::new(Expression::Integer(2.into())),
@@ -297,16 +461,27 @@ impl Iterator for ConstraintResidualIter {
                 2 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        true,
                         y2_ref.clone(),
                         Expression::Difference(
-                            Box::new(Expression::Variable((&y1_ref.clone()).into())),
+                            Box::new(Expression::Power(
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*distance).unwrap(),
+                                    true,
+                                )),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
                             Box::new(Expression::Sqrt(
-                                Box::new(Expression::Difference(
+                                Box::new(Expression::Sum(
                                     Box::new(Expression::Power(
-                                        Box::new(Expression::Rational(
-                                            Rational::from_float(*distance).unwrap(),
-                                            true,
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&y2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&y1_ref.clone()).into(),
+                                            )),
                                         )),
                                         Box::new(Expression::Integer(2.into())),
                                     )),
@@ -330,16 +505,27 @@ impl Iterator for ConstraintResidualIter {
                 3 => {
                     *count += 1;
 
-                    Some(system::ResidualConstraint::new(
+                    Some(system::ResidualEq::new(
+                        true,
                         y1_ref.clone(),
                         Expression::Difference(
-                            Box::new(Expression::Variable((&y2_ref.clone()).into())),
+                            Box::new(Expression::Power(
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*distance).unwrap(),
+                                    true,
+                                )),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
                             Box::new(Expression::Sqrt(
-                                Box::new(Expression::Difference(
+                                Box::new(Expression::Sum(
                                     Box::new(Expression::Power(
-                                        Box::new(Expression::Rational(
-                                            Rational::from_float(*distance).unwrap(),
-                                            true,
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&y2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&y1_ref.clone()).into(),
+                                            )),
                                         )),
                                         Box::new(Expression::Integer(2.into())),
                                     )),

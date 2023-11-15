@@ -3,20 +3,25 @@ use slotmap::HopSlotMap;
 pub use terms::{TermAllocator, TermRef, TermType};
 
 #[derive(Debug, Clone)]
-pub struct ResidualConstraint {
+pub struct ResidualEq {
+    pub(crate) standalone: bool,
     pub(crate) term: TermRef,
     pub(crate) rhs: eq::Expression,
 }
 
-impl ResidualConstraint {
-    pub fn new(term: TermRef, rhs: eq::Expression) -> Self {
-        ResidualConstraint { term, rhs }
+impl ResidualEq {
+    pub fn new(standalone: bool, term: TermRef, rhs: eq::Expression) -> Self {
+        ResidualEq {
+            standalone,
+            term,
+            rhs,
+        }
     }
 }
 
 pub trait ConstraintProvider<I>
 where
-    I: std::iter::Iterator<Item = ResidualConstraint>,
+    I: std::iter::Iterator<Item = ResidualEq>,
 {
     fn residuals(
         &self,
@@ -25,7 +30,7 @@ where
     ) -> I;
 }
 
-pub fn unique_unknowns(residuals: &Vec<ResidualConstraint>) -> Vec<TermRef> {
+pub fn unique_unknowns(residuals: &Vec<ResidualEq>) -> Vec<TermRef> {
     use std::collections::HashSet;
     let mut seen: HashSet<TermRef> = HashSet::with_capacity(residuals.len());
     let mut out: Vec<TermRef> = Vec::with_capacity(residuals.len());
@@ -51,13 +56,13 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub(crate) struct Solver {
     known: HashMap<eq::Variable, eq::Concrete>,
-    residuals: Vec<(TermRef, Vec<ResidualConstraint>, f64)>,
+    residuals: Vec<(TermRef, Vec<ResidualEq>, f64)>,
 }
 
 impl Solver {
     pub fn new(
         known: HashMap<eq::Variable, eq::Concrete>,
-        residuals: Vec<(TermRef, Vec<ResidualConstraint>, f64)>,
+        residuals: Vec<(TermRef, Vec<ResidualEq>, f64)>,
     ) -> Self {
         Self { known, residuals }
     }
@@ -176,8 +181,13 @@ impl System for Solver {
                     eq::Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
 
-                println!("fx[{}] = {} with guess {}", i, x[i] - res, x[i]);
-                residual += x[i] - res;
+                if r.standalone {
+                    println!("fx[{}] = {} with guess {}", i, res, x[i]);
+                    residual += res.abs();
+                } else {
+                    println!("fx[{}] += {} with guess {}", i, x[i] - res, x[i]);
+                    residual += (x[i] - res).abs();
+                }
             }
 
             fx[i] = 2.0 * residual;

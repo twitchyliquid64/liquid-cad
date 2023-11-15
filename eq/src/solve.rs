@@ -70,23 +70,48 @@ impl SubSolverState {
         let mut vars_by_eq: HashMap<Variable, EquivalentExpressions> =
             HashMap::with_capacity(exprs.len());
 
-        // Collect equations which specify <var> = <expression> into a map
-        // with each var as the key.
-        for s in exprs
+        // Collect equations:
+        //  - <var> = <expression> straight into the map with each var as the key.
+        //  -     0 = <expression> rearrange for a variable then into the map.
+        for (var, expr) in exprs
             .iter()
             .map(|e| match e {
-                Expression::Equal(a, b) => {
-                    if let Expression::Variable(v) = a.as_ref() {
-                        Some((v.clone(), (**b).clone().into()))
-                    } else {
-                        None
+                Expression::Equal(a, b) => match a.as_ref() {
+                    Expression::Variable(v) => Some((v.clone(), (**b).clone().into())),
+                    Expression::Integer(i) => {
+                        if i == &Integer::from(0) {
+                            let mut rearranged = None;
+                            e.walk(&mut |ve| {
+                                if rearranged.is_some() {
+                                    return false;
+                                }
+                                if let Expression::Variable(v) = ve {
+                                    match e.make_subject(&Expression::Variable(v.clone())) {
+                                        Ok(eq) => {
+                                            if let Expression::Equal(_, eq) = eq {
+                                                rearranged = Some((v.clone(), (*eq).into()));
+                                            } else {
+                                                unreachable!();
+                                            }
+                                            false
+                                        }
+                                        Err(_) => true,
+                                    }
+                                } else {
+                                    true
+                                }
+                            });
+                            rearranged
+                        } else {
+                            None
+                        }
                     }
-                }
+                    _ => None,
+                },
                 _ => None,
             })
-            .filter(|s| s.is_some())
+            .filter_map(|s| s)
         {
-            let (var, expr) = s.unwrap();
             if let Some(ee) = vars_by_eq.get_mut(&var) {
                 Rc::get_mut(&mut ee.exprs).unwrap().push(expr);
             } else {
@@ -227,6 +252,30 @@ impl SubSolver {
         Err(ResolveErr::CannotSolve)
     }
 
+    pub fn find_all<'a>(&mut self, st: &'a mut SubSolverState) -> &'a HashMap<Variable, Concrete> {
+        let mut vars: Vec<Variable> = st.vars_by_eq.iter().map(|(v, _)| v.clone()).collect();
+        for (_v, ees) in st.vars_by_eq.iter() {
+            for e in ees.exprs.iter() {
+                e.expr.walk(&mut |e| {
+                    if let Expression::Variable(v) = e {
+                        if !vars.contains(v) {
+                            vars.push(v.clone());
+                        }
+                    }
+                    true
+                });
+            }
+        }
+
+        for v in vars {
+            if let None = st.resolved.get(&v) {
+                self.find(st, &v);
+            }
+        }
+
+        &st.resolved
+    }
+
     pub fn find(
         &mut self,
         st: &mut SubSolverState,
@@ -306,6 +355,33 @@ mod tests {
                     ]),
                 }
             ),]),
+        );
+
+        // residual expressions assigned to vars_by_eq
+        assert_eq!(
+            SubSolverState::new(
+                HashMap::new(),
+                vec![
+                    Expression::parse("0 = x+1 - a", false).unwrap(),
+                    Expression::parse("0 = y/2 - a", false).unwrap(),
+                ]
+            )
+            .unwrap()
+            .vars_by_eq,
+            HashMap::from([
+                (
+                    Variable::from("x"),
+                    EquivalentExpressions {
+                        exprs: Rc::new(vec![Expression::parse("a-1", false).unwrap().into(),]),
+                    }
+                ),
+                (
+                    Variable::from("y"),
+                    EquivalentExpressions {
+                        exprs: Rc::new(vec![Expression::parse("2a", false).unwrap().into(),]),
+                    }
+                )
+            ]),
         );
     }
 
@@ -496,6 +572,81 @@ mod tests {
         match SubSolver::default().find(&mut state, &"x3".into()).unwrap() {
             Concrete::Rational(r) => assert_eq!(r, Rational::from_integer(5.into())),
             _ => panic!("result is not a rational"),
+        }
+    }
+
+    #[test]
+    fn solve_aligned_distance() {
+        // p0-----line 1-----p1
+        //
+        // line 1 is horizontal, therefore: p0.y == p1.y
+        // line 1 has fixed distance of 5
+        // p0 is at (0, 1)
+
+        let mut state = SubSolverState::new(
+            HashMap::from([
+                (
+                    "x0".into(),
+                    Concrete::Rational(Rational::from_integer(0.into())),
+                ),
+                (
+                    "y0".into(),
+                    Concrete::Rational(Rational::from_integer(1.into())),
+                ),
+            ]),
+            vec![
+                Expression::parse("y1 = y0", false).unwrap(),
+                Expression::parse("d1 = sqrt((x1-x0)^2 + (y1-y0)^2)", false).unwrap(),
+                Expression::parse("d1 = 5", false).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        match SubSolver::default().find(&mut state, &"x1".into()).unwrap() {
+            Concrete::Float(x) => assert_eq!(x, 5.0),
+            _ => panic!("result is not a float"),
+        }
+        match SubSolver::default().find(&mut state, &"y1".into()).unwrap() {
+            Concrete::Rational(r) => assert_eq!(r, Rational::from_integer(1.into())),
+            _ => panic!("result is not a rational"),
+        }
+
+        // p0
+        // |
+        // | line 1
+        // |
+        // p1
+        //
+        // line 1 is vertical, therefore: p0.x == p1.x
+        // line 1 has fixed distance of 5
+        // p0 is at (0, 0)
+
+        state = SubSolverState::new(
+            HashMap::from([
+                (
+                    "x0".into(),
+                    Concrete::Rational(Rational::from_integer(0.into())),
+                ),
+                (
+                    "y0".into(),
+                    Concrete::Rational(Rational::from_integer(0.into())),
+                ),
+            ]),
+            vec![
+                Expression::parse("x1 = x0", false).unwrap(),
+                Expression::parse("d1 = sqrt((x1-x0)^2 + (y1-y0)^2)", false).unwrap(),
+                Expression::parse("d1 = 5", false).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        match SubSolver::default().find(&mut state, &"x1".into()).unwrap() {
+            Concrete::Rational(r) => assert_eq!(r, Rational::from_integer(0.into())),
+            _ => panic!("result is not a rational"),
+        }
+        match SubSolver::default().find(&mut state, &"y1".into()).unwrap() {
+            Concrete::Float(x) => assert_eq!(x, 5.0),
+            _ => panic!("result is not a float"),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::system::{ResidualConstraint, TermAllocator, TermRef, TermType};
+use crate::system::{ResidualEq, TermAllocator, TermRef, TermType};
 use crate::{Constraint, ConstraintKey};
 use crate::{Feature, FeatureKey};
 use slotmap::HopSlotMap;
@@ -57,58 +57,91 @@ impl Data {
     }
 
     fn solve_and_apply(&mut self) {
-        let residuals = self.residuals();
-        if residuals.len() == 0 {
-            return;
-        }
-
-        let variables = crate::system::unique_unknowns(&residuals);
-        let by_variable: Vec<(TermRef, Vec<ResidualConstraint>, f64)> = variables
+        let equations: Vec<eq::Expression> = self
+            .constraints
             .iter()
-            .map(|v| {
-                (
-                    v.clone(),
-                    residuals
-                        .iter()
-                        .map(|r| if &r.term == v { Some(r.clone()) } else { None })
-                        .filter_map(|d| d)
-                        .collect(),
-                    v.for_feature
-                        .map(|fk| match self.features.get(fk) {
-                            Some(Feature::Point(_, x, y)) => match v.t {
-                                TermType::PositionX => *x as f64,
-                                TermType::PositionY => *y as f64,
-                                TermType::ScalarDistance => unreachable!(),
-                            },
-                            _ => 1.,
-                        })
-                        .unwrap_or(1.),
-                )
-            })
+            .map(|(_ck, c)| c.clone())
+            .collect::<Vec<Constraint>>()
+            .iter()
+            .map(|c| c.equations(self))
+            .flatten()
             .collect();
 
-        let solver = crate::system::Solver::new(HashMap::new(), by_variable);
-        // println!("solver state: {:?}", solver);
+        for eq in equations.iter() {
+            println!("{}", eq);
+        }
 
-        if let Ok(r) = solver.solve() {
-            r.into_iter()
-                .zip(residuals.iter())
-                .map(|(v, r)| {
-                    if !self.apply_solved_residual(r, v) {
-                        println!("apply {:?} = {} failed!", r, v);
-                    };
-                })
-                .count();
-        } else {
-            println!("Solve failed!!");
+        let mut sub_solver_state = match eq::solve::SubSolverState::new(HashMap::new(), equations) {
+            Ok(st) => st,
+            Err(e) => {
+                println!("failed to build substitution solver: {:?}", e);
+                return;
+            }
         };
+
+        let sub_solutions = eq::solve::SubSolver::default().find_all(&mut sub_solver_state);
+        for (v, r) in sub_solutions.iter() {
+            if let Some(term) = self.terms.get_var_ref(v) {
+                let v = r.as_f64();
+                println!("{:?} = {:?}", term, v);
+                self.apply_solved(&term, v);
+            } else {
+                panic!("no such var! {:?}", v);
+            }
+        }
+
+        // let residuals = self.residuals();
+        // if residuals.len() == 0 {
+        //     return;
+        // }
+
+        // let variables = crate::system::unique_unknowns(&residuals);
+        // let by_variable: Vec<(TermRef, Vec<ResidualEq>, f64)> = variables
+        //     .iter()
+        //     .map(|v| {
+        //         (
+        //             v.clone(),
+        //             residuals
+        //                 .iter()
+        //                 .map(|r| if &r.term == v { Some(r.clone()) } else { None })
+        //                 .filter_map(|d| d)
+        //                 .collect(),
+        //             v.for_feature
+        //                 .map(|fk| match self.features.get(fk) {
+        //                     Some(Feature::Point(_, x, y)) => match v.t {
+        //                         TermType::PositionX => *x as f64,
+        //                         TermType::PositionY => *y as f64,
+        //                         TermType::ScalarDistance => unreachable!(),
+        //                     },
+        //                     _ => 1.,
+        //                 })
+        //                 .unwrap_or(1.),
+        //         )
+        //     })
+        //     .collect();
+
+        // let solver = crate::system::Solver::new(HashMap::new(), by_variable);
+        // // println!("solver state: {:?}", solver);
+
+        // if let Ok(r) = solver.solve() {
+        //     r.into_iter()
+        //         .zip(residuals.iter())
+        //         .map(|(v, r)| {
+        //             if !self.apply_solved_residual(r, v) {
+        //                 println!("apply {:?} = {} failed!", r, v);
+        //             };
+        //         })
+        //         .count();
+        // } else {
+        //     println!("Solve failed!!");
+        // };
     }
 
-    fn apply_solved_residual(&mut self, r: &ResidualConstraint, v: f64) -> bool {
-        if let Some(feature) = r.term.for_feature {
+    fn apply_solved(&mut self, term: &TermRef, v: f64) -> bool {
+        if let Some(feature) = term.for_feature {
             match self.features.get_mut(feature) {
                 Some(Feature::Point(_, x, y)) => {
-                    match r.term.t {
+                    match term.t {
                         TermType::PositionX => *x = v as f32,
                         TermType::PositionY => *y = v as f32,
                         TermType::ScalarDistance => unreachable!(),
@@ -122,7 +155,7 @@ impl Data {
         }
     }
 
-    pub fn residuals(&mut self) -> Vec<ResidualConstraint> {
+    pub fn residuals(&mut self) -> Vec<ResidualEq> {
         let mut residuals = Vec::with_capacity(16); // arbitrarily chosen
 
         use crate::system::ConstraintProvider;

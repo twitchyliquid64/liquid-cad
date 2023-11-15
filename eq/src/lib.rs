@@ -19,7 +19,7 @@ pub enum Concrete {
 }
 
 impl Concrete {
-    fn as_f64(&self) -> f64 {
+    pub fn as_f64(&self) -> f64 {
         use num::ToPrimitive;
         match self {
             Concrete::Float(f) => *f,
@@ -116,10 +116,7 @@ impl Expression {
         let mut cost = 0;
         self.walk(&mut |e| {
             match e {
-                Expression::Sum(_, _)
-                | Expression::Difference(_, _)
-                | Expression::Neg(_)
-                | Expression::Abs(_) => {
+                Expression::Sum(_, _) | Expression::Difference(_, _) | Expression::Neg(_) => {
                     cost += 2;
                 }
                 Expression::Product(_, _) => {
@@ -131,8 +128,11 @@ impl Expression {
                 Expression::Integer(_) | Expression::Rational(_, _) => {
                     cost += 1;
                 }
-                Expression::Sqrt(_, _) | Expression::Power(_, _) => {
+                Expression::Power(_, _) | Expression::Abs(_) => {
                     cost += 10;
+                }
+                Expression::Sqrt(_, _) => {
+                    cost += 25;
                 }
                 _ => {}
             };
@@ -286,6 +286,14 @@ impl Expression {
                 }
             }
         }
+
+        // Abs of a negation
+        if let Expression::Abs(a) = self {
+            if let Expression::Neg(b) = a.as_ref() {
+                let temp = b.to_owned();
+                let _ = std::mem::replace(&mut *a, temp);
+            }
+        }
     }
 
     fn normalize(&mut self) {
@@ -431,6 +439,20 @@ impl Expression {
             }
         }
 
+        if let Expression::Sqrt(a, _) = self {
+            match a.as_ref() {
+                // Sqrt of square: simplify to abs(term)
+                Expression::Power(a, b) => {
+                    if let Expression::Integer(b) = b.as_ref() {
+                        if *b == 2.into() {
+                            *self = Expression::Abs(a.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         self.normalize_2x();
     }
 
@@ -553,9 +575,11 @@ impl Expression {
                         *self = Expression::Integer(0.into());
                     } else
                     // a--a = 2a
-                    if Box::new(Expression::Neg(a.clone())) == *b {
-                        *self =
-                            Expression::Product(Box::new(Expression::Integer(2.into())), b.clone());
+                    if &Expression::Neg(a.clone()) == b.as_ref() {
+                        *self = Expression::Product(
+                            Box::new(Expression::Integer(2.into())),
+                            a.to_owned(),
+                        );
                     }
                 }
             },
@@ -893,12 +917,12 @@ impl Display for Expression {
             },
 
             Expression::Equal(a, b) => write!(f, "{} = {}", a, b),
-            Expression::Sum(a, b) => write!(f, "{} + {}", a, b),
-            Expression::Difference(a, b) => write!(f, "{} - {}", a, b),
-            Expression::Quotient(a, b) => write!(f, "{} / {}", a, b),
+            Expression::Sum(a, b) => write!(f, "({} + {})", a, b),
+            Expression::Difference(a, b) => write!(f, "({} - {})", a, b),
+            Expression::Quotient(a, b) => write!(f, "({} / {})", a, b),
             Expression::Product(a, b) => match (a.as_ref(), b.as_ref()) {
                 (Expression::Integer(a), Expression::Variable(v)) => write!(f, "{}{}", a, v),
-                _ => write!(f, "{} * {}", a, b),
+                _ => write!(f, "({} * {})", a, b),
             },
             Expression::Power(a, b) => write!(f, "({})^{}", a, b),
         }
@@ -994,6 +1018,14 @@ mod tests {
         assert_eq!(
             Expression::parse("sqrt(3.5 + 1/2)", true),
             Ok(Expression::Integer(2.into()))
+        );
+        assert_eq!(
+            Expression::parse("abs(-a)", true),
+            Ok(Expression::Abs(Box::new(Expression::Variable("a".into())),))
+        );
+        assert_eq!(
+            Expression::parse("sqrt(a^2)", true),
+            Ok(Expression::Abs(Box::new(Expression::Variable("a".into())),))
         );
 
         assert_eq!(
@@ -1100,6 +1132,13 @@ mod tests {
                 Box::new(Expression::Variable("a".into())),
                 Box::new(Expression::Variable("a".into())),
             ))))
+        );
+        assert_eq!(
+            Expression::parse("a--a", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Integer(2.into())),
+                Box::new(Expression::Variable("a".into())),
+            ))
         );
         assert_eq!(
             Expression::parse("(-a)--a", true),
