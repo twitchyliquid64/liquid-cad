@@ -2,7 +2,7 @@ use crate::{ConstraintKey, FeatureKey};
 use std::collections::HashMap;
 
 /// Specialization of a term.
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum TermType {
     #[default]
     ScalarDistance,
@@ -11,11 +11,17 @@ pub enum TermType {
 }
 
 /// Represents a term in the system of equations.
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Eq, Hash, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct TermRef {
-    t: TermType,
     base: usize,
-    for_feature: Option<FeatureKey>,
+    pub(crate) t: TermType,
+    pub(crate) for_feature: Option<FeatureKey>,
+}
+
+impl PartialEq for TermRef {
+    fn eq(&self, other: &Self) -> bool {
+        return self.t == other.t && self.base == other.base;
+    }
 }
 
 impl std::fmt::Display for TermRef {
@@ -26,6 +32,12 @@ impl std::fmt::Display for TermRef {
             PositionX => write!(f, "x{}", self.base),
             PositionY => write!(f, "y{}", self.base),
         }
+    }
+}
+
+impl Into<eq::Variable> for &TermRef {
+    fn into(self) -> eq::Variable {
+        format!("{}", self).as_str().into()
     }
 }
 

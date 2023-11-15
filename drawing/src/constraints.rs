@@ -1,5 +1,7 @@
 use crate::l::LineSegment;
+use crate::system::{self, TermAllocator, TermRef, TermType};
 use crate::{Feature, FeatureKey};
+use slotmap::HopSlotMap;
 
 slotmap::new_key_type! {
     pub struct ConstraintKey;
@@ -110,7 +112,7 @@ impl Constraint {
                         _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
                     };
 
-                    DimensionLengthOverlay {
+                    crate::l::draw::DimensionLengthOverlay {
                         a,
                         b,
                         val: d,
@@ -125,125 +127,252 @@ impl Constraint {
     }
 }
 
-// all input dimensions are in drawing-space.
-struct DimensionLengthOverlay<'a> {
-    val: &'a f32,
-    a: egui::Pos2,
-    b: egui::Pos2,
-    reference: egui::Vec2,
-    hovered: bool,
-    selected: bool,
-}
-
-impl<'a> DimensionLengthOverlay<'a> {
-    const LINE_STOP_OFFSET: f32 = 8.5;
-
-    pub fn draw(&self, painter: &egui::Painter, params: &crate::PaintParams) {
-        let vp = &params.vp;
-        let t = (self.a - self.b).angle() + self.reference.angle();
-        let (sa, sb) = (vp.translate_point(self.a), vp.translate_point(self.b));
-
-        self.draw_stop_lines(t, sa, sb, painter);
-
-        let color = if self.selected {
-            params.colors.selected
-        } else if self.hovered {
-            params.colors.hover
-        } else {
-            egui::Color32::LIGHT_BLUE
-        };
-
-        let layout = painter.layout_no_wrap(
-            format!("{:.3}", self.val).into(),
-            egui::FontId::monospace(10.),
-            color,
-        );
-        let text_pos = vp.translate_point(self.a.lerp(self.b, 0.5))
-            + egui::Vec2::angled(t) * self.reference.length();
-
-        self.draw_parallel_arrows(t, sa, sb, text_pos, &layout.rect, color, painter);
-        painter.galley(
-            text_pos
-                - egui::Vec2 {
-                    x: layout.rect.width() / 2.,
-                    y: layout.rect.height() / 2.,
-                },
-            layout,
-        );
-    }
-
-    fn draw_parallel_arrows(
+impl system::ConstraintProvider<ConstraintResidualIter> for Constraint {
+    fn residuals(
         &self,
-        t: f32,
-        sa: egui::Pos2,
-        sb: egui::Pos2,
-        text_pos: egui::Pos2,
-        text_bounds: &egui::Rect,
-        color: egui::Color32,
-        painter: &egui::Painter,
-    ) {
-        let v = egui::Vec2::angled(t) * self.reference.length();
-        let text_offset = text_pos.to_vec2()
-            - egui::Vec2 {
-                x: text_bounds.width() / 2.,
-                y: text_bounds.height() / 2.,
-            };
-
-        let arrow_line_1 = LineSegment {
-            p1: sa + v,
-            p2: text_pos,
-        };
-        if let Some(end) = arrow_line_1
-            .intersection_rect(&text_bounds.expand2((10., 2.).into()).translate(text_offset))
-        {
-            if arrow_line_1.p1.distance_sq(end) > 750. {
-                painter.arrow(
-                    end,
-                    egui::Vec2::angled((sa - sb).angle()) * 20.,
-                    egui::Stroke { width: 1., color },
-                );
-            }
-        }
-
-        let arrow_line_2 = LineSegment {
-            p1: text_pos,
-            p2: sb + v,
-        };
-        if let Some(end) = arrow_line_2
-            .intersection_rect(&text_bounds.expand2((10., 2.).into()).translate(text_offset))
-        {
-            if arrow_line_2.p2.distance_sq(end) > 750. {
-                painter.arrow(
-                    end,
-                    egui::Vec2::angled((sb - sa).angle()) * 20.,
-                    egui::Stroke { width: 1., color },
-                );
-            }
-        }
-    }
-
-    fn draw_stop_lines(&self, t: f32, sa: egui::Pos2, sb: egui::Pos2, painter: &egui::Painter) {
-        let l = self.reference.length();
-
-        painter.line_segment(
-            [
-                sa + egui::Vec2::angled(t) * l,
-                sa + egui::Vec2::angled(t) * DimensionLengthOverlay::LINE_STOP_OFFSET,
-            ],
-            egui::Stroke {
-                width: 1.,
-                color: egui::Color32::LIGHT_BLUE,
+        features: &mut HopSlotMap<FeatureKey, Feature>,
+        allocator: &mut TermAllocator,
+    ) -> ConstraintResidualIter {
+        use Constraint::{Fixed, LineLength};
+        match self {
+            Fixed(_, k, x, y) => ConstraintResidualIter::Fixed {
+                count: 0,
+                x_val: *x,
+                y_val: *y,
+                x_ref: allocator.get_feature_term(*k, TermType::PositionX),
+                y_ref: allocator.get_feature_term(*k, TermType::PositionY),
             },
-        );
-        painter.line_segment(
-            [
-                sb + egui::Vec2::angled(t) * l,
-                sb + egui::Vec2::angled(t) * DimensionLengthOverlay::LINE_STOP_OFFSET,
-            ],
-            egui::Stroke {
-                width: 1.,
-                color: egui::Color32::LIGHT_BLUE,
-            },
-        );
+            LineLength(_, k, d, _) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = features.get(*k) {
+                    ConstraintResidualIter::PointDistance {
+                        count: 0,
+                        distance: *d,
+                        x1_ref: allocator.get_feature_term(*f1, TermType::PositionX),
+                        y1_ref: allocator.get_feature_term(*f1, TermType::PositionY),
+                        x2_ref: allocator.get_feature_term(*f2, TermType::PositionX),
+                        y2_ref: allocator.get_feature_term(*f2, TermType::PositionY),
+                    }
+                } else {
+                    panic!();
+                }
+            }
+            _ => todo!(),
+        }
     }
 }
+
+/// A non-allocating iterator over the residuals provided by a constraint.
+pub(crate) enum ConstraintResidualIter {
+    Fixed {
+        count: usize,
+        x_ref: TermRef,
+        y_ref: TermRef,
+        x_val: f32,
+        y_val: f32,
+    },
+    PointDistance {
+        count: usize,
+        distance: f32,
+        x1_ref: TermRef,
+        y1_ref: TermRef,
+        x2_ref: TermRef,
+        y2_ref: TermRef,
+    },
+}
+
+impl Iterator for ConstraintResidualIter {
+    type Item = system::ResidualConstraint;
+
+    // next() is the only required method
+    fn next(&mut self) -> Option<Self::Item> {
+        use eq::{Expression, Rational};
+        match self {
+            ConstraintResidualIter::Fixed {
+                x_ref,
+                y_ref,
+                x_val,
+                y_val,
+                count,
+            } => match count {
+                0 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        x_ref.clone(),
+                        Expression::Rational(Rational::from_float(*x_val).unwrap(), true),
+                    ))
+                    // Expression::Difference(
+                    //     Box::new(Expression::Variable("x".into())),
+                    //     Box::new(Expression::Rational(
+                    //         Rational::from_float(*x_val).unwrap(),
+                    //         true,
+                    //     )),
+                    // ),
+                }
+                1 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        y_ref.clone(),
+                        Expression::Rational(Rational::from_float(*y_val).unwrap(), true),
+                    ))
+                }
+                _ => None,
+            },
+
+            ConstraintResidualIter::PointDistance {
+                x1_ref,
+                y1_ref,
+                x2_ref,
+                y2_ref,
+                distance,
+                count,
+            } => match count {
+                0 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        x2_ref.clone(),
+                        Expression::Difference(
+                            Box::new(Expression::Variable((&x1_ref.clone()).into())),
+                            Box::new(Expression::Sqrt(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Rational(
+                                            Rational::from_float(*distance).unwrap(),
+                                            true,
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&y2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&y1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                )),
+                                true,
+                            )),
+                        ),
+                    ))
+                }
+                1 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        x1_ref.clone(),
+                        Expression::Difference(
+                            Box::new(Expression::Variable((&x2_ref.clone()).into())),
+                            Box::new(Expression::Sqrt(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Rational(
+                                            Rational::from_float(*distance).unwrap(),
+                                            true,
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&y2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&y1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                )),
+                                true,
+                            )),
+                        ),
+                    ))
+                }
+                2 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        y2_ref.clone(),
+                        Expression::Difference(
+                            Box::new(Expression::Variable((&y1_ref.clone()).into())),
+                            Box::new(Expression::Sqrt(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Rational(
+                                            Rational::from_float(*distance).unwrap(),
+                                            true,
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&x2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&x1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                )),
+                                true,
+                            )),
+                        ),
+                    ))
+                }
+                3 => {
+                    *count += 1;
+
+                    Some(system::ResidualConstraint::new(
+                        y1_ref.clone(),
+                        Expression::Difference(
+                            Box::new(Expression::Variable((&y2_ref.clone()).into())),
+                            Box::new(Expression::Sqrt(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Rational(
+                                            Rational::from_float(*distance).unwrap(),
+                                            true,
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                    Box::new(Expression::Power(
+                                        Box::new(Expression::Difference(
+                                            Box::new(Expression::Variable(
+                                                (&x2_ref.clone()).into(),
+                                            )),
+                                            Box::new(Expression::Variable(
+                                                (&x1_ref.clone()).into(),
+                                            )),
+                                        )),
+                                        Box::new(Expression::Integer(2.into())),
+                                    )),
+                                )),
+                                true,
+                            )),
+                        ),
+                    ))
+                }
+                _ => None,
+            },
+        }
+    }
+}
+
+impl ExactSizeIterator for ConstraintResidualIter {
+    fn len(&self) -> usize {
+        match self {
+            ConstraintResidualIter::Fixed { count, .. } => 2 - count,
+            ConstraintResidualIter::PointDistance { count, .. } => 4 - count,
+        }
+    }
+}
+
+impl core::iter::FusedIterator for ConstraintResidualIter {}

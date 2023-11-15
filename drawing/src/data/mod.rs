@@ -1,3 +1,4 @@
+use crate::system::{ResidualConstraint, TermAllocator, TermRef, TermType};
 use crate::{Constraint, ConstraintKey};
 use crate::{Feature, FeatureKey};
 use slotmap::HopSlotMap;
@@ -10,9 +11,6 @@ pub use viewport::Viewport;
 
 mod constraint_data;
 pub use constraint_data::ConstraintData;
-
-mod terms;
-pub use terms::{TermAllocator, TermRef};
 
 #[derive(Clone, Debug)]
 pub enum Hover {
@@ -59,22 +57,80 @@ impl Data {
     }
 
     fn solve_and_apply(&mut self) {
-        // quick hack before we have a solver:
-        let Data {
-            features,
-            constraints,
-            ..
-        } = self;
-        for (k, f) in features.iter_mut() {
-            for ck in constraints.by_feature(&k) {
-                if let Some(Constraint::Fixed(_, _, x, y)) = constraints.get(ck) {
-                    if let Feature::Point(_, px, py) = f {
-                        *px = *x;
-                        *py = *y;
-                    }
-                }
-            }
+        let residuals = self.residuals();
+        if residuals.len() == 0 {
+            return;
         }
+
+        let variables = crate::system::unique_unknowns(&residuals);
+        let by_variable: Vec<(TermRef, Vec<ResidualConstraint>, f64)> = variables
+            .iter()
+            .map(|v| {
+                (
+                    v.clone(),
+                    residuals
+                        .iter()
+                        .map(|r| if &r.term == v { Some(r.clone()) } else { None })
+                        .filter_map(|d| d)
+                        .collect(),
+                    v.for_feature
+                        .map(|fk| match self.features.get(fk) {
+                            Some(Feature::Point(_, x, y)) => match v.t {
+                                TermType::PositionX => *x as f64,
+                                TermType::PositionY => *y as f64,
+                                TermType::ScalarDistance => unreachable!(),
+                            },
+                            _ => 1.,
+                        })
+                        .unwrap_or(1.),
+                )
+            })
+            .collect();
+
+        let solver = crate::system::Solver::new(HashMap::new(), by_variable);
+        // println!("solver state: {:?}", solver);
+
+        if let Ok(r) = solver.solve() {
+            r.into_iter()
+                .zip(residuals.iter())
+                .map(|(v, r)| {
+                    if !self.apply_solved_residual(r, v) {
+                        println!("apply {:?} = {} failed!", r, v);
+                    };
+                })
+                .count();
+        } else {
+            println!("Solve failed!!");
+        };
+    }
+
+    fn apply_solved_residual(&mut self, r: &ResidualConstraint, v: f64) -> bool {
+        if let Some(feature) = r.term.for_feature {
+            match self.features.get_mut(feature) {
+                Some(Feature::Point(_, x, y)) => {
+                    match r.term.t {
+                        TermType::PositionX => *x = v as f32,
+                        TermType::PositionY => *y = v as f32,
+                        TermType::ScalarDistance => unreachable!(),
+                    }
+                    true
+                }
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn residuals(&mut self) -> Vec<ResidualConstraint> {
+        let mut residuals = Vec::with_capacity(16); // arbitrarily chosen
+
+        use crate::system::ConstraintProvider;
+        for (_ck, c) in self.constraints.iter() {
+            residuals.extend(c.residuals(&mut self.features, &mut self.terms));
+        }
+
+        residuals
     }
 
     /// Iterates through the features.

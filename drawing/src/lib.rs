@@ -1,6 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-pub mod l;
+pub(crate) mod l;
 
 mod data;
 pub use data::{Data, Hover, Viewport};
@@ -9,6 +9,7 @@ pub use feature::{Feature, FeatureKey, FeatureMeta};
 mod constraints;
 pub use constraints::{Constraint, ConstraintKey, ConstraintMeta};
 pub mod handler;
+mod system;
 pub use handler::Handler;
 pub mod tools;
 
