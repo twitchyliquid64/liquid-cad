@@ -18,10 +18,17 @@ pub(crate) struct ExpressionInfo {
     references: HashMap<Variable, usize>,
 }
 
+/// Describes how to solve for a variable.
+#[derive(Debug, Clone)]
+pub(crate) enum SolvePlan {
+    Concrete(Concrete),
+    Substituted(ExpressionInfo),
+}
+
 impl From<Expression> for ExpressionInfo {
     fn from(exp: Expression) -> Self {
         let mut references: HashMap<Variable, usize> = HashMap::with_capacity(4); // 4 arbitrarily chosen
-        let mut cost = exp.cost();
+        let mut cost = exp.cost() * exp.num_solutions();
 
         exp.walk(&mut |e| {
             if let Expression::Variable(v) = e {
@@ -54,9 +61,12 @@ impl From<Expression> for ExpressionInfo {
 #[derive(Default, Clone, Debug)]
 pub struct SubSolverState {
     // finite values provided or solved for.
-    pub(crate) resolved: HashMap<Variable, Concrete>,
+    pub(crate) resolved: HashMap<Variable, SolvePlan>,
     // expressions expected to be ordered in increasing complexity.
     pub(crate) vars_by_eq: HashMap<Variable, EquivalentExpressions>,
+
+    // tuple of (variable, expression_info) for which substitutions have succeeded
+    // pub(crate) substitutions: HashMap<Variable, ExpressionInfo>,
 
     // tuple of (variable, expression_info) which rearranges have been attempted
     pub(crate) tried_rearrange: HashMap<(Variable, u64), ()>,
@@ -115,12 +125,9 @@ impl SubSolverState {
             if let Some(ee) = vars_by_eq.get_mut(&var) {
                 Rc::get_mut(&mut ee.exprs).unwrap().push(expr);
             } else {
-                vars_by_eq.insert(
-                    var,
-                    EquivalentExpressions {
-                        exprs: Rc::new(vec![expr]),
-                    },
-                );
+                let mut v = Vec::with_capacity(16); // arbitrarily chosen
+                v.push(expr);
+                vars_by_eq.insert(var, EquivalentExpressions { exprs: Rc::new(v) });
             }
         }
 
@@ -131,9 +138,15 @@ impl SubSolverState {
                 .sort_by(|a, b| a.cost.cmp(&b.cost));
         }
 
+        let mut resolved = values
+            .into_iter()
+            .map(|(k, v)| (k, SolvePlan::Concrete(v)))
+            .collect::<HashMap<_, _>>();
+        resolved.reserve(256.max(vars_by_eq.len()));
+
         Ok(Self {
             vars_by_eq,
-            resolved: values,
+            resolved,
             ..SubSolverState::default()
         })
     }
@@ -143,7 +156,10 @@ impl super::Resolver for SubSolverState {
     fn resolve_variable(&mut self, v: &Variable) -> Result<Concrete, ResolveErr> {
         match self.resolved.get(v) {
             None => Err(ResolveErr::UnknownVar(v.clone())),
-            Some(c) => Ok(c.clone()),
+            Some(p) => match p {
+                SolvePlan::Concrete(c) => Ok(c.clone()),
+                _ => Err(ResolveErr::UnknownVar(v.clone())),
+            },
         }
     }
 }
@@ -155,59 +171,56 @@ pub struct SubSolver;
 impl SubSolver {
     // Tries to solve the given expression by substituting known values in st.resolved.
     // Returns Err(ResolveErr::UnknownVar) if necessary values aren't known.
-    fn find_iterative_using_exp(
+    fn solve_using_known(
         &mut self,
         st: &mut SubSolverState,
         var: &Variable,
         info: &ExpressionInfo,
-    ) -> Result<Concrete, ResolveErr> {
-        // println!("find_iterative_using_exp({:?}, {:?})", var, info);
+    ) -> Result<SolvePlan, ResolveErr> {
+        // println!("solve_using_known({:?}, {:?})", var, info);
 
-        // See if we have concrete values for the dependent variables, solving them otherwise.
+        let mut out = info.clone();
+        // Ensure we have all the dependent variables + perform substitution.
         for dependent_var in info.references.keys() {
-            if st.resolved.get(dependent_var).is_none() {
-                match self.find(st, dependent_var) {
-                    Err(e) => return Err(e),
-                    Ok(_) => {}
+            match st.resolved.get(&dependent_var) {
+                None => {
+                    return Err(ResolveErr::CannotSolve);
                 }
-            }
+                Some(p) => match p {
+                    SolvePlan::Substituted(ei) => out
+                        .expr
+                        .sub_variable(dependent_var, Box::new(ei.expr.clone())),
+                    SolvePlan::Concrete(ref c) => {}
+                },
+            };
         }
 
-        // If we got this far, we have all the dependent variables. Solve for the value.
-        return match info.expr.evaluate(st, 0) {
-            Ok(c) => {
-                st.resolved.insert(var.clone(), c.clone());
-                Ok(c)
-            }
-            Err(e) => {
-                // println!("eval error: {:?} -- {:?}", &info.expr, e);
-                Err(e)
-            }
-        };
-    }
-
-    fn find_iterative(
-        &mut self,
-        st: &mut SubSolverState,
-        var: &Variable,
-    ) -> Result<Concrete, ResolveErr> {
-        // println!("find_iterative({:?})", var);
-
-        // Find the expressions to solve for the target var
-        match st.vars_by_eq.get(var) {
-            Some(ee) => {
-                for info in ee.exprs.clone().as_ref() {
-                    match self.find_iterative_using_exp(st, var, info) {
-                        Ok(c) => return Ok(c),
-                        Err(ResolveErr::UnknownVar(_)) => continue,
-                        Err(e) => return Err(e),
+        // Store the equation as a resolved value.
+        if !st.resolved.contains_key(var) {
+            // As a special case, if the equation only has one solution
+            // then we store the numeric result rather than the equation.
+            if out.expr.num_solutions() == 1 {
+                let cc = out.expr.evaluate(st, 0).unwrap();
+                match cc {
+                    Concrete::Float(ref f) if !f.is_nan() => {
+                        st.resolved
+                            .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
+                        return Ok(SolvePlan::Concrete(cc));
                     }
+                    Concrete::Rational(_) => {
+                        st.resolved
+                            .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
+                        return Ok(SolvePlan::Concrete(cc));
+                    }
+                    _ => {}
                 }
             }
-            None => {}
+
+            st.resolved
+                .insert(var.clone(), SolvePlan::Substituted(out.clone()));
         }
 
-        Err(ResolveErr::CannotSolve)
+        Ok(SolvePlan::Substituted(out))
     }
 
     fn rearrange_candidate(
@@ -218,17 +231,27 @@ impl SubSolver {
         // println!("rearrange_candidate({:?})", var);
 
         for (lhs_var, ee) in st.vars_by_eq.iter() {
-            for info in ee.exprs.iter() {
+            // If we don't have the lhs_var, there's no point continuing as
+            // we cannot solve it.
+            if !st.resolved.contains_key(&lhs_var) {
+                continue;
+            };
+            'expr_loop: for info in ee.exprs.iter() {
+                // Make sure the candidate expression contains the variable we care
+                // about.
                 if info.references.get(var).is_some() {
-                    // See if we've already tried this before
-                    {
-                        let k = (var.clone(), info.expr_hash);
-                        if st.tried_rearrange.get(&k).is_some() {
+                    // Make sure all the other variables referenced are known.
+                    for v in info.references.keys() {
+                        if v == var {
                             continue;
-                        }
-                        st.tried_rearrange.insert(k, ());
+                        };
+                        if !st.resolved.contains_key(v) {
+                            continue 'expr_loop;
+                        };
                     }
 
+                    // At this stage, we should be able to re-arrange the equation
+                    // to find our target var.
                     let v = Expression::Variable(lhs_var.clone());
                     let eq = Expression::Equal(Box::new(v.clone()), Box::new(info.expr.clone()));
 
@@ -242,7 +265,7 @@ impl SubSolver {
                             }
                         }
                         Err(_e) => {
-                            // println!("cannot rearrange {:?}, continuing ({:?})", &eq, e)
+                            // println!("cannot rearrange {:?}, continuing ({:?})", &eq, var)
                         }
                     }
                 }
@@ -252,7 +275,7 @@ impl SubSolver {
         Err(ResolveErr::CannotSolve)
     }
 
-    pub fn find_all<'a>(&mut self, st: &'a mut SubSolverState) -> &'a HashMap<Variable, Concrete> {
+    fn all_vars(&mut self, st: &mut SubSolverState) -> Vec<Variable> {
         let mut vars: Vec<Variable> = st.vars_by_eq.iter().map(|(v, _)| v.clone()).collect();
         for (_v, ees) in st.vars_by_eq.iter() {
             for e in ees.exprs.iter() {
@@ -266,14 +289,77 @@ impl SubSolver {
                 });
             }
         }
+        for v in st.resolved.keys() {
+            if !vars.contains(v) {
+                vars.push(v.clone());
+            }
+        }
+        vars
+    }
 
-        for v in vars {
-            if let None = st.resolved.get(&v) {
-                self.find(st, &v);
+    pub fn walk_solutions<'a>(
+        &mut self,
+        st: &'a mut SubSolverState,
+        cb: &mut impl FnMut(&mut SubSolverState, &Variable, &Expression) -> bool,
+    ) {
+        let vars = self.all_vars(st);
+
+        'outer_loop: for i in 0..vars.len() {
+            // Find the next variable which is simplest to solve.
+            for v in vars.iter() {
+                if st.resolved.contains_key(&v) {
+                    continue;
+                };
+                // See if we have all the dependent variables to solve
+                // one of the expressions.
+                match st.vars_by_eq.get(v) {
+                    Some(ee) => {
+                        for info in ee.exprs.clone().as_ref() {
+                            match self.solve_using_known(st, v, info) {
+                                Ok(p) => continue 'outer_loop,
+                                Err(_) => continue,
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            }
+            // Oh no! There wasn't a simple substitution to be done this round.
+            // Lets try rearranging equations that have the right variables
+            // to be solved for the target.
+            for v in vars.iter() {
+                if st.resolved.contains_key(&v) {
+                    continue;
+                };
+                if let Ok(ei) = self.rearrange_candidate(st, v) {
+                    match self.solve_using_known(st, v, &ei) {
+                        Ok(p) => continue 'outer_loop,
+                        Err(_) => continue,
+                    }
+                }
             }
         }
 
-        &st.resolved
+        for v in vars {
+            if let Some(p) = st.resolved.get(&v).clone() {
+                let keep_going = cb(
+                    st,
+                    &v,
+                    &match p {
+                        SolvePlan::Concrete(c) => match c {
+                            Concrete::Float(f) => {
+                                Expression::Rational(super::Rational::from_float(*f).unwrap(), true)
+                            }
+                            Concrete::Rational(r) => Expression::Rational(r.clone(), false),
+                        },
+                        SolvePlan::Substituted(e) => e.expr.clone(),
+                    },
+                );
+                if !keep_going {
+                    return;
+                }
+            };
+        }
     }
 
     pub fn find(
@@ -281,37 +367,17 @@ impl SubSolver {
         st: &mut SubSolverState,
         var: &Variable,
     ) -> Result<Concrete, ResolveErr> {
-        // println!("find({:?})", var);
-
-        // First, see if we know the value of the requested variable.
-        if let Some(val) = st.resolved.get(var) {
-            return Ok(val.clone());
-        }
-
-        // Next, if theres an equation that resolves that variable, try and solve it,
-        // iteratively solving dependent variables.
-        match self.find_iterative(st, var) {
-            Ok(c) => return Ok(c),
-            Err(ResolveErr::UnknownVar(_)) => {}
-            Err(ResolveErr::CannotSolve) => {}
-            Err(e) => return Err(e),
-        }
-
-        // Lastly, if none of that worked, try to rearrange an equation for the requested
-        // variable and recurse to solve that.
-        loop {
-            match self.rearrange_candidate(st, var) {
-                Ok(ee) => {
-                    // println!("got rearrange candidate: {:?}", &ee);
-                    match self.find_iterative_using_exp(st, var, &ee) {
-                        Ok(c) => return Ok(c),
-                        Err(ResolveErr::UnknownVar(_)) => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
-                Err(e) => return Err(e),
+        let mut out = None;
+        self.walk_solutions(st, &mut |st, v, expr| -> bool {
+            if v == var {
+                out = Some(expr.evaluate(st, 0).unwrap());
+                false
+            } else {
+                true
             }
-        }
+        });
+
+        out.ok_or(ResolveErr::CannotSolve)
     }
 }
 
@@ -491,12 +557,13 @@ mod tests {
             )]),
             vec![
                 Expression::parse("b = a", false).unwrap(),
-                Expression::parse("b = 2 * (c+1)", false).unwrap(),
+                Expression::parse("c = b", false).unwrap(),
+                Expression::parse("c = 2 * (d+1)", false).unwrap(),
             ],
         )
         .unwrap();
 
-        match SubSolver::default().find(&mut state, &"c".into()).unwrap() {
+        match SubSolver::default().find(&mut state, &"d".into()).unwrap() {
             Concrete::Rational(r) => assert_eq!(r, Rational::from_integer(2.into())),
             _ => panic!("result is not a rational"),
         }

@@ -71,10 +71,10 @@ impl Data {
             return;
         }
 
-        println!("Inputs:");
-        for eq in equations.iter() {
-            println!(" - {}", eq);
-        }
+        // println!("Inputs:");
+        // for eq in equations.iter() {
+        //     println!(" - {}", eq);
+        // }
 
         let mut sub_solver_state = match eq::solve::SubSolverState::new(HashMap::new(), equations) {
             Ok(st) => st,
@@ -84,18 +84,56 @@ impl Data {
             }
         };
 
-        let sub_solutions = eq::solve::SubSolver::default().find_all(&mut sub_solver_state);
-        println!("Resolved:");
-        for (v, r) in sub_solutions.iter() {
-            if let Some(term) = self.terms.get_var_ref(v) {
-                let v = r.as_f64();
-                let var: eq::Variable = (&term).into();
-                println!(" - {} = {:?}", var, v);
-                self.apply_solved(&term, v);
-            } else {
-                panic!("no such var! {:?}", v);
-            }
-        }
+        eq::solve::SubSolver::default().walk_solutions(
+            &mut sub_solver_state,
+            &mut |sub_solver_state, v, expr| -> bool {
+                if let Some(term) = self.terms.get_var_ref(v) {
+                    let var: eq::Variable = (&term).into();
+                    let num_solutions = expr.num_solutions();
+
+                    if num_solutions == 1 {
+                        let f = expr.evaluate(sub_solver_state, 0).unwrap().as_f64();
+                        self.apply_solved(&term, f);
+                    } else if num_solutions < 8 {
+                        let current = match self.term_current_value(&term) {
+                            Some(f) => f as f64,
+                            None => {
+                                return true;
+                            }
+                        };
+
+                        let closest_solution = (0..num_solutions)
+                            .into_iter()
+                            .map(|i| expr.evaluate(sub_solver_state, i).ok().map(|c| c.as_f64()))
+                            .fold(None, |acc, res| match (acc, res) {
+                                (None, None) => None,
+                                (None, Some(res)) => Some(res),
+                                (Some(acc), None) => Some(acc),
+                                (Some(acc), Some(res)) => {
+                                    if (res - current).abs() < (acc - current).abs() {
+                                        Some(res)
+                                    } else {
+                                        Some(acc)
+                                    }
+                                }
+                            });
+
+                        if let Some(f) = closest_solution {
+                            self.apply_solved(&term, f);
+                        }
+                    } else {
+                        println!(
+                            "Skipping evaluating {} ({}) which has {} solutions",
+                            var, expr, num_solutions
+                        );
+                    }
+                } else {
+                    panic!("no such var! {:?}", v);
+                }
+
+                true
+            },
+        );
 
         // let residuals = self.residuals();
         // if residuals.len() == 0 {
@@ -142,6 +180,21 @@ impl Data {
         // } else {
         //     println!("Solve failed!!");
         // };
+    }
+
+    fn term_current_value(&self, term: &TermRef) -> Option<f32> {
+        if let Some(feature) = term.for_feature {
+            match self.features.get(feature) {
+                Some(Feature::Point(_, x, y)) => match term.t {
+                    TermType::PositionX => Some(*x),
+                    TermType::PositionY => Some(*y),
+                    TermType::ScalarDistance => None,
+                },
+                _ => None,
+            }
+        } else {
+            None
+        }
     }
 
     fn apply_solved(&mut self, term: &TermRef, v: f64) -> bool {
