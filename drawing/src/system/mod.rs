@@ -176,7 +176,7 @@ impl System for Solver {
             let mut residual = 0.;
             for r in residuals.iter() {
                 use num::traits::cast::ToPrimitive;
-                let res = match r.rhs.evaluate(&mut resolver).unwrap() {
+                let res = match r.rhs.evaluate(&mut resolver, 0).unwrap() {
                     eq::Concrete::Float(f) => f as f64,
                     eq::Concrete::Rational(r) => r.to_f64().unwrap(),
                 };

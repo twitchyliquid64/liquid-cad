@@ -67,8 +67,13 @@ impl Data {
             .flatten()
             .collect();
 
+        if equations.len() == 0 {
+            return;
+        }
+
+        println!("Inputs:");
         for eq in equations.iter() {
-            println!("{}", eq);
+            println!(" - {}", eq);
         }
 
         let mut sub_solver_state = match eq::solve::SubSolverState::new(HashMap::new(), equations) {
@@ -80,10 +85,12 @@ impl Data {
         };
 
         let sub_solutions = eq::solve::SubSolver::default().find_all(&mut sub_solver_state);
+        println!("Resolved:");
         for (v, r) in sub_solutions.iter() {
             if let Some(term) = self.terms.get_var_ref(v) {
                 let v = r.as_f64();
-                println!("{:?} = {:?}", term, v);
+                let var: eq::Variable = (&term).into();
+                println!(" - {} = {:?}", var, v);
                 self.apply_solved(&term, v);
             } else {
                 panic!("no such var! {:?}", v);

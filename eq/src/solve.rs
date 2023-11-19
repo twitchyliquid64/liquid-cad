@@ -174,7 +174,7 @@ impl SubSolver {
         }
 
         // If we got this far, we have all the dependent variables. Solve for the value.
-        return match info.expr.evaluate(st) {
+        return match info.expr.evaluate(st, 0) {
             Ok(c) => {
                 st.resolved.insert(var.clone(), c.clone());
                 Ok(c)

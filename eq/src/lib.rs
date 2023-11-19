@@ -38,8 +38,26 @@ pub enum ResolveErr {
     NotImplementedOrWhatever,
 }
 
+/// A type which can resolve the concrete value of expressions.
 pub trait Resolver {
     fn resolve_variable(&mut self, v: &Variable) -> Result<Concrete, ResolveErr>;
+}
+
+pub struct StaticResolver(std::collections::HashMap<Variable, Concrete>);
+
+impl Resolver for StaticResolver {
+    fn resolve_variable(&mut self, v: &Variable) -> Result<Concrete, ResolveErr> {
+        match self.0.get(v) {
+            None => Err(ResolveErr::UnknownVar(v.clone())),
+            Some(c) => Ok(c.clone()),
+        }
+    }
+}
+
+impl StaticResolver {
+    pub fn new<const N: usize>(i: [(Variable, Concrete); N]) -> Self {
+        Self(std::collections::HashMap::from(i))
+    }
 }
 
 /// Equation element.
@@ -141,67 +159,136 @@ impl Expression {
         cost
     }
 
-    pub fn evaluate<R: Resolver>(&self, r: &mut R) -> Result<Concrete, ResolveErr> {
-        // TODO: support multiple results in return set
+    pub fn num_solutions(&self) -> usize {
         match self {
-            Expression::Sum(a, b) => match (a.evaluate(r)?, b.evaluate(r)?) {
-                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a + b)),
-                (a, b) => Ok(Concrete::Float(a.as_f64() + b.as_f64())),
-            },
-            Expression::Difference(a, b) => match (a.evaluate(r)?, b.evaluate(r)?) {
-                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a - b)),
-                (a, b) => Ok(Concrete::Float(a.as_f64() - b.as_f64())),
-            },
-            Expression::Product(a, b) => match (a.evaluate(r)?, b.evaluate(r)?) {
-                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a * b)),
-                _ => todo!("{:?} * {:?}", a, b),
-            },
-            Expression::Quotient(a, b) => match (a.evaluate(r)?, b.evaluate(r)?) {
-                (Concrete::Rational(a), Concrete::Rational(b)) => {
-                    if b == Rational::from_integer(0.into()) {
-                        Err(ResolveErr::DivByZero)
-                    } else {
-                        Ok(Concrete::Rational(a / b))
-                    }
-                }
-                _ => todo!("{:?} / {:?}", a, b),
-            },
+            Expression::Sum(a, b) => a.num_solutions() * b.num_solutions(),
+            Expression::Difference(a, b) => a.num_solutions() * b.num_solutions(),
+            Expression::Product(a, b) => a.num_solutions() * b.num_solutions(),
+            Expression::Quotient(a, b) => a.num_solutions() * b.num_solutions(),
+            Expression::Power(a, b) => a.num_solutions() * b.num_solutions(),
 
-            Expression::Neg(a) => match a.evaluate(r)? {
+            Expression::Neg(a) | Expression::Abs(a) => a.num_solutions(),
+
+            Expression::Sqrt(a, is_pm) => {
+                if *is_pm {
+                    2 * a.num_solutions()
+                } else {
+                    a.num_solutions()
+                }
+            }
+
+            Expression::Integer(i) => 1,
+            Expression::Rational(r, _) => 1,
+            Expression::Variable(v) => 1,
+
+            Expression::Equal(a, b) => panic!("num_solutions() called on {:?} = {:?}", a, b),
+        }
+    }
+
+    /// evaluates the expression with the given resolver and for the solution
+    /// specified by the zero-indexed which parameter.
+    ///
+    /// The concrete value of the specific result is returned.
+    pub fn evaluate<R: Resolver>(&self, r: &mut R, which: usize) -> Result<Concrete, ResolveErr> {
+        match self {
+            Expression::Sum(a, b) => {
+                let a_solutions = a.num_solutions();
+                match (
+                    a.evaluate(r, which % a_solutions)?,
+                    b.evaluate(r, which / a_solutions)?,
+                ) {
+                    (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a + b)),
+                    (a, b) => Ok(Concrete::Float(a.as_f64() + b.as_f64())),
+                }
+            }
+            Expression::Difference(a, b) => {
+                let a_solutions = a.num_solutions();
+                match (
+                    a.evaluate(r, which % a_solutions)?,
+                    b.evaluate(r, which / a_solutions)?,
+                ) {
+                    (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a - b)),
+                    (a, b) => Ok(Concrete::Float(a.as_f64() - b.as_f64())),
+                }
+            }
+            Expression::Product(a, b) => {
+                let a_solutions = a.num_solutions();
+                match (
+                    a.evaluate(r, which % a_solutions)?,
+                    b.evaluate(r, which / a_solutions)?,
+                ) {
+                    (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a * b)),
+                    (a, b) => Ok(Concrete::Float(a.as_f64() * b.as_f64())),
+                }
+            }
+            Expression::Quotient(a, b) => {
+                let a_solutions = a.num_solutions();
+                match (
+                    a.evaluate(r, which % a_solutions)?,
+                    b.evaluate(r, which / a_solutions)?,
+                ) {
+                    (Concrete::Rational(a), Concrete::Rational(b)) => {
+                        if b == Rational::from_integer(0.into()) {
+                            Err(ResolveErr::DivByZero)
+                        } else {
+                            Ok(Concrete::Rational(a / b))
+                        }
+                    }
+                    (a, b) => Ok(Concrete::Float(a.as_f64() / b.as_f64())),
+                }
+            }
+            Expression::Power(a, b) => {
+                let a_solutions = a.num_solutions();
+                match (
+                    a.evaluate(r, which % a_solutions)?,
+                    b.evaluate(r, which / a_solutions)?,
+                ) {
+                    (Concrete::Rational(a), Concrete::Rational(b)) => {
+                        use num::ToPrimitive;
+                        match b.to_i32() {
+                            Some(b) => Ok(Concrete::Rational(a.pow(b))),
+                            None => Err(ResolveErr::PowUnable(b)),
+                        }
+                    }
+                    (Concrete::Float(a), Concrete::Rational(b)) => {
+                        use num::ToPrimitive;
+                        match b.to_i32() {
+                            Some(b) => Ok(Concrete::Float(a.powi(b))),
+                            None => Ok(Concrete::Float(a.powf(b.to_f64().unwrap()))),
+                        }
+                    }
+                    (a, b) => Ok(Concrete::Float(a.as_f64().powf(b.as_f64()))),
+                }
+            }
+
+            Expression::Neg(a) => match a.evaluate(r, which)? {
                 Concrete::Rational(a) => Ok(Concrete::Rational(-a)),
-                _ => todo!("-{:?}", a),
+                Concrete::Float(a) => Ok(Concrete::Float(-a)),
             },
-            Expression::Abs(a) => match a.evaluate(r)? {
+            Expression::Abs(a) => match a.evaluate(r, which)? {
                 Concrete::Rational(a) => {
                     use num::Signed;
                     Ok(Concrete::Rational(a.abs()))
                 }
                 a => Ok(Concrete::Float(a.as_f64().abs())),
             },
-            Expression::Sqrt(a, _) => Ok(Concrete::Float(a.evaluate(r)?.as_f64().sqrt())),
-
-            Expression::Power(a, b) => match (a.evaluate(r)?, b.evaluate(r)?) {
-                (Concrete::Rational(a), Concrete::Rational(b)) => {
-                    use num::ToPrimitive;
-                    match b.to_i32() {
-                        Some(b) => Ok(Concrete::Rational(a.pow(b))),
-                        None => Err(ResolveErr::PowUnable(b)),
+            Expression::Sqrt(a, is_pm) => {
+                if *is_pm {
+                    let res = a.evaluate(r, which / 2)?;
+                    if which % 2 == 0 {
+                        Ok(Concrete::Float(res.as_f64().sqrt()))
+                    } else {
+                        Ok(Concrete::Float(-res.as_f64().sqrt()))
                     }
+                } else {
+                    Ok(Concrete::Float(a.evaluate(r, which)?.as_f64().sqrt()))
                 }
-                (Concrete::Float(a), Concrete::Rational(b)) => {
-                    use num::ToPrimitive;
-                    match b.to_i32() {
-                        Some(b) => Ok(Concrete::Float(a.powi(b))),
-                        None => Ok(Concrete::Float(a.powf(b.to_f64().unwrap()))),
-                    }
-                }
-                (a, b) => Ok(Concrete::Float(a.as_f64().powf(b.as_f64()))),
-            },
-
+            }
             Expression::Integer(i) => Ok(Concrete::Rational(Rational::from_integer(i.clone()))),
             Expression::Rational(r, _) => Ok(Concrete::Rational(r.clone())),
-            Expression::Variable(v) => r.resolve_variable(v),
-            _ => todo!("{:?}", self),
+            Expression::Variable(v) => Ok(r.resolve_variable(v)?),
+
+            Expression::Equal(a, b) => panic!("evaluate() called on {:?} = {:?}", a, b),
         }
     }
 
@@ -1542,5 +1629,137 @@ mod tests {
                 .make_subject(&Expression::Variable("x".into())),
             Ok(Expression::parse("x = sqrt_pm(r^2 - (y-k)^2) + h", true).unwrap()),
         );
+    }
+
+    #[test]
+    fn num_solutions() {
+        assert_eq!(
+            Expression::parse("1 + 2", false).unwrap().num_solutions(),
+            1,
+        );
+        assert_eq!(
+            Expression::parse("(1 - 2^2) / abs(11)", false)
+                .unwrap()
+                .num_solutions(),
+            1,
+        );
+        assert_eq!(
+            Expression::parse("(1 - 2^2) / abs(sqrt_pm(11))", false)
+                .unwrap()
+                .num_solutions(),
+            2,
+        );
+        assert_eq!(
+            Expression::parse("(sqrt_pm(4) - 2^2) / abs(sqrt_pm(11))", false)
+                .unwrap()
+                .num_solutions(),
+            4,
+        );
+    }
+
+    #[test]
+    fn eval() {
+        assert_eq!(
+            Expression::parse("1 + 2", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64(),
+            3.0,
+        );
+        assert_eq!(
+            Expression::parse("1 - v", false)
+                .unwrap()
+                .evaluate(
+                    &mut StaticResolver::new([(
+                        "v".into(),
+                        Concrete::Rational(Rational::new(3.into(), 1.into()))
+                    )]),
+                    0
+                )
+                .unwrap()
+                .as_f64(),
+            -2.0,
+        );
+
+        assert_eq!(
+            Expression::parse("1 + (5 * 3) / 2", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64(),
+            8.5,
+        );
+        assert_eq!(
+            Expression::parse("2.5^2", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64(),
+            6.25,
+        );
+
+        assert!(matches!(Expression::parse("1 / v", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([(
+                    "v".into(),
+                    Concrete::Rational(Rational::new(1.into(), 2.into()))
+                )]), 0)
+                .unwrap(),
+                Concrete::Rational(r) if r == Rational::new(2.into(), 1.into())));
+        assert_eq!(
+            Expression::parse("1 / v", false)
+                .unwrap()
+                .evaluate(
+                    &mut StaticResolver::new([("v".into(), Concrete::Float(0.5))]),
+                    0
+                )
+                .unwrap()
+                .as_f64(),
+            2.0,
+        );
+
+        // Test multiple-results of sqrt
+        // First case: non-pm, should give unary solution.
+        assert!(matches!(Expression::parse("5 - sqrt(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 0)
+            .unwrap(),
+                Concrete::Float(f) if (f - 3.0).abs() < 0.001));
+
+        // Second case: plus/minus, should give first result and indicate 2 solutions.
+        assert!(matches!(Expression::parse("5 - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 0)
+            .unwrap(),
+                Concrete::Float(f) if (f - 3.0).abs() < 0.001));
+        // What about for the 2nd result?
+        assert!(matches!(Expression::parse("5 - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 1)
+            .unwrap(),
+                Concrete::Float(f) if (f - 7.0).abs() < 0.001));
+
+        // Third case: What if both branches of a binary operation have multiple solutions?
+        assert!(matches!(Expression::parse("sqrt_pm(9) - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 0) // 3 - 2
+            .unwrap(),
+                Concrete::Float(f) if (f - 1.0).abs() < 0.001));
+        assert!(matches!(Expression::parse("sqrt_pm(9) - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 1) // 3 - -2
+            .unwrap(),
+                Concrete::Float(f) if (f + 5.0).abs() < 0.001));
+        assert!(matches!(Expression::parse("sqrt_pm(9) - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 2) // -3 - 2
+            .unwrap(),
+                Concrete::Float(f) if (f - 5.0).abs() < 0.001));
+        assert!(matches!(Expression::parse("sqrt_pm(9) - sqrt_pm(4)", false)
+            .unwrap()
+            .evaluate(&mut StaticResolver::new([]), 3) // -3 - -2
+            .unwrap(),
+                Concrete::Float(f) if (f + 1.0).abs() < 0.001));
     }
 }
