@@ -92,12 +92,19 @@ impl<'a> DimensionLengthOverlay<'a> {
     }
 
     fn draw_stop_lines(&self, t: f32, sa: egui::Pos2, sb: egui::Pos2, painter: &egui::Painter) {
-        let l = self.reference.length();
+        let l = egui::Vec2::angled(std::f32::consts::PI / 2.).dot(self.reference);
+        let t = t - self.reference.angle() + std::f32::consts::PI / 2.;
+
+        let offset = if l >= 0. {
+            DimensionLengthOverlay::LINE_STOP_OFFSET
+        } else {
+            -DimensionLengthOverlay::LINE_STOP_OFFSET
+        };
 
         painter.line_segment(
             [
                 sa + egui::Vec2::angled(t) * l,
-                sa + egui::Vec2::angled(t) * DimensionLengthOverlay::LINE_STOP_OFFSET,
+                sa + egui::Vec2::angled(t) * offset,
             ],
             egui::Stroke {
                 width: 1.,
@@ -107,7 +114,7 @@ impl<'a> DimensionLengthOverlay<'a> {
         painter.line_segment(
             [
                 sb + egui::Vec2::angled(t) * l,
-                sb + egui::Vec2::angled(t) * DimensionLengthOverlay::LINE_STOP_OFFSET,
+                sb + egui::Vec2::angled(t) * offset,
             ],
             egui::Stroke {
                 width: 1.,

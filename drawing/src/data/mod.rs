@@ -94,7 +94,7 @@ impl Data {
                     if num_solutions == 1 {
                         let f = expr.evaluate(sub_solver_state, 0).unwrap().as_f64();
                         self.apply_solved(&term, f);
-                    } else if num_solutions < 8 {
+                    } else if num_solutions <= 32 {
                         let current = match self.term_current_value(&term) {
                             Some(f) => f as f64,
                             None => {
@@ -198,6 +198,10 @@ impl Data {
     }
 
     fn apply_solved(&mut self, term: &TermRef, v: f64) -> bool {
+        if v.is_nan() || v.is_infinite() {
+            return false;
+        }
+
         if let Some(feature) = term.for_feature {
             match self.features.get_mut(feature) {
                 Some(Feature::Point(_, x, y)) => {

@@ -202,7 +202,7 @@ impl SubSolver {
             if out.expr.num_solutions() == 1 {
                 let cc = out.expr.evaluate(st, 0).unwrap();
                 match cc {
-                    Concrete::Float(ref f) if !f.is_nan() => {
+                    Concrete::Float(ref f) if !f.is_nan() && !f.is_infinite() => {
                         st.resolved
                             .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
                         return Ok(SolvePlan::Concrete(cc));
@@ -339,6 +339,8 @@ impl SubSolver {
                 }
             }
         }
+        // TODO: Sometimes the substitutions are such that there's a ton of possible solutions.
+        // Maybe we can try and find better substitutions in those cases?
 
         for v in vars {
             if let Some(p) = st.resolved.get(&v).clone() {

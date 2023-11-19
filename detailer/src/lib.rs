@@ -198,6 +198,11 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
                 .changed();
+
+            if *changed && *d < 0. {
+                *d = 0.;
+            }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::ConstraintDelete(*k));
@@ -229,9 +234,16 @@ impl<'a> Widget<'a> {
                 .rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
-            // *changed |= ui
-            //     .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
-            //     .changed();
+            let resp = ui.add_sized(
+                [100. + ui.spacing().item_spacing.x, text_height * 1.4],
+                egui::Button::new("swap direction"),
+            );
+
+            if resp.clicked() {
+                *changed |= true;
+                *is_horizontal = !*is_horizontal;
+            }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::ConstraintDelete(*k));
