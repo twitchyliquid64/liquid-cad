@@ -75,7 +75,7 @@ impl<'a> Widget<'a> {
         ui: &mut egui::Ui,
         hp: Option<egui::Pos2>,
         hover: &Hover,
-        response: &egui::Response,
+        response: &mut egui::Response,
     ) -> Option<Input> {
         // Handle: zooming
         if let Some(hp) = hp {
@@ -183,6 +183,7 @@ impl<'a> Widget<'a> {
                     }
                     let new_pos = self.drawing.vp.screen_to_point(hp) - offset;
                     self.drawing.move_feature(fk, new_pos);
+                    response.mark_changed();
                     Some(Input::FeatureDrag(fk, new_pos))
                 }
 
@@ -369,7 +370,7 @@ impl<'a> Widget<'a> {
 
     pub fn show(mut self, ui: &mut egui::Ui) -> DrawResponse {
         use egui::Sense;
-        let (rect, response) = ui.allocate_exact_size(
+        let (rect, mut response) = ui.allocate_exact_size(
             ui.available_size(),
             Sense {
                 click: true,
@@ -404,7 +405,7 @@ impl<'a> Widget<'a> {
             self.handler.handle(self.drawing, self.tools, c);
             None
         } else {
-            self.handle_input(ui, hp, &hover, &response)
+            self.handle_input(ui, hp, &hover, &mut response)
         };
 
         let base_params = PaintParams {
