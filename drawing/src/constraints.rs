@@ -10,10 +10,16 @@ slotmap::new_key_type! {
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ConstraintMeta {}
 
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct DimensionDisplay {
+    pub(crate) x: f32,
+    pub(crate) y: f32,
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Constraint {
     Fixed(ConstraintMeta, FeatureKey, f32, f32),
-    LineLength(ConstraintMeta, FeatureKey, f32, (f32, f32)),
+    LineLength(ConstraintMeta, FeatureKey, f32, DimensionDisplay),
     LineAlongCardinal(ConstraintMeta, FeatureKey, bool), // true = horizontal
 }
 
@@ -55,7 +61,7 @@ impl Constraint {
         use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
             Fixed(..) => None,
-            LineLength(_, fk, _, (ref_x, ref_y)) => {
+            LineLength(_, fk, _, dd) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*fk) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -67,7 +73,7 @@ impl Constraint {
                         _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
                     };
 
-                    let reference = egui::Vec2::new(*ref_x, *ref_y);
+                    let reference = egui::Vec2::new(dd.x, dd.y);
                     let t = (a - b).angle() + reference.angle();
                     let text_center = vp.translate_point(a.lerp(b, 0.5))
                         + egui::Vec2::angled(t) * reference.length();
@@ -123,7 +129,7 @@ impl Constraint {
                 };
             }
 
-            LineLength(_, k, d, (ref_x, ref_y)) => {
+            LineLength(_, k, d, dd) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -139,7 +145,7 @@ impl Constraint {
                         a,
                         b,
                         val: &format!("{:.3}", d),
-                        reference: egui::Vec2::new(*ref_x, *ref_y),
+                        reference: egui::Vec2::new(dd.x, dd.y),
                         hovered: params.hovered,
                         selected: params.selected,
                     }

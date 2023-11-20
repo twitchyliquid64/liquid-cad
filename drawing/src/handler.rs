@@ -1,6 +1,6 @@
 use super::{Data, Feature, FeatureKey, FeatureMeta};
 use crate::tools::Toolbar;
-use crate::{Constraint, ConstraintKey, ConstraintMeta};
+use crate::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 
 #[derive(Debug)]
 pub enum ToolResponse {
@@ -92,7 +92,7 @@ impl Handler {
                         ConstraintMeta::default(),
                         k,
                         d,
-                        (0., 35.0),
+                        DimensionDisplay { x: 0., y: 35.0 },
                     ));
 
                     tools.clear();

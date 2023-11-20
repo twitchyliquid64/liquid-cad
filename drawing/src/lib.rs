@@ -7,7 +7,7 @@ pub use data::{Data, Hover, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta};
 mod constraints;
-pub use constraints::{Constraint, ConstraintKey, ConstraintMeta};
+pub use constraints::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 pub mod handler;
 mod system;
 pub use handler::Handler;
@@ -139,9 +139,10 @@ impl<'a> Widget<'a> {
                     } => None,
                     Hover::Constraint {
                         k,
-                        constraint: Constraint::LineLength(_, _, _, (x, y)),
+                        constraint: Constraint::LineLength(_, _, _, dd),
                     } => {
-                        let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*x, *y);
+                        let offset =
+                            self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
                         let state = DragState::Constraint(*k, offset);
                         ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
                         Some(state)

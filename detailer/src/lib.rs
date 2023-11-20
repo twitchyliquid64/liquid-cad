@@ -1,5 +1,5 @@
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, Handler};
-use drawing::{Constraint, ConstraintKey};
+use drawing::{Constraint, ConstraintKey, DimensionDisplay};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
@@ -113,14 +113,14 @@ impl<'a> Widget<'a> {
                                                 y,
                                             )
                                         }
-                                        Some(Constraint::LineLength(_, _, d, ref_pt)) => {
+                                        Some(Constraint::LineLength(_, _, d, dd)) => {
                                             Widget::show_constraint_line_length(
                                                 ui,
                                                 &mut commands,
                                                 &mut changed,
                                                 &ck,
                                                 d,
-                                                ref_pt,
+                                                dd,
                                             )
                                         }
                                         Some(Constraint::LineAlongCardinal(
@@ -186,7 +186,7 @@ impl<'a> Widget<'a> {
         changed: &mut bool,
         k: &ConstraintKey,
         d: &mut f32,
-        _ref_pt: &mut (f32, f32),
+        _ref_pt: &mut DimensionDisplay,
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
