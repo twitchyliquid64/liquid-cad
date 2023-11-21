@@ -8,7 +8,9 @@ slotmap::new_key_type! {
 const POINT_SIZE: egui::Vec2 = egui::Vec2 { x: 4.5, y: 4.5 };
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct FeatureMeta {}
+pub struct FeatureMeta {
+    pub construction: bool,
+}
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Feature {
@@ -96,7 +98,7 @@ impl Feature {
         painter: &egui::Painter,
     ) {
         match self {
-            Feature::Point(_, _, _) => {
+            Feature::Point(meta, _, _) => {
                 painter.rect_filled(
                     params
                         .vp
@@ -105,17 +107,17 @@ impl Feature {
                     egui::Rounding::ZERO,
                     if params.selected {
                         params.colors.selected
+                    } else if params.hovered {
+                        params.colors.hover
+                    } else if meta.construction {
+                        params.colors.point.gamma_multiply(0.35)
                     } else {
-                        if params.hovered {
-                            params.colors.hover
-                        } else {
-                            params.colors.point
-                        }
+                        params.colors.point
                     },
                 );
             }
 
-            Feature::LineSegment(_, p1, p2) => {
+            Feature::LineSegment(meta, p1, p2) => {
                 let (f1, f2) = (
                     drawing.features.get(*p1).unwrap(),
                     drawing.features.get(*p2).unwrap(),
@@ -134,12 +136,12 @@ impl Feature {
                         width: 1.,
                         color: if params.selected {
                             params.colors.selected
+                        } else if params.hovered {
+                            params.colors.hover
+                        } else if meta.construction {
+                            params.colors.line.gamma_multiply(0.35)
                         } else {
-                            if params.hovered {
-                                params.colors.hover
-                            } else {
-                                params.colors.line
-                            }
+                            params.colors.line
                         },
                     },
                 )

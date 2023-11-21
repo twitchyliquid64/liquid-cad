@@ -1,4 +1,5 @@
-use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, Handler};
+use drawing::Handler;
+use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
 use drawing::{Constraint, ConstraintKey, DimensionDisplay};
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -82,16 +83,23 @@ impl<'a> Widget<'a> {
             for k in selected {
                 ui.push_id(k, |ui| {
                     match self.drawing.feature_mut(k) {
-                        Some(Feature::Point(_, x, y)) => Widget::show_selection_entry_point(
+                        Some(Feature::Point(meta, x, y)) => Widget::show_selection_entry_point(
                             ui,
                             &mut commands,
                             &mut changed,
                             &k,
                             x,
                             y,
+                            meta,
                         ),
-                        Some(Feature::LineSegment(_, _p1, _p2)) => {
-                            Widget::show_selection_entry_line(ui, &mut commands, &mut changed, &k)
+                        Some(Feature::LineSegment(meta, _p1, _p2)) => {
+                            Widget::show_selection_entry_line(
+                                ui,
+                                &mut commands,
+                                &mut changed,
+                                &k,
+                                meta,
+                            )
                         }
                         None => {}
                     }
@@ -259,6 +267,7 @@ impl<'a> Widget<'a> {
         k: &FeatureKey,
         px: &mut f32,
         py: &mut f32,
+        meta: &mut FeatureMeta,
     ) {
         // use egui_extras::{Size, StripBuilder};
 
@@ -293,9 +302,16 @@ impl<'a> Widget<'a> {
             let text_rect = ui
                 .add(egui::Label::new(format!("Point {:?}", k.data())).wrap(false))
                 .rect;
-            if text_rect.width() < r.x / 2. {
-                ui.add_space(r.x / 2. - text_rect.width());
+            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
+                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
             }
+
+            *changed |= ui
+                .add_sized(
+                    [r.x / 4., text_height * 1.4],
+                    egui::Checkbox::new(&mut meta.construction, "🚧"),
+                )
+                .changed();
 
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(px))
@@ -314,15 +330,28 @@ impl<'a> Widget<'a> {
     fn show_selection_entry_line(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
-        _changed: &mut bool,
+        changed: &mut bool,
         k: &FeatureKey,
+        meta: &mut FeatureMeta,
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add(egui::Label::new(format!("Line {:?}", k.data())).wrap(false));
+            let text_rect = ui
+                .add(egui::Label::new(format!("Line {:?}", k.data())).wrap(false))
+                .rect;
+            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
+                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
+            }
+
+            *changed |= ui
+                .add_sized(
+                    [r.x / 4., text_height * 1.4],
+                    egui::Checkbox::new(&mut meta.construction, "🚧"),
+                )
+                .changed();
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
