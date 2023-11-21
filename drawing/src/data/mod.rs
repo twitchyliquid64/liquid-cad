@@ -33,6 +33,8 @@ pub struct Data {
     pub vp: Viewport,
 
     pub selected_map: HashMap<FeatureKey, usize>,
+    #[serde(skip)]
+    pub selected_constraint: Option<ConstraintKey>,
 
     pub terms: TermAllocator,
 }
@@ -44,6 +46,7 @@ impl Default for Data {
             constraints: ConstraintData::default(),
             vp: Viewport::default(),
             selected_map: HashMap::default(),
+            selected_constraint: None,
             terms: TermAllocator::default(),
         }
     }

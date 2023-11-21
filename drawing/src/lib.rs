@@ -39,6 +39,7 @@ enum DragState {
     SelectBox(egui::Pos2),
     Feature(FeatureKey, egui::Vec2),
     Constraint(ConstraintKey, egui::Vec2),
+    EditingLineLength(ConstraintKey),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -46,6 +47,7 @@ enum Input {
     Selection(egui::Rect),
     FeatureDrag(FeatureKey, egui::Pos2),
     ConstraintDrag(ConstraintKey, egui::Pos2),
+    EditingLineLength(ConstraintKey),
 }
 
 /// Widget implements the egui drawing widget.
@@ -113,44 +115,78 @@ impl<'a> Widget<'a> {
         // Handle: selection, dragging
         let current_input = if let Some(hp) = hp {
             let select_id = ui.make_persistent_id("select_box_start");
-            let drag_state = if response.drag_started_by(egui::PointerButton::Primary) {
-                match hover {
-                    // dragging a box to select
-                    Hover::None => {
-                        let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
-                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
-                        Some(state)
-                    }
-                    // Dragging a point
+            let drag_state = match (
+                hover,
+                response.drag_started_by(egui::PointerButton::Primary),
+                response.double_clicked_by(egui::PointerButton::Primary),
+            ) {
+                // dragging a box to select
+                (Hover::None, true, false) => {
+                    let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
+                }
+                // Dragging a point
+                (
                     Hover::Feature {
                         k,
                         feature: Feature::Point(_, px, py),
-                    } => {
-                        let offset =
-                            self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
-                        let state = DragState::Feature(*k, offset);
-                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
-                        Some(state)
-                    }
-                    // TODO: dragging a line
+                    },
+                    true,
+                    false,
+                ) => {
+                    let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
+                    let state = DragState::Feature(*k, offset);
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
+                }
+                // TODO: dragging a line
+                (
                     Hover::Feature {
                         k: _,
                         feature: Feature::LineSegment(..),
-                    } => None,
+                    },
+                    true,
+                    false,
+                ) => None,
+                // Dragging a LineLength constraint reference
+                (
                     Hover::Constraint {
                         k,
                         constraint: Constraint::LineLength(_, _, _, dd),
-                    } => {
-                        let offset =
-                            self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
-                        let state = DragState::Constraint(*k, offset);
-                        ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
-                        Some(state)
-                    }
-                    Hover::Constraint { .. } => None,
+                    },
+                    true,
+                    false,
+                ) => {
+                    let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
+                    let state = DragState::Constraint(*k, offset);
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
                 }
-            } else {
-                ui.memory(|mem| mem.data.get_temp(select_id))
+                // Double-clicking a LineLength constraint reference
+                (
+                    Hover::Constraint {
+                        k,
+                        constraint: Constraint::LineLength(_, _, _, dd),
+                    },
+                    false,
+                    true,
+                ) => {
+                    if let Some(Constraint::LineLength(meta, ..)) = self.drawing.constraint_mut(*k)
+                    {
+                        meta.focus_to = true;
+                        let state = DragState::EditingLineLength(*k);
+                        ui.memory_mut(|mem| {
+                            mem.data.insert_temp(select_id, state);
+                        });
+                        Some(state)
+                    } else {
+                        unreachable!();
+                    }
+                }
+                (Hover::Constraint { .. }, true, false) => None,
+
+                (_, _, _) => ui.memory(|mem| mem.data.get_temp(select_id)),
             };
 
             let released = response.drag_released_by(egui::PointerButton::Primary);
@@ -196,8 +232,22 @@ impl<'a> Widget<'a> {
                     Some(Input::ConstraintDrag(ck, hp))
                 }
 
+                (Some(DragState::EditingLineLength(ck)), _) => {
+                    if response.clicked() && matches!(hover, Hover::None) {
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    }
+                    Some(Input::EditingLineLength(ck))
+                }
+
                 (None, _) => None,
             }
+        } else {
+            None
+        };
+
+        self.drawing.selected_constraint = if let Some(Input::EditingLineLength(ck)) = current_input
+        {
+            Some(ck)
         } else {
             None
         };
@@ -209,7 +259,10 @@ impl<'a> Widget<'a> {
         }
 
         // Handle: clicks altering selection
-        if hp.is_some() && response.clicked_by(egui::PointerButton::Primary) {
+        if hp.is_some()
+            && response.clicked_by(egui::PointerButton::Primary)
+            && !matches!(current_input, Some(Input::EditingLineLength(ck)))
+        {
             let shift_held = ui.input(|i| i.modifiers.shift);
 
             // feature clicked: add-to or replace selection
@@ -308,24 +361,65 @@ impl<'a> Widget<'a> {
             v.paint(self.drawing, k, &pp, painter);
         }
 
-        if let Some(Input::Selection(current_drag)) = current_input {
-            let screen_rect = self.drawing.vp.translate_rect(current_drag);
-            painter.rect_filled(
-                screen_rect.shrink(1.),
-                egui::Rounding::ZERO,
-                egui::Color32::from_white_alpha(20),
-            );
-            painter.rect_stroke(
-                screen_rect,
-                egui::Rounding::ZERO,
-                egui::Stroke {
-                    width: 1.,
-                    color: egui::Color32::WHITE,
-                },
-            );
-        }
+        match current_input {
+            Some(Input::Selection(current_drag)) => {
+                let screen_rect = self.drawing.vp.translate_rect(current_drag);
+                painter.rect_filled(
+                    screen_rect.shrink(1.),
+                    egui::Rounding::ZERO,
+                    egui::Color32::from_white_alpha(20),
+                );
+                painter.rect_stroke(
+                    screen_rect,
+                    egui::Rounding::ZERO,
+                    egui::Stroke {
+                        width: 1.,
+                        color: egui::Color32::WHITE,
+                    },
+                );
+            }
+
+            Some(Input::FeatureDrag(_, _))
+            | Some(Input::ConstraintDrag(_, _))
+            | Some(Input::EditingLineLength(_))
+            | None => {}
+        };
 
         self.tools.paint(ui, painter, response, hp, &base_params);
+
+        // if let Some(Input::EditingLineLength(ck)) = current_input {
+        //     if let Some(Constraint::LineLength(_, fk, _, dd)) = self.drawing.constraints.get(ck) {
+        //         if let Some(Feature::LineSegment(_, f1, f2)) = self.drawing.features.get(*fk) {
+        //             let (a, b) = match (
+        //                 self.drawing.features.get(*f1).unwrap(),
+        //                 self.drawing.features.get(*f2).unwrap(),
+        //             ) {
+        //                 (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+        //                     (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+        //                 }
+        //                 _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+        //             };
+
+        //             let reference = egui::Vec2::from((dd.x, dd.y));
+        //             let t = (a - b).angle() + reference.angle();
+        //             let reference_screen = self.drawing.vp.translate_point(a.lerp(b, 0.5))
+        //                 + egui::Vec2::angled(t) * reference.length();
+
+        //             let area_response = egui::Area::new(popup_id)
+        //                 .order(egui::Order::Foreground)
+        //                 .fixed_pos(reference_screen)
+        //                 .constrain(true)
+        //                 .pivot(egui::Align2::CENTER_CENTER)
+        //                 .show(ui.ctx(), |ui| {
+        //                     ui.vertical(|ui| ui.label("HI"));
+        //                     // egui::Frame::popup(ui.style()).show(ui, |ui| {
+        //                     //     ui.label("HI");
+        //                     // });
+        //                 })
+        //                 .response;
+        //         };
+        //     };
+        // }
 
         self.draw_debug(ui, painter, hp, &base_params);
     }

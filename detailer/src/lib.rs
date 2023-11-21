@@ -1,6 +1,6 @@
 use drawing::Handler;
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
-use drawing::{Constraint, ConstraintKey, DimensionDisplay};
+use drawing::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
@@ -77,7 +77,17 @@ impl<'a> Widget<'a> {
     fn show_selection_tab(&mut self, ui: &mut egui::Ui) {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
         let mut changed = false;
-        let selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
+        let mut selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
+
+        if let Some(ck) = self.drawing.selected_constraint {
+            if let Some(c) = self.drawing.constraints.get(ck) {
+                for fk in c.affecting_features() {
+                    if !selected.contains(&fk) {
+                        selected.push(fk);
+                    }
+                }
+            }
+        };
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             for k in selected {
@@ -110,7 +120,7 @@ impl<'a> Widget<'a> {
                             .default_open(true)
                             .show(ui, |ui| {
                                 for ck in constraints {
-                                    match self.drawing.constraint_mut(ck) {
+                                    ui.push_id(k, |ui| match self.drawing.constraint_mut(ck) {
                                         Some(Constraint::Fixed(_, _, x, y)) => {
                                             Widget::show_constraint_fixed(
                                                 ui,
@@ -121,7 +131,7 @@ impl<'a> Widget<'a> {
                                                 y,
                                             )
                                         }
-                                        Some(Constraint::LineLength(_, _, d, dd)) => {
+                                        Some(Constraint::LineLength(meta, _, d, dd)) => {
                                             Widget::show_constraint_line_length(
                                                 ui,
                                                 &mut commands,
@@ -129,6 +139,7 @@ impl<'a> Widget<'a> {
                                                 &ck,
                                                 d,
                                                 dd,
+                                                meta,
                                             )
                                         }
                                         Some(Constraint::LineAlongCardinal(
@@ -143,7 +154,7 @@ impl<'a> Widget<'a> {
                                             is_horizontal,
                                         ),
                                         None => {}
-                                    }
+                                    });
                                 }
                             });
                     }
@@ -195,6 +206,7 @@ impl<'a> Widget<'a> {
         k: &ConstraintKey,
         d: &mut f32,
         _ref_pt: &mut DimensionDisplay,
+        meta: &mut ConstraintMeta,
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
@@ -203,9 +215,14 @@ impl<'a> Widget<'a> {
             let text_rect = ui.add(egui::Label::new("Length").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
-            *changed |= ui
-                .add_sized([50., text_height * 1.4], egui::DragValue::new(d))
-                .changed();
+            let dv = ui.add_sized([50., text_height * 1.4], egui::DragValue::new(d));
+            if meta.focus_to {
+                meta.focus_to = false;
+                dv.request_focus();
+                ui.memory_mut(|mem| mem.request_focus(dv.id));
+            } else {
+                *changed |= dv.changed();
+            }
 
             if *changed && *d < 0. {
                 *d = 0.;
