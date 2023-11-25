@@ -72,6 +72,8 @@ impl Constraint {
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
             (LineLength(_, f1, ..), LineLength(_, f2, ..)) => f1 == f2,
+            (LineLength(_, f1, _d, Some(_axis), ..), LineAlongCardinal(_, f2, ..)) => f1 == f2,
+            (LineAlongCardinal(_, f2, ..), LineLength(_, f1, _d, Some(_axis), ..)) => f1 == f2,
             (LineAlongCardinal(_, f1, ..), LineAlongCardinal(_, f2, ..)) => f1 == f2,
             _ => false,
         }
@@ -171,8 +173,8 @@ impl Constraint {
                         b,
                         val: &match axis {
                             None => format!("{:.3}", d),
-                            Some(Axis::LeftRight) => format!("H+{:.3}", d),
-                            Some(Axis::TopBottom) => format!("V+{:.3}", d),
+                            Some(Axis::LeftRight) => format!("H{:+.3}", d),
+                            Some(Axis::TopBottom) => format!("V{:+.3}", d),
                         },
                         reference: egui::Vec2::new(dd.x, dd.y),
                         hovered: params.hovered,

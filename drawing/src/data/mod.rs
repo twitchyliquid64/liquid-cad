@@ -91,7 +91,7 @@ impl Data {
             &mut sub_solver_state,
             &mut |sub_solver_state, v, expr| -> (bool, Option<eq::Concrete>) {
                 let term = self.terms.get_var_ref(v).expect("no such var");
-                println!("Iterating for {}: {}", term, expr);
+                // println!("Iterating for {}: {}", term, expr);
                 let var: eq::Variable = (&term).into();
                 let num_solutions = expr.num_solutions();
 

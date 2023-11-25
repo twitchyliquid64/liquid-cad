@@ -226,7 +226,7 @@ impl<'a> Widget<'a> {
                 *changed |= dv.changed();
             }
 
-            if *changed && *d < 0. {
+            if *changed && *d < 0. && axis.is_none() {
                 *d = 0.;
             }
 
