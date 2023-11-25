@@ -6,17 +6,30 @@ use std::rc::Rc;
 /// Expressions are ordered by increasing cost.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct EquivalentExpressions {
+    seen: HashMap<ExprHash, usize>,
     exprs: Rc<Vec<ExpressionInfo>>,
 }
 impl EquivalentExpressions {
     fn from_expr(expr: Expression) -> Self {
+        let ei: ExpressionInfo = expr.into();
+        let mut seen = HashMap::with_capacity(16);
         let mut v = Vec::with_capacity(16); // arbitrarily chosen
-        v.push(expr.into());
-        Self { exprs: Rc::new(v) }
+
+        seen.insert(ei.expr_hash, 0);
+        v.push(ei);
+
+        Self {
+            seen,
+            exprs: Rc::new(v),
+        }
     }
 
     fn push(&mut self, expr: Expression) {
         let ei: ExpressionInfo = expr.into();
+        if self.seen.contains_key(&ei.expr_hash) {
+            return;
+        }
+        self.seen.insert(ei.expr_hash, self.exprs.len());
 
         let exprs = Rc::get_mut(&mut self.exprs).unwrap();
         match exprs.binary_search(&ei) {
@@ -89,6 +102,7 @@ pub(crate) enum SolvePlan {
 
 #[derive(Default, Clone, Debug)]
 pub struct SubSolverState {
+    done_substitution: bool,
     // finite values provided or solved for.
     resolved: HashMap<Variable, SolvePlan>,
     // expressions expected to be ordered in increasing complexity.
@@ -153,7 +167,10 @@ impl SubSolverState {
             .collect::<HashMap<_, _>>();
         resolved.reserve(256.max(vars_by_eq.len()));
 
+        let done_substitution = false;
+
         Ok(Self {
+            done_substitution,
             vars_by_eq,
             resolved,
             ..SubSolverState::default()
@@ -309,6 +326,10 @@ impl SubSolver {
 
     fn try_solve(&mut self, st: &mut SubSolverState) -> Vec<Variable> {
         let vars = self.all_vars(st);
+        if st.done_substitution {
+            return vars;
+        }
+
         'outer_loop: for i in 0..vars.len() {
             // Find the next variable which is simplest to solve.
             for v in vars.iter() {
@@ -344,6 +365,8 @@ impl SubSolver {
                 }
             }
         }
+
+        st.done_substitution = true;
         vars
     }
 
@@ -446,19 +469,29 @@ mod tests {
                 ]
             )
             .unwrap()
-            .vars_by_eq,
-            HashMap::from([(
-                Variable::from("a"),
-                EquivalentExpressions {
-                    exprs: Rc::new(vec![
-                        Expression::parse("x+1", false).unwrap().into(),
-                        Expression::parse("y/2", false).unwrap().into()
-                    ]),
-                }
-            ),]),
+            .vars_by_eq[&"a".into()]
+                .exprs,
+            Rc::new(vec![
+                Expression::parse("x+1", false).unwrap().into(),
+                Expression::parse("y/2", false).unwrap().into()
+            ]),
         );
 
-        // residual expressions assigned to vars_by_eq
+        // residual expressions assigned to vars_by_eq, dedupe
+        assert_eq!(
+            SubSolverState::new(
+                HashMap::new(),
+                vec![
+                    Expression::parse("0 = x+1 - a", false).unwrap(),
+                    Expression::parse("0 = y/2 - a", false).unwrap(),
+                    Expression::parse("0 = y/2 - a", false).unwrap(),
+                ]
+            )
+            .unwrap()
+            .vars_by_eq[&"x".into()]
+                .exprs,
+            Rc::new(vec![Expression::parse("a-1", false).unwrap().into(),]),
+        );
         assert_eq!(
             SubSolverState::new(
                 HashMap::new(),
@@ -468,21 +501,9 @@ mod tests {
                 ]
             )
             .unwrap()
-            .vars_by_eq,
-            HashMap::from([
-                (
-                    Variable::from("x"),
-                    EquivalentExpressions {
-                        exprs: Rc::new(vec![Expression::parse("a-1", false).unwrap().into(),]),
-                    }
-                ),
-                (
-                    Variable::from("y"),
-                    EquivalentExpressions {
-                        exprs: Rc::new(vec![Expression::parse("2a", false).unwrap().into(),]),
-                    }
-                )
-            ]),
+            .vars_by_eq[&"y".into()]
+                .exprs,
+            Rc::new(vec![Expression::parse("2a", false).unwrap().into(),]),
         );
     }
 

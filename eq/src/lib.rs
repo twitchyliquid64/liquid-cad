@@ -61,7 +61,7 @@ impl StaticResolver {
 }
 
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub(crate) struct ExprHash(u64);
+pub struct ExprHash(u64);
 
 impl From<&Expression> for ExprHash {
     fn from(exp: &Expression) -> Self {
