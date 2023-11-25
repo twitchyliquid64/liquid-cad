@@ -1,6 +1,6 @@
 use drawing::Handler;
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
-use drawing::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
+use drawing::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
@@ -131,13 +131,14 @@ impl<'a> Widget<'a> {
                                                 y,
                                             )
                                         }
-                                        Some(Constraint::LineLength(meta, _, d, dd)) => {
+                                        Some(Constraint::LineLength(meta, _, d, axis, dd)) => {
                                             Widget::show_constraint_line_length(
                                                 ui,
                                                 &mut commands,
                                                 &mut changed,
                                                 &ck,
                                                 d,
+                                                axis,
                                                 dd,
                                                 meta,
                                             )
@@ -205,12 +206,13 @@ impl<'a> Widget<'a> {
         changed: &mut bool,
         k: &ConstraintKey,
         d: &mut f32,
+        axis: &mut Option<Axis>,
         _ref_pt: &mut DimensionDisplay,
         meta: &mut ConstraintMeta,
     ) {
+        let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
         ui.horizontal(|ui| {
             let r = ui.available_size();
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             let text_rect = ui.add(egui::Label::new("Length").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
@@ -234,6 +236,46 @@ impl<'a> Widget<'a> {
                 }
             });
         });
+
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+
+            match axis {
+                Some(a) => {
+                    let text_rect = ui.add(egui::Label::new("⏵ Cardinality").wrap(false)).rect;
+                    ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+                    match a {
+                        Axis::TopBottom => ui.label("+V"),
+                        Axis::LeftRight => ui.label("+H"),
+                    };
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                        if ui.button("⊗").clicked() {
+                            *axis = None;
+                            *changed = true;
+                        }
+                    });
+                }
+                None => {
+                    let r = ui.available_size();
+
+                    let text_rect = ui
+                        .add(egui::Label::new("⏵ Constrain cardinality").wrap(false))
+                        .rect;
+                    ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+                    if ui.button("+V").clicked() {
+                        *axis = Some(Axis::TopBottom);
+                        *changed = true;
+                    }
+                    if ui.button("+H").clicked() {
+                        *axis = Some(Axis::LeftRight);
+                        *changed = true;
+                    }
+                }
+            };
+        });
     }
 
     fn show_constraint_line_cardinal_align(
@@ -241,7 +283,7 @@ impl<'a> Widget<'a> {
         commands: &mut Vec<ToolResponse>,
         changed: &mut bool,
         k: &ConstraintKey,
-        is_horizontal: &mut bool,
+        axis: &mut Axis,
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
@@ -249,7 +291,7 @@ impl<'a> Widget<'a> {
 
             let text_rect = ui
                 .add(
-                    egui::Label::new(if *is_horizontal {
+                    egui::Label::new(if *axis == Axis::LeftRight {
                         "Horizontal"
                     } else {
                         "Vertical"
@@ -266,7 +308,7 @@ impl<'a> Widget<'a> {
 
             if resp.clicked() {
                 *changed |= true;
-                *is_horizontal = !*is_horizontal;
+                axis.swap();
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {

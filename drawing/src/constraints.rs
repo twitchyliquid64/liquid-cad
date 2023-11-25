@@ -19,11 +19,33 @@ pub struct DimensionDisplay {
     pub(crate) y: f32,
 }
 
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum Axis {
+    #[default]
+    LeftRight,
+    TopBottom,
+}
+
+impl Axis {
+    pub fn swap(&mut self) {
+        *self = match self {
+            Axis::TopBottom => Axis::LeftRight,
+            Axis::LeftRight => Axis::TopBottom,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Constraint {
     Fixed(ConstraintMeta, FeatureKey, f32, f32),
-    LineLength(ConstraintMeta, FeatureKey, f32, DimensionDisplay),
-    LineAlongCardinal(ConstraintMeta, FeatureKey, bool), // true = horizontal
+    LineLength(
+        ConstraintMeta,
+        FeatureKey,
+        f32,
+        Option<Axis>,
+        DimensionDisplay,
+    ),
+    LineAlongCardinal(ConstraintMeta, FeatureKey, Axis),
 }
 
 impl Constraint {
@@ -64,7 +86,7 @@ impl Constraint {
         use Constraint::{Fixed, LineAlongCardinal, LineLength};
         match self {
             Fixed(..) => None,
-            LineLength(_, fk, _, dd) => {
+            LineLength(_, fk, _, _, dd) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*fk) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -132,7 +154,7 @@ impl Constraint {
                 };
             }
 
-            LineLength(_, k, d, dd) => {
+            LineLength(_, k, d, axis, dd) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -147,7 +169,11 @@ impl Constraint {
                     crate::l::draw::DimensionLengthOverlay {
                         a,
                         b,
-                        val: &format!("{:.3}", d),
+                        val: &match axis {
+                            None => format!("{:.3}", d),
+                            Some(Axis::LeftRight) => format!("H+{:.3}", d),
+                            Some(Axis::TopBottom) => format!("V+{:.3}", d),
+                        },
                         reference: egui::Vec2::new(dd.x, dd.y),
                         hovered: params.hovered,
                         selected: params.selected,
@@ -156,7 +182,7 @@ impl Constraint {
                 }
             }
 
-            LineAlongCardinal(_, k, is_horizontal) => {
+            LineAlongCardinal(_, k, axis) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -172,7 +198,7 @@ impl Constraint {
                     painter.text(
                         mid,
                         egui::Align2::CENTER_CENTER,
-                        if *is_horizontal { "H" } else { "V" },
+                        if *axis == Axis::LeftRight { "H" } else { "V" },
                         params.font_id.clone(),
                         egui::Color32::WHITE,
                     );
@@ -206,7 +232,7 @@ impl Constraint {
                     ),
                 ]
             }
-            LineLength(_, k, d, _) => {
+            LineLength(_, k, d, axis, _) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let td = &drawing.terms.get_feature_term(*k, TermType::ScalarDistance);
                     let (x1, y1, x2, y2) = (
@@ -216,25 +242,67 @@ impl Constraint {
                         &drawing.terms.get_feature_term(*f2, TermType::PositionY),
                     );
 
-                    vec![
-                        Expression::Equal(
-                            Box::new(Expression::Variable(td.into())),
-                            Box::new(Expression::Rational(
-                                Rational::from_float(*d).unwrap(),
-                                true,
-                            )),
-                        ),
-                        Expression::Equal(
-                            Box::new(Expression::Variable(td.into())),
-                            Box::new(distance_eq(td, x1, y1, x2, y2)),
-                        ),
-                    ]
+                    match axis {
+                        Some(Axis::LeftRight) => vec![
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*d).unwrap(),
+                                    true,
+                                )),
+                            ),
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(x2.into())),
+                                    Box::new(Expression::Variable(x1.into())),
+                                )),
+                            ),
+                            Expression::Equal(
+                                Box::new(Expression::Variable(y2.into())),
+                                Box::new(Expression::Variable(y1.into())),
+                            ),
+                        ],
+                        Some(Axis::TopBottom) => vec![
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*d).unwrap(),
+                                    true,
+                                )),
+                            ),
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(y1.into())),
+                                    Box::new(Expression::Variable(y2.into())),
+                                )),
+                            ),
+                            Expression::Equal(
+                                Box::new(Expression::Variable(x2.into())),
+                                Box::new(Expression::Variable(x1.into())),
+                            ),
+                        ],
+                        None => vec![
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(Expression::Rational(
+                                    Rational::from_float(*d).unwrap(),
+                                    true,
+                                )),
+                            ),
+                            Expression::Equal(
+                                Box::new(Expression::Variable(td.into())),
+                                Box::new(distance_eq(td, x1, y1, x2, y2)),
+                            ),
+                        ],
+                    }
                 } else {
                     unreachable!();
                 }
             }
 
-            LineAlongCardinal(_, k, is_horizontal) => {
+            LineAlongCardinal(_, k, axis) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let (x1, y1, x2, y2) = (
                         &drawing.terms.get_feature_term(*f1, TermType::PositionX),
@@ -243,7 +311,7 @@ impl Constraint {
                         &drawing.terms.get_feature_term(*f2, TermType::PositionY),
                     );
 
-                    if *is_horizontal {
+                    if *axis == Axis::LeftRight {
                         vec![Expression::Equal(
                             Box::new(Expression::Variable(y1.into())),
                             Box::new(Expression::Variable(y2.into())),
@@ -299,7 +367,7 @@ impl system::ConstraintProvider<ConstraintResidualIter> for Constraint {
                 x_ref: allocator.get_feature_term(*k, TermType::PositionX),
                 y_ref: allocator.get_feature_term(*k, TermType::PositionY),
             },
-            LineLength(_, k, d, _) => {
+            LineLength(_, k, d, ..) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = features.get(*k) {
                     ConstraintResidualIter::PointDistance {
                         count: 0,

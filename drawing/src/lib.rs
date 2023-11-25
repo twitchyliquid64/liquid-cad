@@ -7,7 +7,7 @@ pub use data::{Data, Hover, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta};
 mod constraints;
-pub use constraints::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
+pub use constraints::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 pub mod handler;
 mod system;
 pub use handler::Handler;
@@ -153,7 +153,7 @@ impl<'a> Widget<'a> {
                 (
                     Hover::Constraint {
                         k,
-                        constraint: Constraint::LineLength(_, _, _, dd),
+                        constraint: Constraint::LineLength(_, _, _, _, dd),
                     },
                     true,
                     false,
@@ -167,7 +167,7 @@ impl<'a> Widget<'a> {
                 (
                     Hover::Constraint {
                         k,
-                        constraint: Constraint::LineLength(_, _, _, dd),
+                        constraint: Constraint::LineLength(_, _, _, _, dd),
                     },
                     false,
                     true,

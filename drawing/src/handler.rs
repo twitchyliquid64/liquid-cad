@@ -1,6 +1,6 @@
 use super::{Data, Feature, FeatureKey, FeatureMeta};
 use crate::tools::Toolbar;
-use crate::{Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
+use crate::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 
 #[derive(Debug)]
 pub enum ToolResponse {
@@ -92,6 +92,7 @@ impl Handler {
                         ConstraintMeta::default(),
                         k,
                         d,
+                        None,
                         DimensionDisplay { x: 0., y: 35.0 },
                     ));
 
@@ -118,7 +119,11 @@ impl Handler {
                         drawing.add_constraint(Constraint::LineAlongCardinal(
                             ConstraintMeta::default(),
                             k,
-                            is_horizontal,
+                            if is_horizontal {
+                                Axis::LeftRight
+                            } else {
+                                Axis::TopBottom
+                            },
                         ));
 
                         tools.clear();
