@@ -89,52 +89,53 @@ impl Data {
 
         eq::solve::SubSolver::default().walk_solutions(
             &mut sub_solver_state,
-            &mut |sub_solver_state, v, expr| -> bool {
-                if let Some(term) = self.terms.get_var_ref(v) {
-                    let var: eq::Variable = (&term).into();
-                    let num_solutions = expr.num_solutions();
+            &mut |sub_solver_state, v, expr| -> (bool, Option<eq::Concrete>) {
+                let term = self.terms.get_var_ref(v).expect("no such var");
+                println!("Iterating for {}: {}", term, expr);
+                let var: eq::Variable = (&term).into();
+                let num_solutions = expr.num_solutions();
 
-                    if num_solutions == 1 {
-                        let f = expr.evaluate(sub_solver_state, 0).unwrap().as_f64();
-                        self.apply_solved(&term, f);
-                    } else if num_solutions <= 32 {
-                        let current = match self.term_current_value(&term) {
-                            Some(f) => f as f64,
-                            None => {
-                                return true;
-                            }
-                        };
-
-                        let closest_solution = (0..num_solutions)
-                            .into_iter()
-                            .map(|i| expr.evaluate(sub_solver_state, i).ok().map(|c| c.as_f64()))
-                            .fold(None, |acc, res| match (acc, res) {
-                                (None, None) => None,
-                                (None, Some(res)) => Some(res),
-                                (Some(acc), None) => Some(acc),
-                                (Some(acc), Some(res)) => {
-                                    if (res - current).abs() < (acc - current).abs() {
-                                        Some(res)
-                                    } else {
-                                        Some(acc)
-                                    }
-                                }
-                            });
-
-                        if let Some(f) = closest_solution {
-                            self.apply_solved(&term, f);
+                if num_solutions == 1 {
+                    let f = expr.evaluate(sub_solver_state, 0).unwrap().as_f64();
+                    self.apply_solved(&term, f);
+                    return (true, Some(eq::Concrete::Float(f)));
+                } else if num_solutions <= 256 {
+                    let current = match self.term_current_value(&term) {
+                        Some(f) => f as f64,
+                        None => {
+                            panic!("unknown term: {:?}", term);
                         }
-                    } else {
-                        println!(
-                            "Skipping evaluating {} ({}) which has {} solutions",
-                            var, expr, num_solutions
-                        );
+                    };
+
+                    let closest_solution = (0..num_solutions)
+                        .into_iter()
+                        .map(|i| expr.evaluate(sub_solver_state, i).ok().map(|c| c.as_f64()))
+                        .fold(None, |acc, res| match (acc, res) {
+                            (None, None) => None,
+                            (None, Some(res)) => Some(res),
+                            (Some(acc), None) => Some(acc),
+                            (Some(acc), Some(res)) => {
+                                if (res - current).abs() < (acc - current).abs() {
+                                    Some(res)
+                                } else {
+                                    Some(acc)
+                                }
+                            }
+                        });
+
+                    if let Some(f) = closest_solution {
+                        println!("{} solved with {}", &expr, f);
+                        self.apply_solved(&term, f);
+                        return (true, Some(eq::Concrete::Float(f)));
                     }
                 } else {
-                    panic!("no such var! {:?}", v);
+                    println!(
+                        "Skipping evaluating {} ({}) which has {} solutions",
+                        var, expr, num_solutions
+                    );
                 }
 
-                true
+                (true, None)
             },
         );
 

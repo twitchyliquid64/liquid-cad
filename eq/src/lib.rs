@@ -60,13 +60,26 @@ impl StaticResolver {
     }
 }
 
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub(crate) struct ExprHash(u64);
+
+impl From<&Expression> for ExprHash {
+    fn from(exp: &Expression) -> Self {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut s = DefaultHasher::new();
+        exp.hash(&mut s);
+        Self(s.finish())
+    }
+}
+
 /// Equation element.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum Expression {
     /// Variable with identifier.
     Variable(Variable),
     /// Substitution of variable.
-    Subtitution(Variable, Box<Self>),
+    Subtitution(Variable, Box<Self>, ExprHash),
     /// Integer.
     Integer(Integer),
     /// Rational number, .1 is true if it should be printed as fraction.
@@ -129,7 +142,7 @@ impl Expression {
             Expression::Neg(a)
             | Expression::Sqrt(a, _)
             | Expression::Abs(a)
-            | Expression::Subtitution(_, a) => a.walk(cb),
+            | Expression::Subtitution(_, a, _) => a.walk(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
         }
@@ -155,7 +168,7 @@ impl Expression {
             Expression::Neg(a)
             | Expression::Sqrt(a, _)
             | Expression::Abs(a)
-            | Expression::Subtitution(_, a) => a.walk_mut(cb),
+            | Expression::Subtitution(_, a, _) => a.walk_mut(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
         }
@@ -165,9 +178,7 @@ impl Expression {
         let mut cost = 0;
         self.walk(&mut |e| {
             match e {
-                Expression::Integer(_)
-                | Expression::Rational(_, _)
-                | Expression::Subtitution(_, _) => {
+                Expression::Integer(_) | Expression::Rational(_, _) => {
                     cost += 1;
                 }
                 Expression::Sum(_, _) | Expression::Difference(_, _) | Expression::Neg(_) => {
@@ -185,6 +196,9 @@ impl Expression {
                 Expression::Sqrt(_, _) => {
                     cost += 12;
                 }
+                Expression::Subtitution(_, _, _) => {
+                    cost += 35;
+                }
                 _ => {}
             };
             true
@@ -193,10 +207,11 @@ impl Expression {
     }
 
     pub fn sub_variable(&mut self, v: &Variable, replacement: Box<Expression>) {
+        let h: ExprHash = (&*replacement).into();
         self.walk_mut(&mut |expr| {
             if let Expression::Variable(v2) = expr {
                 if v2 == v {
-                    *expr = Expression::Subtitution(v2.clone(), replacement.clone());
+                    *expr = Expression::Subtitution(v2.clone(), replacement.clone(), h);
                 }
             }
 
@@ -212,7 +227,7 @@ impl Expression {
             Expression::Quotient(a, b) => a.num_solutions() * b.num_solutions(),
             Expression::Power(a, b) => a.num_solutions() * b.num_solutions(),
 
-            Expression::Neg(a) | Expression::Abs(a) | Expression::Subtitution(_, a) => {
+            Expression::Neg(a) | Expression::Abs(a) | Expression::Subtitution(_, a, _) => {
                 a.num_solutions()
             }
 
@@ -312,7 +327,10 @@ impl Expression {
                 Concrete::Rational(a) => Ok(Concrete::Rational(-a)),
                 Concrete::Float(a) => Ok(Concrete::Float(-a)),
             },
-            Expression::Subtitution(_, a) => a.evaluate(r, which),
+            Expression::Subtitution(v, a, _) => match r.resolve_variable(v) {
+                Ok(c) => Ok(c),
+                Err(_) => a.evaluate(r, which),
+            },
             Expression::Abs(a) => match a.evaluate(r, which)? {
                 Concrete::Rational(a) => {
                     use num::Signed;
@@ -367,7 +385,7 @@ impl Expression {
             Expression::Integer(_)
             | Expression::Rational(_, _)
             | Expression::Variable(_)
-            | Expression::Subtitution(_, _) => {}
+            | Expression::Subtitution(_, _, _) => {}
         }
 
         // handle any simplifications we can do at our end
@@ -1019,7 +1037,7 @@ impl Display for Expression {
         use num::ToPrimitive;
 
         match self {
-            Expression::Subtitution(_, e) => write!(f, "&[{}]", e),
+            Expression::Subtitution(_, e, _) => write!(f, "&[{}]", e),
             Expression::Neg(e) => write!(f, "-{}", e),
             Expression::Abs(e) => write!(f, "abs({})", e),
             Expression::Sqrt(a, pm) => match pm {

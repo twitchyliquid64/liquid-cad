@@ -3,31 +3,42 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 /// Describes a set of expressions which represent a variable.
+/// Expressions are ordered by increasing cost.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct EquivalentExpressions {
     exprs: Rc<Vec<ExpressionInfo>>,
 }
+impl EquivalentExpressions {
+    fn from_expr(expr: Expression) -> Self {
+        let mut v = Vec::with_capacity(16); // arbitrarily chosen
+        v.push(expr.into());
+        Self { exprs: Rc::new(v) }
+    }
 
-/// Describes an expression.
+    fn push(&mut self, expr: Expression) {
+        let ei: ExpressionInfo = expr.into();
+
+        let exprs = Rc::get_mut(&mut self.exprs).unwrap();
+        match exprs.binary_search(&ei) {
+            Ok(pos) => {} // already exists
+            Err(pos) => exprs.insert(pos, ei),
+        }
+    }
+}
+
+/// Describes an expression. Ordered by cost then hash.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct ExpressionInfo {
-    expr_hash: u64,
+    expr_hash: ExprHash,
     expr: Expression,
     cost: usize,
 
     references: HashMap<Variable, usize>,
 }
 
-/// Describes how to solve for a variable.
-#[derive(Debug, Clone)]
-pub(crate) enum SolvePlan {
-    Concrete(Concrete),
-    Substituted(ExpressionInfo),
-}
-
 impl From<Expression> for ExpressionInfo {
     fn from(exp: Expression) -> Self {
-        let mut references: HashMap<Variable, usize> = HashMap::with_capacity(4); // 4 arbitrarily chosen
+        let mut references: HashMap<Variable, usize> = HashMap::with_capacity(8); // 8 arbitrarily chosen
         let mut cost = exp.cost() * exp.num_solutions();
 
         exp.walk(&mut |e| {
@@ -43,12 +54,7 @@ impl From<Expression> for ExpressionInfo {
             true
         });
 
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut s = DefaultHasher::new();
-        exp.hash(&mut s);
-        let expr_hash = s.finish();
-
+        let expr_hash = ExprHash::from(&exp);
         Self {
             expr_hash,
             expr: exp,
@@ -58,25 +64,39 @@ impl From<Expression> for ExpressionInfo {
     }
 }
 
+impl Ord for ExpressionInfo {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let by_cost = self.cost.cmp(&other.cost);
+        match by_cost {
+            std::cmp::Ordering::Equal => self.expr_hash.cmp(&other.expr_hash),
+            _ => by_cost,
+        }
+    }
+}
+
+impl PartialOrd for ExpressionInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Describes how to solve for a variable.
+#[derive(Debug, Clone)]
+pub(crate) enum SolvePlan {
+    Concrete(Concrete),
+    Substituted(ExpressionInfo),
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct SubSolverState {
     // finite values provided or solved for.
-    pub(crate) resolved: HashMap<Variable, SolvePlan>,
+    resolved: HashMap<Variable, SolvePlan>,
     // expressions expected to be ordered in increasing complexity.
-    pub(crate) vars_by_eq: HashMap<Variable, EquivalentExpressions>,
-
-    // tuple of (variable, expression_info) for which substitutions have succeeded
-    // pub(crate) substitutions: HashMap<Variable, ExpressionInfo>,
-
-    // tuple of (variable, expression_info) which rearranges have been attempted
-    pub(crate) tried_rearrange: HashMap<(Variable, u64), ()>,
+    vars_by_eq: HashMap<Variable, EquivalentExpressions>,
 }
 
 impl SubSolverState {
-    pub fn new(
-        values: HashMap<Variable, Concrete>,
-        exprs: Vec<Expression>,
-    ) -> Result<Self, ResolveErr> {
+    pub fn new(values: HashMap<Variable, Concrete>, exprs: Vec<Expression>) -> Result<Self, ()> {
         let mut vars_by_eq: HashMap<Variable, EquivalentExpressions> =
             HashMap::with_capacity(exprs.len());
 
@@ -103,13 +123,11 @@ impl SubSolverState {
                                             } else {
                                                 unreachable!();
                                             }
-                                            false
                                         }
-                                        Err(_) => true,
+                                        Err(_) => {}
                                     }
-                                } else {
-                                    true
-                                }
+                                };
+                                true
                             });
                             rearranged
                         } else {
@@ -123,19 +141,10 @@ impl SubSolverState {
             .filter_map(|s| s)
         {
             if let Some(ee) = vars_by_eq.get_mut(&var) {
-                Rc::get_mut(&mut ee.exprs).unwrap().push(expr);
+                ee.push(expr);
             } else {
-                let mut v = Vec::with_capacity(16); // arbitrarily chosen
-                v.push(expr);
-                vars_by_eq.insert(var, EquivalentExpressions { exprs: Rc::new(v) });
+                vars_by_eq.insert(var, EquivalentExpressions::from_expr(expr));
             }
-        }
-
-        // Sort the equations for a variable by increasing cost.
-        for (_, v) in vars_by_eq.iter_mut() {
-            Rc::get_mut(&mut v.exprs)
-                .unwrap()
-                .sort_by(|a, b| a.cost.cmp(&b.cost));
         }
 
         let mut resolved = values
@@ -294,16 +303,12 @@ impl SubSolver {
                 vars.push(v.clone());
             }
         }
+        SubSolver::sort_vars_by_base(&mut vars);
         vars
     }
 
-    pub fn walk_solutions<'a>(
-        &mut self,
-        st: &'a mut SubSolverState,
-        cb: &mut impl FnMut(&mut SubSolverState, &Variable, &Expression) -> bool,
-    ) {
+    fn try_solve(&mut self, st: &mut SubSolverState) -> Vec<Variable> {
         let vars = self.all_vars(st);
-
         'outer_loop: for i in 0..vars.len() {
             // Find the next variable which is simplest to solve.
             for v in vars.iter() {
@@ -339,12 +344,19 @@ impl SubSolver {
                 }
             }
         }
-        // TODO: Sometimes the substitutions are such that there's a ton of possible solutions.
-        // Maybe we can try and find better substitutions in those cases?
+        vars
+    }
+
+    pub fn walk_solutions<'a>(
+        &mut self,
+        st: &'a mut SubSolverState,
+        cb: &mut impl FnMut(&mut SubSolverState, &Variable, &Expression) -> (bool, Option<Concrete>),
+    ) {
+        let vars = self.try_solve(st);
 
         for v in vars {
             if let Some(p) = st.resolved.get(&v).clone() {
-                let keep_going = cb(
+                let (keep_going, chosen_solution) = cb(
                     st,
                     &v,
                     &match p {
@@ -357,6 +369,11 @@ impl SubSolver {
                         SolvePlan::Substituted(e) => e.expr.clone(),
                     },
                 );
+                if let Some(c) = chosen_solution {
+                    if matches!(c, Concrete::Rational(_)) || c.as_f64().is_normal() {
+                        st.resolved.insert(v, SolvePlan::Concrete(c));
+                    }
+                };
                 if !keep_going {
                     return;
                 }
@@ -370,16 +387,32 @@ impl SubSolver {
         var: &Variable,
     ) -> Result<Concrete, ResolveErr> {
         let mut out = None;
-        self.walk_solutions(st, &mut |st, v, expr| -> bool {
+        self.walk_solutions(st, &mut |st, v, expr| -> (bool, Option<Concrete>) {
             if v == var {
-                out = Some(expr.evaluate(st, 0).unwrap());
-                false
+                let output = expr.evaluate(st, 0).unwrap();
+                out = Some(output.clone());
+                (false, Some(output))
             } else {
-                true
+                (true, None)
             }
         });
 
         out.ok_or(ResolveErr::CannotSolve)
+    }
+
+    fn sort_vars_by_base(vars: &mut Vec<Variable>) {
+        // Assuming variables of form "<letter><integer>" the sort order
+        // is by integer-first.
+        vars.sort_by(|a, b| match (a.as_str().get(1..), b.as_str().get(1..)) {
+            (Some(a_str), Some(b_str)) => match (a_str.parse::<usize>(), b_str.parse::<usize>()) {
+                (Ok(ai), Ok(bi)) => match ai.partial_cmp(&bi) {
+                    Some(std::cmp::Ordering::Equal) => a.partial_cmp(b).unwrap(),
+                    v => v.unwrap(),
+                },
+                _ => a.partial_cmp(b).unwrap(),
+            },
+            _ => a.partial_cmp(b).unwrap(),
+        });
     }
 }
 
@@ -403,13 +436,13 @@ mod tests {
         .get(&"a".into())
         .is_some());
 
-        // expressions assigned to vars_by_eq
+        // expressions assigned to vars_by_eq, increasing cost
         assert_eq!(
             SubSolverState::new(
                 HashMap::new(),
                 vec![
-                    Expression::parse("a = x+1", false).unwrap(),
                     Expression::parse("a = y/2", false).unwrap(),
+                    Expression::parse("a = x+1", false).unwrap(),
                 ]
             )
             .unwrap()
