@@ -83,7 +83,7 @@ impl eframe::App for App {
                             ctx.memory_mut(|mem| *mem = Default::default());
                         }
                         if ui.button("Quit").clicked() {
-                            _frame.close();
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
                     ui.add_space(16.0);

@@ -254,8 +254,8 @@ impl Constraint {
                             Expression::Equal(
                                 Box::new(Expression::Variable(td.into())),
                                 Box::new(Expression::Difference(
-                                    Box::new(Expression::Variable(x2.into())),
                                     Box::new(Expression::Variable(x1.into())),
+                                    Box::new(Expression::Variable(x2.into())),
                                 )),
                             ),
                             Expression::Equal(
