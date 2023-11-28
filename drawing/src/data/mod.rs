@@ -1,4 +1,4 @@
-use crate::system::{ResidualEq, TermAllocator, TermRef, TermType};
+use crate::system::{TermAllocator, TermRef, TermType};
 use crate::{Constraint, ConstraintKey};
 use crate::{Feature, FeatureKey};
 use slotmap::HopSlotMap;
@@ -79,6 +79,7 @@ impl Data {
         //     println!(" - {}", eq);
         // }
 
+        let mut solver = eq::solve::SubSolver::default();
         let mut sub_solver_state = match eq::solve::SubSolverState::new(HashMap::new(), equations) {
             Ok(st) => st,
             Err(e) => {
@@ -86,104 +87,39 @@ impl Data {
                 return;
             }
         };
+        // Solve as many as possible using substitution.
+        let (known, unresolved) = solver.all_concrete_results(&mut sub_solver_state);
+        for (v, f) in known.iter() {
+            let term = self.terms.get_var_ref(v).expect("no such var");
+            self.apply_solved(&term, f.as_f64());
+        }
 
-        eq::solve::SubSolver::default().walk_solutions(
-            &mut sub_solver_state,
-            &mut |sub_solver_state, v, expr| -> (bool, Option<eq::Concrete>) {
+        let residuals = solver.all_residuals(&mut sub_solver_state);
+        if residuals.len() == 0 {
+            return;
+        }
+
+        let initials = unresolved
+            .iter()
+            .map(|v| {
                 let term = self.terms.get_var_ref(v).expect("no such var");
-                // println!("Iterating for {}: {}", term, expr);
-                let var: eq::Variable = (&term).into();
-                let num_solutions = expr.num_solutions();
-
-                if num_solutions == 1 {
-                    let f = expr.evaluate(sub_solver_state, 0).unwrap().as_f64();
-                    self.apply_solved(&term, f);
-                    return (true, Some(eq::Concrete::Float(f)));
-                } else if num_solutions <= 256 {
-                    let current = match self.term_current_value(&term) {
-                        Some(f) => f as f64,
-                        None => {
-                            panic!("unknown term: {:?}", term);
-                        }
-                    };
-
-                    let closest_solution = (0..num_solutions)
-                        .into_iter()
-                        .map(|i| expr.evaluate(sub_solver_state, i).ok().map(|c| c.as_f64()))
-                        .fold(None, |acc, res| match (acc, res) {
-                            (None, None) => None,
-                            (None, Some(res)) => Some(res),
-                            (Some(acc), None) => Some(acc),
-                            (Some(acc), Some(res)) => {
-                                if (res - current).abs() < (acc - current).abs() {
-                                    Some(res)
-                                } else {
-                                    Some(acc)
-                                }
-                            }
-                        });
-
-                    if let Some(f) = closest_solution {
-                        println!("{} solved with {}", &expr, f);
-                        self.apply_solved(&term, f);
-                        return (true, Some(eq::Concrete::Float(f)));
-                    }
-                } else {
-                    println!(
-                        "Skipping evaluating {} ({}) which has {} solutions",
-                        var, expr, num_solutions
-                    );
+                match self.term_current_value(&term) {
+                    Some(v) => v as f64,
+                    None => 0.47,
                 }
-
-                (true, None)
-            },
-        );
-
-        // let residuals = self.residuals();
-        // if residuals.len() == 0 {
-        //     return;
-        // }
-
-        // let variables = crate::system::unique_unknowns(&residuals);
-        // let by_variable: Vec<(TermRef, Vec<ResidualEq>, f64)> = variables
-        //     .iter()
-        //     .map(|v| {
-        //         (
-        //             v.clone(),
-        //             residuals
-        //                 .iter()
-        //                 .map(|r| if &r.term == v { Some(r.clone()) } else { None })
-        //                 .filter_map(|d| d)
-        //                 .collect(),
-        //             v.for_feature
-        //                 .map(|fk| match self.features.get(fk) {
-        //                     Some(Feature::Point(_, x, y)) => match v.t {
-        //                         TermType::PositionX => *x as f64,
-        //                         TermType::PositionY => *y as f64,
-        //                         TermType::ScalarDistance => unreachable!(),
-        //                     },
-        //                     _ => 1.,
-        //                 })
-        //                 .unwrap_or(1.),
-        //         )
-        //     })
-        //     .collect();
-
-        // let solver = crate::system::Solver::new(HashMap::new(), by_variable);
-        // // println!("solver state: {:?}", solver);
-
-        // if let Ok(r) = solver.solve() {
-        //     r.into_iter()
-        //         .zip(residuals.iter())
-        //         .map(|(v, r)| {
-        //             if !self.apply_solved_residual(r, v) {
-        //                 println!("apply {:?} = {} failed!", r, v);
-        //             };
-        //         })
-        //         .count();
-        // } else {
-        //     println!("Solve failed!!");
-        // };
+            })
+            .collect();
+        let mut solver_state = eq::solve::DumbassSolverState::new(known, unresolved, residuals);
+        let mut solver = eq::solve::DumbassSolver::new_with_initials(&solver_state, initials);
+        match solver.solve(&mut solver_state) {
+            Ok(results) => {
+                for (v, f) in results {
+                    let term = self.terms.get_var_ref(&v).expect("no such var");
+                    self.apply_solved(&term, f);
+                }
+            }
+            Err(_) => println!("solve failed!"),
+        }
     }
 
     fn term_current_value(&self, term: &TermRef) -> Option<f32> {
@@ -221,17 +157,6 @@ impl Data {
         } else {
             false
         }
-    }
-
-    pub fn residuals(&mut self) -> Vec<ResidualEq> {
-        let mut residuals = Vec::with_capacity(16); // arbitrarily chosen
-
-        use crate::system::ConstraintProvider;
-        for (_ck, c) in self.constraints.iter() {
-            residuals.extend(c.residuals(&mut self.features, &mut self.terms));
-        }
-
-        residuals
     }
 
     /// Iterates through the features.

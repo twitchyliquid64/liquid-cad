@@ -10,3 +10,5 @@ rust-version = "1.71"
 heapless = "0.7"
 num = "0.4"
 chumsky = "1.0.0-alpha.4"
+
+nalgebra = "0.32"

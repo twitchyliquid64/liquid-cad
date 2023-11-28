@@ -1,6 +1,13 @@
 //pub const MAX_EQ_ELEMENTS: usize = 16;
 mod parser;
-pub mod solve;
+
+mod dumbass_solve;
+mod sub_solve;
+
+pub mod solve {
+    pub use crate::dumbass_solve::*;
+    pub use crate::sub_solve::*;
+}
 
 /// Algebraic unknown, identified by a name up to 12 characters long.
 pub type Variable = heapless::String<12>;
@@ -754,6 +761,13 @@ impl Expression {
                 | (Expression::Integer(b), Expression::Rational(a, as_fraction)) => {
                     *self = Expression::Rational(a * b, *as_fraction);
                 }
+                // a * (bx) = (ab)x
+                (Expression::Integer(x1), Expression::Product(ba, bb)) => {
+                    if let Expression::Integer(x2) = ba.as_ref() {
+                        *self =
+                            Expression::Product(Box::new(Expression::Integer(x1 * x2)), bb.clone());
+                    }
+                }
                 _ => {
                     // Multiplication of identical terms is pow(a, 2)
                     if a == b {
@@ -981,6 +995,89 @@ impl Expression {
         }
 
         self
+    }
+
+    fn d_wrt(&self, v: &Variable) -> Expression {
+        match self {
+            Expression::Variable(v2) => {
+                if v == v2 {
+                    Expression::Integer(1.into())
+                } else {
+                    Expression::Integer(0.into())
+                }
+            }
+            Expression::Integer(_) | Expression::Rational(_, _) => Expression::Integer(0.into()),
+
+            Expression::Neg(a) => Expression::Neg(Box::new(a.d_wrt(v))),
+            Expression::Sum(a, b) => Expression::Sum(Box::new(a.d_wrt(v)), Box::new(b.d_wrt(v))),
+            Expression::Difference(a, b) => {
+                Expression::Difference(Box::new(a.d_wrt(v)), Box::new(b.d_wrt(v)))
+            }
+            Expression::Product(a, b) => {
+                let (da, db) = (a.d_wrt(v), b.d_wrt(v));
+                Expression::Sum(
+                    Box::new(Expression::Product(a.clone(), Box::new(db))),
+                    Box::new(Expression::Product(a.clone(), Box::new(da))),
+                )
+            }
+            Expression::Quotient(a, b) => {
+                let (da, db) = (a.d_wrt(v), b.d_wrt(v));
+                Expression::Quotient(
+                    Box::new(Expression::Difference(
+                        Box::new(Expression::Product(Box::new(da), b.clone())),
+                        Box::new(Expression::Product(Box::new(db), a.clone())),
+                    )),
+                    Box::new(Expression::Power(
+                        b.clone(),
+                        Box::new(Expression::Integer(2.into())),
+                    )),
+                )
+            }
+            Expression::Power(a, b) => match (a.as_ref(), b.as_ref()) {
+                (Expression::Variable(v2), Expression::Integer(i)) => {
+                    if v == v2 {
+                        Expression::Product(
+                            Box::new(Expression::Integer(i.clone())),
+                            Box::new(Expression::Power(
+                                a.clone(),
+                                Box::new(Expression::Integer(i - 1)),
+                            )),
+                        )
+                    } else {
+                        Expression::Integer(0.into())
+                    }
+                }
+                // We can do squares.
+                (_, Expression::Integer(i)) => {
+                    if i == &Integer::from(2) {
+                        Expression::Product(
+                            Box::new(Expression::Integer(2.into())),
+                            Box::new(Expression::Product(a.clone(), Box::new(a.d_wrt(v)))),
+                        )
+                    } else {
+                        todo!("d_wrt({:?} ^ integer {:?})", a, i)
+                    }
+                }
+                _ => todo!("d_wrt({:?} ^ {:?})", a, b),
+            },
+            Expression::Sqrt(a, _) => Expression::Quotient(
+                Box::new(a.d_wrt(v)),
+                Box::new(Expression::Product(
+                    Box::new(Expression::Integer(2.into())),
+                    Box::new(self.clone()),
+                )),
+            ),
+
+            _ => todo!("d_wrt({:?})", self),
+        }
+    }
+
+    /// derivative_wrt computes the derivative of the expression with regards to the
+    /// given variable.
+    pub fn derivative_wrt(&self, v: &Variable) -> Expression {
+        let mut d = self.d_wrt(v);
+        d.simplify();
+        d
     }
 
     pub fn parse<'a>(
@@ -1831,5 +1928,116 @@ mod tests {
             .evaluate(&mut StaticResolver::new([]), 3) // -3 - -2
             .unwrap(),
                 Concrete::Float(f) if (f + 1.0).abs() < 0.001));
+    }
+
+    #[test]
+    fn derivative_wrt() {
+        assert_eq!(
+            Expression::parse("5", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("0", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("x", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("1", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("5x", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("5", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("5x + x", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("6", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("x^2", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("2x", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("x^3", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("3 * (x^2)", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("x^2 + 6", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("2x", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("2 * x^2", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("4x", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("3 * x^4", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("12 * x^3", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("2 * x^5", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("10 * x^4", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("1/x", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("-1/(x^2)", true).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("x^2 + x^3", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("2x + (3 * x^2)", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("x^3 - x^4", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("(3 * x^2) - (4 * x^3)", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("(5x - 2)^2", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("(10 * (5x - 2))", false).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("sqrt(x)", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("1 / (2 * sqrt(x))", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("5 - x^2", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("-2x", true).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("-6x", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("-6", true).unwrap(),
+        );
     }
 }

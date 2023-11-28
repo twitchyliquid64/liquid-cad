@@ -2,52 +2,6 @@ mod terms;
 use slotmap::HopSlotMap;
 pub use terms::{TermAllocator, TermRef, TermType};
 
-#[derive(Debug, Clone)]
-pub struct ResidualEq {
-    pub(crate) standalone: bool,
-    pub(crate) term: TermRef,
-    pub(crate) rhs: eq::Expression,
-}
-
-impl ResidualEq {
-    pub fn new(standalone: bool, term: TermRef, rhs: eq::Expression) -> Self {
-        ResidualEq {
-            standalone,
-            term,
-            rhs,
-        }
-    }
-}
-
-pub trait ConstraintProvider<I>
-where
-    I: std::iter::Iterator<Item = ResidualEq>,
-{
-    fn residuals(
-        &self,
-        features: &mut HopSlotMap<crate::FeatureKey, crate::Feature>,
-        allocator: &mut TermAllocator,
-    ) -> I;
-}
-
-pub fn unique_unknowns(residuals: &Vec<ResidualEq>) -> Vec<TermRef> {
-    use std::collections::HashSet;
-    let mut seen: HashSet<TermRef> = HashSet::with_capacity(residuals.len());
-    let mut out: Vec<TermRef> = Vec::with_capacity(residuals.len());
-
-    for r in residuals.iter() {
-        match seen.get(&r.term) {
-            Some(_) => {}
-            None => {
-                seen.insert(r.term.clone());
-                out.push(r.term.clone());
-            }
-        }
-    }
-
-    out
-}
-
 use gomez::nalgebra as na;
 use gomez::prelude::*;
 use na::{Dim, IsContiguous};
@@ -56,46 +10,39 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub(crate) struct Solver {
     known: HashMap<eq::Variable, eq::Concrete>,
-    residuals: Vec<(TermRef, Vec<ResidualEq>, f64)>,
+    residuals: Vec<(TermRef, usize, eq::Expression, f64)>,
 }
 
 impl Solver {
     pub fn new(
         known: HashMap<eq::Variable, eq::Concrete>,
-        residuals: Vec<(TermRef, Vec<ResidualEq>, f64)>,
+        residuals: Vec<(TermRef, usize, eq::Expression, f64)>,
     ) -> Self {
         Self { known, residuals }
     }
 
     // TODO: real error type
-    pub fn solve(&self) -> Result<Vec<f64>, ()> {
+    pub fn solve(self) -> Result<Vec<(TermRef, f64)>, ()> {
         // Initial guess. Good choice helps the convergence of numerical methods.
         let mut x = na::DVector::from_iterator(
             self.residuals.len(),
-            self.residuals.iter().map(|(_, _, initial)| *initial),
+            self.residuals.iter().map(|(_, _, _, initial)| *initial),
         );
 
         // Residuals vector.
         let mut fx = na::DVector::from_element(self.residuals.len(), 5555.);
 
-        for (t_ref, constraints, _) in self.residuals.iter() {
-            print!("{}.residual = ", t_ref);
-            for (i, c) in constraints.iter().enumerate() {
-                print!("{}", c.rhs);
-                if i < constraints.len() - 1 {
-                    print!(" + ");
-                }
-            }
-            println!();
+        for (t_ref, num_eqs, expr, _) in self.residuals.iter() {
+            println!("{}.residual = {}", t_ref, expr);
         }
 
         let dom = self.domain();
-        let mut solver = gomez::solver::TrustRegion::new(self, &dom);
+        let mut solver = gomez::solver::TrustRegion::new(&self, &dom);
 
         use gomez::core::Solver;
         for i in 1.. {
             // Do one iteration in the solving process.
-            solver.next(self, &dom, &mut x, &mut fx).map_err(|e| {
+            solver.next(&self, &dom, &mut x, &mut fx).map_err(|e| {
                 println!("solver err: {:?}", e);
             })?;
 
@@ -114,7 +61,10 @@ impl Solver {
             }
         }
 
-        Ok(x.into_iter().map(|v| *v).collect())
+        Ok(x.into_iter()
+            .enumerate()
+            .map(|(i, v)| (self.residuals[i].0.clone(), *v))
+            .collect())
     }
 }
 
@@ -138,7 +88,7 @@ where
             None => {}
         };
 
-        for (i, (t, _, _)) in self.system.residuals.iter().enumerate() {
+        for (i, (t, _, _, _)) in self.system.residuals.iter().enumerate() {
             let v2: eq::Variable = t.into();
             if v == &v2 {
                 return Ok(eq::Concrete::Float(self.guess[i] as f64));
@@ -172,25 +122,22 @@ impl System for Solver {
             system: self,
         };
 
-        for (i, (term, residuals, _)) in self.residuals.iter().enumerate() {
-            let mut residual = 0.;
-            for r in residuals.iter() {
+        for (i, (term, count, residual, _)) in self.residuals.iter().enumerate() {
+            let solutions = residual.num_solutions();
+            for j in 0..solutions {
                 use num::traits::cast::ToPrimitive;
-                let res = match r.rhs.evaluate(&mut resolver, 0).unwrap() {
+                let res = match residual.evaluate(&mut resolver, j).unwrap() {
                     eq::Concrete::Float(f) => f as f64,
                     eq::Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
-
-                if r.standalone {
-                    println!("fx[{}] = {} with guess {}", i, res, x[i]);
-                    residual += res.abs();
-                } else {
-                    println!("fx[{}] += {} with guess {}", i, x[i] - res, x[i]);
-                    residual += (x[i] - res).abs();
+                if res.is_nan() && j < solutions {
+                    continue;
                 }
-            }
+                fx[i] = (*count as f64 * x[i]) - res;
 
-            fx[i] = 2.0 * residual;
+                println!("fx[{}] = {} with guess {}", i, fx[i], x[i]);
+                break;
+            }
         }
 
         Ok(())

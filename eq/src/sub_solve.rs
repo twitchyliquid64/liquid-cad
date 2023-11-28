@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 /// Describes a set of expressions which represent a variable.
@@ -216,7 +216,7 @@ impl SubSolver {
                     SolvePlan::Substituted(ei) => out
                         .expr
                         .sub_variable(dependent_var, Box::new(ei.expr.clone())),
-                    SolvePlan::Concrete(ref c) => {}
+                    SolvePlan::Concrete(_) => {}
                 },
             };
         }
@@ -324,6 +324,21 @@ impl SubSolver {
         vars
     }
 
+    fn sort_vars_by_base(vars: &mut Vec<Variable>) {
+        // Assuming variables of form "<letter><integer>" the sort order
+        // is by integer-first.
+        vars.sort_by(|a, b| match (a.as_str().get(1..), b.as_str().get(1..)) {
+            (Some(a_str), Some(b_str)) => match (a_str.parse::<usize>(), b_str.parse::<usize>()) {
+                (Ok(ai), Ok(bi)) => match ai.partial_cmp(&bi) {
+                    Some(std::cmp::Ordering::Equal) => a.partial_cmp(b).unwrap(),
+                    v => v.unwrap(),
+                },
+                _ => a.partial_cmp(b).unwrap(),
+            },
+            _ => a.partial_cmp(b).unwrap(),
+        });
+    }
+
     fn try_solve(&mut self, st: &mut SubSolverState) -> Vec<Variable> {
         let vars = self.all_vars(st);
         if st.done_substitution {
@@ -423,19 +438,122 @@ impl SubSolver {
         out.ok_or(ResolveErr::CannotSolve)
     }
 
-    fn sort_vars_by_base(vars: &mut Vec<Variable>) {
-        // Assuming variables of form "<letter><integer>" the sort order
-        // is by integer-first.
-        vars.sort_by(|a, b| match (a.as_str().get(1..), b.as_str().get(1..)) {
-            (Some(a_str), Some(b_str)) => match (a_str.parse::<usize>(), b_str.parse::<usize>()) {
-                (Ok(ai), Ok(bi)) => match ai.partial_cmp(&bi) {
-                    Some(std::cmp::Ordering::Equal) => a.partial_cmp(b).unwrap(),
-                    v => v.unwrap(),
-                },
-                _ => a.partial_cmp(b).unwrap(),
-            },
-            _ => a.partial_cmp(b).unwrap(),
-        });
+    pub fn all_concrete_results(
+        &mut self,
+        st: &mut SubSolverState,
+    ) -> (HashMap<Variable, Concrete>, Vec<Variable>) {
+        let vars = self.try_solve(st);
+        let mut out = HashMap::with_capacity(vars.len());
+        let mut unresolved = HashSet::with_capacity(vars.len());
+
+        for v in vars {
+            if let Some(SolvePlan::Concrete(c)) = st.resolved.get(&v).clone() {
+                out.insert(v, c.clone());
+            } else {
+                unresolved.insert(v);
+            }
+        }
+
+        (out, unresolved.into_iter().collect())
+    }
+
+    pub fn all_residuals(&mut self, st: &mut SubSolverState) -> Vec<Expression> {
+        let mut done_exprs: HashSet<ExprHash> =
+            HashSet::with_capacity(st.vars_by_eq.len().max(256));
+        let mut out = Vec::with_capacity(4 * st.vars_by_eq.len());
+
+        for (for_var, ee) in st.vars_by_eq.iter() {
+            for ei in ee.exprs.iter() {
+                let eq = Expression::Difference(
+                    Box::new(Expression::Variable(for_var.clone())),
+                    Box::new(ei.expr.clone()),
+                );
+
+                let h: ExprHash = (&eq).into();
+                if done_exprs.contains(&h) {
+                    continue;
+                }
+                done_exprs.insert(h);
+                out.push((h, eq));
+            }
+        }
+
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out.into_iter().map(|(h, exp)| exp).collect()
+    }
+
+    /// all_remaining_residuals returns the set of all variables for which there is no concrete
+    /// solution, and an expression representing the residual of all expressions which influence
+    /// that variable.
+    pub fn all_remaining_residuals(
+        &mut self,
+        st: &mut SubSolverState,
+    ) -> HashMap<Variable, (usize, Expression)> {
+        let vars = self.try_solve(st);
+        let mut out = HashMap::with_capacity(vars.len());
+
+        for var in vars {
+            // If we already have a solution for this variable, continue.
+            if let Some(SolvePlan::Concrete(_)) = st.resolved.get(&var) {
+                continue;
+            }
+
+            // TODO: Maybe we should try and have less residuals than variables if all
+            // the equations for a variable can be substituted into one represented by another residual?
+            let mut exprs: Option<Expression> = None;
+            let mut count: usize = 0;
+            for (for_var, ee) in st.vars_by_eq.iter() {
+                let mut done_exprs: HashSet<ExprHash> =
+                    HashSet::with_capacity(st.resolved.len().max(256));
+
+                if ee.exprs.len() > 0 {
+                    for ei in ee.exprs.iter() {
+                        if !ei.references.contains_key(&var) {
+                            continue;
+                        }
+
+                        let eq = Expression::Equal(
+                            Box::new(Expression::Variable(for_var.clone())),
+                            Box::new(ei.expr.clone()),
+                        );
+                        let rearranged = match eq.make_subject(&Expression::Variable(var.clone())) {
+                            Ok(eq) => {
+                                if let Expression::Equal(_, eq) = eq {
+                                    Some(eq)
+                                } else {
+                                    unreachable!();
+                                }
+                            }
+                            Err(_e) => {
+                                // println!("cannot rearrange {:?}, continuing ({:?})", &eq, var)
+                                None
+                            }
+                        };
+
+                        if let Some(eq) = rearranged {
+                            let h: ExprHash = (&*eq).into();
+                            if done_exprs.contains(&ei.expr_hash) {
+                                continue;
+                            }
+                            done_exprs.insert(ei.expr_hash);
+
+                            if let Some(e) = exprs {
+                                exprs = Some(Expression::Sum(Box::new(e), Box::new(*eq)));
+                            } else {
+                                exprs = Some(*eq);
+                            }
+                            count += 1;
+                        }
+                    }
+                }
+            }
+
+            if let Some(e) = exprs {
+                out.insert(var.clone(), (count, e));
+            }
+        }
+
+        out
     }
 }
 
@@ -771,5 +889,228 @@ mod tests {
             Concrete::Float(x) => assert_eq!(x, 5.0),
             _ => panic!("result is not a float"),
         }
+    }
+
+    #[test]
+    fn residuals() {
+        // p0-----line 1-----p1
+        //
+        // line 1 has fixed distance of 5
+        // p0 is at (0, 1)
+
+        let mut state = SubSolverState::new(
+            HashMap::from([
+                (
+                    "x0".into(),
+                    Concrete::Rational(Rational::from_integer(0.into())),
+                ),
+                (
+                    "y0".into(),
+                    Concrete::Rational(Rational::from_integer(1.into())),
+                ),
+            ]),
+            vec![
+                Expression::parse("d1 = sqrt((x1-x0)^2 + (y1-y0)^2)", false).unwrap(),
+                Expression::parse("d1 = 5", false).unwrap(),
+                Expression::parse("d1 = 5", false).unwrap(), // should de-dupe
+            ],
+        )
+        .unwrap();
+
+        // distance formula
+        // d                            = sqrt( (x2 - x1)^2 + (y2 - y1)^2 )
+        // d^2                          = (x2 - x1)^2 + (y2 - y1)^2
+        // d^2 - (y2 - y1)^2            = (x2 - x1)^2
+        // sqrt(d^2 - (y2 - y1)^2)      =  x2 - x1
+        // sqrt(d^2 - (y2 - y1)^2) + x1 =  x2
+        assert_eq!(
+            SubSolver::default().all_remaining_residuals(&mut state),
+            HashMap::from([
+                (
+                    "x1".into(),
+                    (
+                        1,
+                        Expression::parse("sqrt_pm(d1^2 - (y1 - y0)^2) + x0", false).unwrap()
+                    )
+                ),
+                (
+                    "y1".into(),
+                    (
+                        1,
+                        Expression::parse("sqrt_pm(d1^2 - (x1 - x0)^2) + y0", false).unwrap()
+                    )
+                )
+            ]),
+        );
+
+        assert_eq!(
+            SubSolver::default().all_residuals(&mut state),
+            vec![
+                Expression::parse("d1 - 5", false).unwrap(),
+                Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),
+            ],
+        );
+        assert_eq!(
+            SubSolver::default()
+                .all_concrete_results(&mut state)
+                .0
+                .len(),
+            3,
+        );
+        assert_eq!(
+            SubSolver::default()
+                .all_concrete_results(&mut state)
+                .0
+                .get(&"x0".into())
+                .unwrap()
+                .as_f64(),
+            0.0,
+        );
+        assert_eq!(
+            SubSolver::default()
+                .all_concrete_results(&mut state)
+                .0
+                .get(&"y0".into())
+                .unwrap()
+                .as_f64(),
+            1.0,
+        );
+        assert_eq!(
+            SubSolver::default()
+                .all_concrete_results(&mut state)
+                .0
+                .get(&"d1".into())
+                .unwrap()
+                .as_f64(),
+            5.0,
+        );
+
+        // p0-----line 1-----p1-----line 2-----p2
+        //
+        // line 1 & 2 have fixed distance of 5
+        // p0 is at (0, 1)
+        // p2 is at (10, 1)
+
+        state = SubSolverState::new(
+            HashMap::from([
+                (
+                    "x0".into(),
+                    Concrete::Rational(Rational::from_integer(0.into())),
+                ),
+                (
+                    "y0".into(),
+                    Concrete::Rational(Rational::from_integer(1.into())),
+                ),
+                (
+                    "x2".into(),
+                    Concrete::Rational(Rational::from_integer(5.into())),
+                ),
+                (
+                    "y2".into(),
+                    Concrete::Rational(Rational::from_integer(1.into())),
+                ),
+            ]),
+            vec![
+                Expression::parse("d1 = sqrt((x1-x0)^2 + (y1-y0)^2)", false).unwrap(),
+                Expression::parse("d1 = 5", false).unwrap(),
+                Expression::parse("d2 = sqrt((x2-x1)^2 + (y2-y1)^2)", false).unwrap(),
+                Expression::parse("d2 = 5", false).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(
+            SubSolver::default().all_residuals(&mut state),
+            vec![
+                Expression::parse("d1 - 5", false).unwrap(),
+                Expression::parse("d2 - 5", false).unwrap(),
+                Expression::parse("d2 - (sqrt((x2-x1)^2 + (y2-y1)^2))", false).unwrap(),
+                Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),
+            ],
+        );
+
+        // for (v, e) in SubSolver::default().all_remaining_residuals(&mut state).iter() {
+        //     println!("{} = {}", v, e.1);
+        // }
+        assert_eq!(
+            SubSolver::default().all_remaining_residuals(&mut state)[&"x1".into()]
+                .1
+                .evaluate(
+                    &mut StaticResolver::new([
+                        (
+                            "d1".into(),
+                            Concrete::Rational(Rational::new(5.into(), 1.into()))
+                        ),
+                        (
+                            "d2".into(),
+                            Concrete::Rational(Rational::new(5.into(), 1.into()))
+                        ),
+                        (
+                            "y1".into(),
+                            Concrete::Rational(Rational::new(1.into(), 1.into()))
+                        ),
+                        (
+                            "x0".into(),
+                            Concrete::Rational(Rational::new(0.into(), 1.into()))
+                        ),
+                        (
+                            "y0".into(),
+                            Concrete::Rational(Rational::new(1.into(), 1.into()))
+                        ),
+                        (
+                            "x2".into(),
+                            Concrete::Rational(Rational::new(10.into(), 1.into()))
+                        ),
+                        (
+                            "y2".into(),
+                            Concrete::Rational(Rational::new(1.into(), 1.into()))
+                        ),
+                    ]),
+                    0
+                )
+                .unwrap()
+                .as_f64(),
+            10.0, // should equal (2 * x1) == 10
+        );
+        assert_eq!(
+            SubSolver::default().all_remaining_residuals(&mut state)[&"y1".into()]
+                .1
+                .evaluate(
+                    &mut StaticResolver::new([
+                        (
+                            "d1".into(),
+                            Concrete::Rational(Rational::new(5.into(), 1.into()))
+                        ),
+                        (
+                            "d2".into(),
+                            Concrete::Rational(Rational::new(5.into(), 1.into()))
+                        ),
+                        (
+                            "x1".into(),
+                            Concrete::Rational(Rational::new(5.into(), 1.into()))
+                        ),
+                        (
+                            "x0".into(),
+                            Concrete::Rational(Rational::new(0.into(), 1.into()))
+                        ),
+                        (
+                            "y0".into(),
+                            Concrete::Rational(Rational::new(1.into(), 1.into()))
+                        ),
+                        (
+                            "x2".into(),
+                            Concrete::Rational(Rational::new(10.into(), 1.into()))
+                        ),
+                        (
+                            "y2".into(),
+                            Concrete::Rational(Rational::new(1.into(), 1.into()))
+                        ),
+                    ]),
+                    0
+                )
+                .unwrap()
+                .as_f64(),
+            2.0, // (2 * y1) == 2
+        );
     }
 }
