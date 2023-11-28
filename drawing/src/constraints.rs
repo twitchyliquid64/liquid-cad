@@ -1,7 +1,6 @@
-use crate::system::{self, TermAllocator, TermRef, TermType};
+use crate::system::{TermRef, TermType};
 use crate::{Feature, FeatureKey};
 use eq::{Expression, Rational};
-use slotmap::HopSlotMap;
 
 slotmap::new_key_type! {
     pub struct ConstraintKey;
@@ -63,7 +62,7 @@ impl Constraint {
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
             LineLength(..) => matches!(ft, &Feature::LineSegment(..)),
-            LineAlongCardinal(_, fk, ..) => matches!(ft, &Feature::LineSegment(..)),
+            LineAlongCardinal(..) => matches!(ft, &Feature::LineSegment(..)),
         }
     }
 
@@ -332,7 +331,7 @@ impl Constraint {
     }
 }
 
-fn distance_eq(d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &TermRef) -> Expression {
+fn distance_eq(_d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &TermRef) -> Expression {
     Expression::Sqrt(
         Box::new(Expression::Sum(
             Box::new(Expression::Power(

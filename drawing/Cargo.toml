@@ -13,6 +13,4 @@ serde = { version = "1", features = ["derive"] }
 
 # For solver
 eq = {version = "0.1.0", path = "../eq"}
-#nalgebra = "0.31"
-gomez = "0.4"
 num = "0.4"

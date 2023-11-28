@@ -33,7 +33,7 @@ impl EquivalentExpressions {
 
         let exprs = Rc::get_mut(&mut self.exprs).unwrap();
         match exprs.binary_search(&ei) {
-            Ok(pos) => {} // already exists
+            Ok(_pos) => {} // already exists
             Err(pos) => exprs.insert(pos, ei),
         }
     }
@@ -345,7 +345,7 @@ impl SubSolver {
             return vars;
         }
 
-        'outer_loop: for i in 0..vars.len() {
+        'outer_loop: for _i in 0..vars.len() {
             // Find the next variable which is simplest to solve.
             for v in vars.iter() {
                 if st.resolved.contains_key(&v) {
@@ -357,7 +357,7 @@ impl SubSolver {
                     Some(ee) => {
                         for info in ee.exprs.clone().as_ref() {
                             match self.solve_using_known(st, v, info) {
-                                Ok(p) => continue 'outer_loop,
+                                Ok(_p) => continue 'outer_loop,
                                 Err(_) => continue,
                             }
                         }
@@ -374,7 +374,7 @@ impl SubSolver {
                 };
                 if let Ok(ei) = self.rearrange_candidate(st, v) {
                     match self.solve_using_known(st, v, &ei) {
-                        Ok(p) => continue 'outer_loop,
+                        Ok(_p) => continue 'outer_loop,
                         Err(_) => continue,
                     }
                 }
@@ -479,7 +479,7 @@ impl SubSolver {
         }
 
         out.sort_by(|a, b| a.0.cmp(&b.0));
-        out.into_iter().map(|(h, exp)| exp).collect()
+        out.into_iter().map(|(_h, exp)| exp).collect()
     }
 
     /// all_remaining_residuals returns the set of all variables for which there is no concrete
@@ -531,7 +531,6 @@ impl SubSolver {
                         };
 
                         if let Some(eq) = rearranged {
-                            let h: ExprHash = (&*eq).into();
                             if done_exprs.contains(&ei.expr_hash) {
                                 continue;
                             }

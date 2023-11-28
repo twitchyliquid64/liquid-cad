@@ -420,5 +420,5 @@ impl<'a> Widget<'a> {
         });
     }
 
-    fn show_system_tab(&mut self, ui: &egui::Ui) {}
+    fn show_system_tab(&mut self, _ui: &egui::Ui) {}
 }

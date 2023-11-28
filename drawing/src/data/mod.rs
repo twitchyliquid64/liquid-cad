@@ -221,7 +221,7 @@ impl Data {
                 }
             };
 
-            if let Some(Constraint::LineLength(_, fk, _, _, dd)) = self.constraint_mut(k) {
+            if let Some(Constraint::LineLength(_, _fk, _, _, dd)) = self.constraint_mut(k) {
                 let c = a.lerp(b, 0.5);
                 let v = c.to_vec2() - pos.to_vec2();
                 let reference = egui::Vec2::angled((a - b).angle() - v.angle()) * v.length();

@@ -1,6 +1,6 @@
 extern crate nalgebra as na;
 use super::*;
-use na::{ArrayStorage, DMatrix, DVector, Dyn, OMatrix, OVector, VecStorage};
+use na::{DMatrix, DVector, Dyn, OMatrix, OVector};
 use num::ToPrimitive;
 use std::collections::HashMap;
 
@@ -138,7 +138,7 @@ impl DumbassSolver {
     }
 
     fn apply_multiplier(iteration: usize) -> f64 {
-        // in WRA: plot 0.95 - sigmoid(x/18)/4, x=0..30
+        // in WRA: plot 0.95 - sigmoid(x/18)/8, x=0..30
         return DumbassSolver::DELTA_MUL - sigmoid(iteration as f64 / 18.0) / 8.0;
     }
 
@@ -203,7 +203,6 @@ impl DumbassSolver {
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
     use super::*;
 
     #[test]
@@ -235,7 +234,7 @@ mod tests {
             ],],
         );
 
-        let mut solver = DumbassSolver::new(&state);
+        let _ = DumbassSolver::new(&state);
     }
 
     #[test]
@@ -292,10 +291,10 @@ mod tests {
 
         solver.x[0] = 1.000;
         solver.x[1] = 3.000;
-        solver.solve(&mut state);
+        let ret = solver.solve(&mut state).unwrap();
 
         assert!(solver.iteration < 60);
-        assert!(solver.fx[0] < 0.0001);
+        assert!(ret[0].1 < 0.0001);
         // assert!(solver.x[0] < 0.1);
     }
 }

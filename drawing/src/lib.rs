@@ -167,7 +167,7 @@ impl<'a> Widget<'a> {
                 (
                     Hover::Constraint {
                         k,
-                        constraint: Constraint::LineLength(_, _, _, _, dd),
+                        constraint: Constraint::LineLength(_, _, _, _, _dd),
                     },
                     false,
                     true,
@@ -224,7 +224,7 @@ impl<'a> Widget<'a> {
                     Some(Input::FeatureDrag(fk, new_pos))
                 }
 
-                (Some(DragState::Constraint(ck, offset)), _) => {
+                (Some(DragState::Constraint(ck, _offset)), _) => {
                     if released {
                         ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
                     }
@@ -261,7 +261,7 @@ impl<'a> Widget<'a> {
         // Handle: clicks altering selection
         if hp.is_some()
             && response.clicked_by(egui::PointerButton::Primary)
-            && !matches!(current_input, Some(Input::EditingLineLength(ck)))
+            && !matches!(current_input, Some(Input::EditingLineLength(_)))
         {
             let shift_held = ui.input(|i| i.modifiers.shift);
 
@@ -541,7 +541,7 @@ pub struct DrawResponse {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     #[test]
     fn simplifications() {}
