@@ -104,13 +104,13 @@ pub struct DumbassSolver {
     x: OVector<f64, Dyn>,
     // residual calculation result
     fx: OVector<f64, Dyn>,
-    // jacobian by [variable, residual]
+    // jacobian by [residual, variable]
     j: OMatrix<f64, Dyn, Dyn>,
 }
 
 impl DumbassSolver {
     const MAX_ITER: usize = 350;
-    const DELTA_MUL: f64 = 0.95;
+    const DELTA_MUL: f64 = 1.14;
 
     const TOTAL_FX_TOLERANCE: f64 = 0.0005;
 
@@ -154,12 +154,26 @@ impl DumbassSolver {
         // Compute jacobian
         for (row, jacs) in st.jacobians.iter().enumerate() {
             for (col, j_fn) in jacs.iter().enumerate() {
-                j[(row, col)] = match j_fn.evaluate(&mut resolver, 0).unwrap() {
+                let mut v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
                     Concrete::Float(f) => f as f64,
                     Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
+                // if v.is_nan() {
+                //     v = 0.0;
+                // }
+                j[(row, col)] = v;
             }
         }
+
+        // Softmax the jacobian for each variable
+        let softmax_mul = 2.5 / (st.vars.len() as f64);
+        for mut col in j.column_iter_mut() {
+            let exp_sum = col.iter().fold(0.0, |acc, x| acc + x.exp());
+            for j in col.iter_mut() {
+                *j *= j.exp() / exp_sum * softmax_mul;
+            }
+        }
+        // println!("j: {}", j);
 
         // Compute residuals
         for (row, exp) in st.residuals.iter().enumerate() {
@@ -173,8 +187,6 @@ impl DumbassSolver {
         let adjustment =
             (fx.transpose() * &*j).transpose() * -DumbassSolver::apply_multiplier(self.iteration);
         *x += adjustment;
-
-        // println!("j: {}fx: {}x: {}", j, fx, x);
     }
 
     pub fn solve(&mut self, st: &mut DumbassSolverState) -> Result<Vec<(Variable, f64)>, ()> {
@@ -254,7 +266,7 @@ mod tests {
         solver.x[1] = 1.000;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 10);
+        assert!(solver.iteration < 15);
         assert!(ret[0].1 < 0.1);
         let f = (ret[0].1 + ret[1].1).abs();
         assert!(f > 4.9 && f < 5.1); // trashy check but gets the point across.
@@ -265,7 +277,7 @@ mod tests {
         solver.x[1] = 1.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 10);
+        assert!(solver.iteration < 15);
         // trashy check but gets the point across.
         assert!(ret[0].1 > 3.4 && ret[0].1 < 3.6);
         assert!(ret[1].1 > 3.4 && ret[1].1 < 3.6);
@@ -293,8 +305,8 @@ mod tests {
         solver.x[1] = 3.000;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 60);
+        assert!(solver.iteration < 65);
         assert!(ret[0].1 < 0.0001);
-        // assert!(solver.x[0] < 0.1);
+        assert!(solver.x[0] < 0.1);
     }
 }

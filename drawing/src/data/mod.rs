@@ -94,11 +94,11 @@ impl Data {
             self.apply_solved(&term, f.as_f64());
         }
 
+        // Solve the rest using an iterative solver.
         let residuals = solver.all_residuals(&mut sub_solver_state);
         if residuals.len() == 0 {
             return;
         }
-
         let initials = unresolved
             .iter()
             .map(|v| {
@@ -130,6 +130,23 @@ impl Data {
                     TermType::PositionY => Some(*y),
                     TermType::ScalarDistance => None,
                 },
+                Some(Feature::LineSegment(_, f1, f2)) => match term.t {
+                    TermType::ScalarDistance => {
+                        let (a, b) = match (
+                            self.features.get(*f1).unwrap(),
+                            self.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
+
+                        Some(a.distance(b))
+                    }
+                    TermType::PositionX => unreachable!(),
+                    TermType::PositionY => unreachable!(),
+                },
                 _ => None,
             }
         } else {
@@ -151,6 +168,14 @@ impl Data {
                         TermType::ScalarDistance => unreachable!(),
                     }
                     true
+                }
+                Some(Feature::LineSegment(_, _, _)) => {
+                    match term.t {
+                        TermType::PositionX => unreachable!(),
+                        TermType::PositionY => unreachable!(),
+                        TermType::ScalarDistance => {}
+                    }
+                    false
                 }
                 _ => false,
             }
