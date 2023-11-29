@@ -113,9 +113,9 @@ pub struct DumbassSolver {
 
 impl DumbassSolver {
     const MAX_ITER: usize = 350;
-    const DELTA_MUL: f64 = 1.12;
+    const DELTA_MUL: f64 = 1.15;
 
-    const TOTAL_FX_TOLERANCE: f64 = 0.0005;
+    const AVG_FX_TOLERANCE: f64 = 0.0008;
 
     pub fn new(st: &DumbassSolverState) -> Self {
         let iteration = 0;
@@ -141,8 +141,8 @@ impl DumbassSolver {
     }
 
     fn apply_multiplier(iteration: usize) -> f64 {
-        // in WRA: plot 1.12 - sigmoid(x/18)/8, x=0..90
-        return DumbassSolver::DELTA_MUL - sigmoid(iteration as f64 / 18.0) / 8.0;
+        // in WRA: plot 1.15 - sigmoid(x/18)/6, x=0..90
+        return DumbassSolver::DELTA_MUL - sigmoid(iteration as f64 / 18.0) / 6.0;
     }
 
     fn solve_step(&mut self, st: &mut DumbassSolverState) {
@@ -168,23 +168,36 @@ impl DumbassSolver {
             }
         }
 
-        // Softmax the jacobian for each variable
-        let softmax_mul = 2.5 / (st.vars.len() as f64);
+        // Softmax the jacobian for each variable, multiplied by
+        // the proportion of variables which are non-zero
+        let softmax_mul = 1.0 / (st.vars.len() as f64);
         for mut col in j.column_iter_mut() {
             let exp_sum = col.iter().fold(0.0, |acc, x| acc + x.exp());
+            let terms_non_zero = col
+                .iter()
+                .map(|j| *j == 0.0)
+                .fold(0.0, |acc, zero| acc + if zero { 0.0 } else { 1.0 });
             for j in col.iter_mut() {
-                *j *= j.exp() / exp_sum * softmax_mul;
+                *j *= j.exp() / exp_sum * softmax_mul * (terms_non_zero / 1.0);
             }
         }
-        // println!("j: {}", j);
 
         // Compute residuals
         for (row, exp) in st.residuals.iter().enumerate() {
-            fx[row] = match exp.evaluate(&mut resolver, 0).unwrap() {
+            let res = match exp.evaluate(&mut resolver, 0).unwrap() {
                 Concrete::Float(f) => f as f64,
                 Concrete::Rational(r) => r.to_f64().unwrap(),
             };
+            fx[row] = res;
         }
+
+        // println!(
+        //     "mul={}\nx:{}j:{}fx:{}",
+        //     DumbassSolver::apply_multiplier(self.iteration),
+        //     x,
+        //     j,
+        //     fx
+        // );
 
         // Update guesses
         let adjustment =
@@ -197,7 +210,7 @@ impl DumbassSolver {
             self.solve_step(st);
 
             let total_fx = self.fx.iter().fold(0.0, |acc, x| acc + x.abs());
-            if total_fx.abs() < DumbassSolver::TOTAL_FX_TOLERANCE {
+            if (total_fx.abs() / st.vars.len() as f64) < DumbassSolver::AVG_FX_TOLERANCE {
                 break;
             }
             self.iteration += 1;
@@ -311,5 +324,49 @@ mod tests {
         assert!(solver.iteration < 65);
         assert!(ret[0].1 < 0.0001);
         assert!(solver.x[0] < 0.1);
+    }
+
+    #[test]
+    fn dist_snake() {
+        // (0,0) ---88--- (x1,y1) ---88--- (x2,y2)
+        //
+        // For two points from the origin constrained by distances, we observed
+        // that it fails to solve when initial x > 0. This test makes sure
+        // we do.
+        let mut state = DumbassSolverState::new(
+            HashMap::from([
+                ("x0".into(), Concrete::Float(0.0)),
+                ("y0".into(), Concrete::Float(0.0)),
+            ]),
+            vec!["x1".into(), "y1".into(), "x2".into(), "y2".into()],
+            vec![
+                Expression::parse("88 - sqrt((x1-x0)^2 + (y1-y0)^2)", false).unwrap(),
+                Expression::parse("88 - sqrt((x2-x1)^2 + (y2-y1)^2)", false).unwrap(),
+            ],
+        );
+        let mut solver = DumbassSolver::new(&state);
+
+        // Make sure we can solve in the good quadrant
+        solver.x[0] = -62.0;
+        solver.x[1] = -62.0;
+        solver.x[0] = -3000.0;
+        solver.x[1] = -3000.0;
+        let ret = solver.solve(&mut state).unwrap();
+
+        assert!(solver.iteration < 150);
+        let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
+        assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
+
+        // Now test we can solve it in the bad quadrant
+        solver = DumbassSolver::new(&state);
+        solver.x[0] = 62.0;
+        solver.x[1] = 62.0;
+        solver.x[0] = 800.0;
+        solver.x[1] = 800.0;
+        let ret = solver.solve(&mut state).unwrap();
+
+        assert!(solver.iteration < 200);
+        let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
+        assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
     }
 }

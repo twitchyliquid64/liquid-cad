@@ -464,6 +464,16 @@ impl SubSolver {
 
         for (for_var, ee) in st.vars_by_eq.iter() {
             for ei in ee.exprs.iter() {
+                // Skip fully-constrained residuals
+                if matches!(st.resolved.get(for_var), Some(SolvePlan::Concrete(_)))
+                    && ei
+                        .references
+                        .keys()
+                        .all(|v| matches!(st.resolved.get(v), Some(SolvePlan::Concrete(_))))
+                {
+                    continue;
+                }
+
                 let eq = Expression::Difference(
                     Box::new(Expression::Variable(for_var.clone())),
                     Box::new(ei.expr.clone()),
@@ -944,10 +954,7 @@ mod tests {
 
         assert_eq!(
             SubSolver::default().all_residuals(&mut state),
-            vec![
-                Expression::parse("d1 - 5", false).unwrap(),
-                Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),
-            ],
+            vec![Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),],
         );
         assert_eq!(
             SubSolver::default()
