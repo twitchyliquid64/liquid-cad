@@ -96,6 +96,9 @@ impl<'a> Resolver for VarResolver<'a> {
 ///
 /// Where possible, I will always tradeoff being understandable
 /// and practical over being clever and efficient.
+///
+/// I have a few random multipliers in here, that I thought would
+/// help convergence at the time. Idk if they actually do.
 #[derive(Clone, Debug)]
 pub struct DumbassSolver {
     iteration: usize,
@@ -110,7 +113,7 @@ pub struct DumbassSolver {
 
 impl DumbassSolver {
     const MAX_ITER: usize = 350;
-    const DELTA_MUL: f64 = 1.14;
+    const DELTA_MUL: f64 = 1.12;
 
     const TOTAL_FX_TOLERANCE: f64 = 0.0005;
 
@@ -138,7 +141,7 @@ impl DumbassSolver {
     }
 
     fn apply_multiplier(iteration: usize) -> f64 {
-        // in WRA: plot 0.95 - sigmoid(x/18)/8, x=0..30
+        // in WRA: plot 1.12 - sigmoid(x/18)/8, x=0..90
         return DumbassSolver::DELTA_MUL - sigmoid(iteration as f64 / 18.0) / 8.0;
     }
 

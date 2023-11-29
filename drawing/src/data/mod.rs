@@ -256,16 +256,6 @@ impl Data {
         }
     }
 
-    /// Returns the feature key of the point exactly at the given position.
-    pub fn find_point_at(&self, p: egui::Pos2) -> Option<FeatureKey> {
-        for (k, v) in self.features.iter() {
-            if v.bb(self).center().distance_sq(p) < 0.0001 {
-                return Some(k);
-            }
-        }
-        None
-    }
-
     /// Returns the 'thing' the screen coordinates are hovering over, if any.
     pub fn find_screen_hover(&self, hp: egui::Pos2) -> Hover {
         match self.find_screen_feature(hp) {

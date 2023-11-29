@@ -1,6 +1,7 @@
 use super::PaintParams;
 use crate::data::Hover;
 use crate::handler::ToolResponse;
+use crate::FeatureKey;
 
 const TOOL_ICON_SIZE: egui::Vec2 = egui::Vec2 { x: 32.0, y: 32.0 };
 const TOOL_ICON_STROKE: f32 = 1.;
@@ -149,15 +150,38 @@ fn vertical_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn lerp_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    painter.line_segment(
+        [
+            c + egui::Vec2 { x: -8.5, y: -4.5 },
+            c + egui::Vec2 { x: 8.5, y: 4.5 },
+        ],
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::WHITE,
+        },
+    );
+    painter.rect_filled(
+        egui::Rect {
+            min: c + egui::Vec2 { x: -1.5, y: -1.5 },
+            max: c + egui::Vec2 { x: 1.5, y: 1.5 },
+        },
+        egui::Rounding::ZERO,
+        egui::Color32::GREEN,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
     Point,
-    Line(Option<egui::Pos2>),
+    Line(Option<FeatureKey>),
     Fixed,
     Dimension,
     Horizontal,
     Vertical,
+    Lerp(Option<FeatureKey>),
 }
 
 impl Tool {
@@ -169,6 +193,7 @@ impl Tool {
             (Tool::Dimension, Tool::Dimension) => true,
             (Tool::Horizontal, Tool::Horizontal) => true,
             (Tool::Vertical, Tool::Vertical) => true,
+            (Tool::Lerp(_), Tool::Lerp(_)) => true,
             _ => false,
         }
     }
@@ -181,6 +206,7 @@ impl Tool {
             Tool::Dimension,
             Tool::Horizontal,
             Tool::Vertical,
+            Tool::Lerp(None),
         ]
     }
 
@@ -225,30 +251,27 @@ impl Tool {
                     // No first point, clicked on a point
                     (
                         Hover::Feature {
-                            k: _,
-                            feature: crate::Feature::Point(_, x, y),
+                            k,
+                            feature: crate::Feature::Point(..),
                         },
                         None,
                         true,
                     ) => {
-                        *p1 = Some(egui::Pos2 { x: *x, y: *y });
+                        *p1 = Some(*k);
                         Some(ToolResponse::Handled)
                     }
                     // Has first point, clicked on a point
                     (
                         Hover::Feature {
-                            k: _,
-                            feature: crate::Feature::Point(_, x2, y2),
+                            k,
+                            feature: crate::Feature::Point(..),
                         },
                         Some(starting_point),
                         true,
                     ) => {
                         let starting_point = starting_point.clone();
-                        *p1 = Some(egui::Pos2 { x: *x2, y: *y2 });
-                        Some(ToolResponse::NewLineSegment(
-                            starting_point,
-                            egui::Pos2 { x: *x2, y: *y2 },
-                        ))
+                        *p1 = Some(*k);
+                        Some(ToolResponse::NewLineSegment(starting_point, *k))
                     }
                     (Hover::None, Some(_), true) => {
                         *p1 = None;
@@ -359,6 +382,64 @@ impl Tool {
                 }
                 None
             }
+
+            Tool::Lerp(p1) => {
+                let c = match (hover, &p1, response.clicked()) {
+                    // No first point, clicked on a point
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Point(_, x, y),
+                        },
+                        None,
+                        true,
+                    ) => {
+                        *p1 = Some(*k);
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first point, clicked on a line
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        },
+                        Some(starting_point),
+                        true,
+                    ) => {
+                        let starting_point = starting_point.clone();
+                        *p1 = None;
+                        Some(ToolResponse::NewPointLerp(starting_point, *k))
+                    }
+                    (Hover::None, Some(_), true) => {
+                        *p1 = None;
+                        Some(ToolResponse::Handled)
+                    }
+                    // No first point, clicked empty space or line
+                    (Hover::None, None, true)
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::LineSegment(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    ) => Some(ToolResponse::SwitchToPointer),
+
+                    _ => None,
+                };
+                if c.is_some() {
+                    return c;
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+
+                None
+            }
         }
     }
 
@@ -368,6 +449,7 @@ impl Tool {
         response: &egui::Response,
         hp: egui::Pos2,
         params: &PaintParams,
+        drawing: &crate::Data,
     ) {
         match self {
             Tool::Line(None) => {
@@ -375,9 +457,15 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("new line: click 1st point");
             }
-            Tool::Line(Some(start)) => {
+            Tool::Line(Some(fk)) => {
+                let p = drawing.features.get(*fk).unwrap();
+                let (x, y) = match p {
+                    crate::Feature::Point(_, x1, y1) => (*x1, *y1),
+                    _ => unreachable!(),
+                };
+
                 painter.line_segment(
-                    [params.vp.translate_point(*start), hp],
+                    [params.vp.translate_point((x, y).into()), hp],
                     egui::Stroke {
                         width: TOOL_ICON_STROKE,
                         color: egui::Color32::WHITE,
@@ -410,6 +498,17 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("constrain vertical");
             }
+
+            Tool::Lerp(None) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain lerp: click point");
+            }
+            Tool::Lerp(Some(_)) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain lerp: click line");
+            }
         }
     }
 
@@ -421,6 +520,7 @@ impl Tool {
             Tool::Dimension => dim_tool_icon,
             Tool::Horizontal => horizontal_tool_icon,
             Tool::Vertical => vertical_tool_icon,
+            Tool::Lerp(_) => lerp_tool_icon,
         }
     }
 
@@ -485,7 +585,7 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d, v, h) = ui.input(|i| {
+            let (l, p, s, d, v, h, i2) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
@@ -493,31 +593,36 @@ impl Toolbar {
                     i.key_pressed(egui::Key::D),
                     i.key_pressed(egui::Key::V),
                     i.key_pressed(egui::Key::H),
+                    i.key_pressed(egui::Key::I),
                 )
             });
-            match (l, p, s, d, v, h) {
-                (true, _, _, _, _, _) => {
+            match (l, p, s, d, v, h, i2) {
+                (true, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _, _, _, _) => {
+                (_, true, _, _, _, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true, _, _, _) => {
+                (_, _, true, _, _, _, _) => {
                     self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, true, _, _) => {
+                (_, _, _, true, _, _, _) => {
                     self.current = Some(Tool::Dimension);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, true, _) => {
+                (_, _, _, _, true, _, _) => {
                     self.current = Some(Tool::Vertical);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, true) => {
+                (_, _, _, _, _, true, _) => {
                     self.current = Some(Tool::Horizontal);
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, _, _, true) => {
+                    self.current = Some(Tool::Lerp(None));
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}
@@ -555,6 +660,7 @@ impl Toolbar {
         response: &egui::Response,
         hp: Option<egui::Pos2>,
         params: &PaintParams,
+        drawing: &crate::Data,
     ) {
         painter.rect_filled(
             egui::Rect {
@@ -581,7 +687,7 @@ impl Toolbar {
         }
 
         if let (Some(hp), Some(tool)) = (hp, self.current.as_ref()) {
-            tool.draw_active(painter, response, hp, params);
+            tool.draw_active(painter, response, hp, params, drawing);
         }
     }
 }

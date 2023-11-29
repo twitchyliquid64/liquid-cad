@@ -385,7 +385,8 @@ impl<'a> Widget<'a> {
             | None => {}
         };
 
-        self.tools.paint(ui, painter, response, hp, &base_params);
+        self.tools
+            .paint(ui, painter, response, hp, &base_params, self.drawing);
 
         // if let Some(Input::EditingLineLength(ck)) = current_input {
         //     if let Some(Constraint::LineLength(_, fk, _, dd)) = self.drawing.constraints.get(ck) {

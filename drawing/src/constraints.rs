@@ -45,35 +45,41 @@ pub enum Constraint {
         DimensionDisplay,
     ),
     LineAlongCardinal(ConstraintMeta, FeatureKey, Axis),
+    PointLerpLine(ConstraintMeta, FeatureKey, FeatureKey, f32),
 }
 
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match self {
             Fixed(_, fk, ..) => vec![fk.clone()],
             LineLength(_, fk, ..) => vec![fk.clone()],
             LineAlongCardinal(_, fk, ..) => vec![fk.clone()],
+            PointLerpLine(_, l_fk, p_fk, _) => vec![l_fk.clone(), p_fk.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
             LineLength(..) => matches!(ft, &Feature::LineSegment(..)),
             LineAlongCardinal(..) => matches!(ft, &Feature::LineSegment(..)),
+            PointLerpLine(..) => matches!(ft, &Feature::LineSegment(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
             (LineLength(_, f1, ..), LineLength(_, f2, ..)) => f1 == f2,
             (LineLength(_, f1, _d, Some(_axis), ..), LineAlongCardinal(_, f2, ..)) => f1 == f2,
             (LineAlongCardinal(_, f2, ..), LineLength(_, f1, _d, Some(_axis), ..)) => f1 == f2,
             (LineAlongCardinal(_, f1, ..), LineAlongCardinal(_, f2, ..)) => f1 == f2,
+            (PointLerpLine(_, l_fk1, p_fk1, _), PointLerpLine(_, l_fk2, p_fk2, _)) => {
+                l_fk1 == l_fk2 && p_fk1 == p_fk2
+            }
             _ => false,
         }
     }
@@ -84,7 +90,7 @@ impl Constraint {
         hp: egui::Pos2,
         vp: &crate::Viewport,
     ) -> Option<f32> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match self {
             Fixed(..) => None,
             LineLength(_, fk, _, _, dd) => {
@@ -129,6 +135,7 @@ impl Constraint {
                     unreachable!();
                 }
             }
+            PointLerpLine(..) => None,
         }
     }
 
@@ -139,7 +146,7 @@ impl Constraint {
         params: &crate::PaintParams,
         painter: &egui::Painter,
     ) {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match self {
             Fixed(_, k, _, _) => {
                 if let Some(Feature::Point(_, x, y)) = drawing.features.get(*k) {
@@ -205,11 +212,13 @@ impl Constraint {
                     );
                 }
             }
+
+            PointLerpLine(..) => {}
         }
     }
 
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength};
+        use Constraint::{Fixed, LineAlongCardinal, LineLength, PointLerpLine};
         match self {
             Fixed(_, k, x, y) => {
                 let (tx, ty) = (
@@ -323,6 +332,56 @@ impl Constraint {
                             Box::new(Expression::Variable(x2.into())),
                         )]
                     }
+                } else {
+                    unreachable!();
+                }
+            }
+
+            PointLerpLine(_, l_fk, p_fk, amt) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*l_fk) {
+                    let (x1, y1, x2, y2, x3, y3) = (
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*p_fk, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*p_fk, TermType::PositionY),
+                    );
+
+                    vec![
+                        Expression::Equal(
+                            Box::new(Expression::Variable(x3.into())),
+                            Box::new(Expression::Sum(
+                                Box::new(Expression::Variable(x1.into())),
+                                Box::new(Expression::Product(
+                                    Box::new(Expression::Rational(
+                                        Rational::from_float(*amt).unwrap(),
+                                        true,
+                                    )),
+                                    Box::new(Expression::Difference(
+                                        Box::new(Expression::Variable(x2.into())),
+                                        Box::new(Expression::Variable(x1.into())),
+                                    )),
+                                )),
+                            )),
+                        ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(y3.into())),
+                            Box::new(Expression::Sum(
+                                Box::new(Expression::Variable(y1.into())),
+                                Box::new(Expression::Product(
+                                    Box::new(Expression::Rational(
+                                        Rational::from_float(*amt).unwrap(),
+                                        true,
+                                    )),
+                                    Box::new(Expression::Difference(
+                                        Box::new(Expression::Variable(y2.into())),
+                                        Box::new(Expression::Variable(y1.into())),
+                                    )),
+                                )),
+                            )),
+                        ),
+                    ]
                 } else {
                     unreachable!();
                 }

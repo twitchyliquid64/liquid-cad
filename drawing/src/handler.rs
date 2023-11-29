@@ -7,12 +7,13 @@ pub enum ToolResponse {
     Handled,
     SwitchToPointer,
     NewPoint(egui::Pos2),
-    NewLineSegment(egui::Pos2, egui::Pos2),
+    NewLineSegment(FeatureKey, FeatureKey),
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
     NewLineLengthConstraint(FeatureKey),
     NewLineCardinalConstraint(FeatureKey, bool), // true = horizontal
+    NewPointLerp(FeatureKey, FeatureKey),        // point, line
     ConstraintDelete(ConstraintKey),
 }
 
@@ -41,12 +42,7 @@ impl Handler {
             }
 
             ToolResponse::NewLineSegment(p1, p2) => {
-                // points correspond to the exact coordinates of an existing point
-                let (f1, f2) = (
-                    drawing.find_point_at(p1).unwrap(),
-                    drawing.find_point_at(p2).unwrap(),
-                );
-                let l = Feature::LineSegment(FeatureMeta::default(), f2, f1);
+                let l = Feature::LineSegment(FeatureMeta::default(), p2, p1);
 
                 // Make sure it doesnt already exist
                 for v in drawing.features.values() {
@@ -113,6 +109,23 @@ impl Handler {
                             } else {
                                 Axis::TopBottom
                             },
+                        ));
+
+                        tools.clear();
+                    }
+                    _ => {}
+                }
+            }
+            ToolResponse::NewPointLerp(p_fk, l_fk) => {
+                match (drawing.features.get(p_fk), drawing.features.get(l_fk)) {
+                    (Some(Feature::Point(..)), Some(Feature::LineSegment(..))) => {
+                        // TODO: Delete/modify existing constraints that would clash, if any
+
+                        drawing.add_constraint(Constraint::PointLerpLine(
+                            ConstraintMeta::default(),
+                            l_fk,
+                            p_fk,
+                            0.5,
                         ));
 
                         tools.clear();

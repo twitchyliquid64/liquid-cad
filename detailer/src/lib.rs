@@ -154,6 +154,16 @@ impl<'a> Widget<'a> {
                                             &ck,
                                             is_horizontal,
                                         ),
+                                        Some(Constraint::PointLerpLine(meta, _, _, amt)) => {
+                                            Widget::show_constraint_line_lerp(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                                amt,
+                                                meta,
+                                            )
+                                        }
                                         None => {}
                                     });
                                 }
@@ -319,6 +329,37 @@ impl<'a> Widget<'a> {
         });
     }
 
+    fn show_constraint_line_lerp(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &ConstraintKey,
+        amt: &mut f32,
+        meta: &mut ConstraintMeta,
+    ) {
+        let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+
+            let text_rect = ui.add(egui::Label::new("Point lerp").wrap(false)).rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+            let dv = ui.add_sized(
+                [50., text_height * 1.4],
+                egui::DragValue::new(amt)
+                    .clamp_range(0.0..=1.0)
+                    .speed(0.005),
+            );
+            *changed |= dv.changed();
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
     fn show_selection_entry_point(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
@@ -328,31 +369,6 @@ impl<'a> Widget<'a> {
         py: &mut f32,
         meta: &mut FeatureMeta,
     ) {
-        // use egui_extras::{Size, StripBuilder};
-
-        // StripBuilder::new(ui)
-        //     .size(Size::relative(0.42)) // name cell
-        //     .size(Size::relative(0.23)) // x cell
-        //     .size(Size::relative(0.23)) // y cell
-        //     .size(Size::remainder().at_least(25.0))
-        //     .horizontal(|mut strip| {
-        //         use slotmap::Key;
-        //         strip.cell(|ui| {
-        //             ui.label(format!("Point {:?}", k.data().as_ffi()));
-        //         });
-        //         strip.cell(|ui| {
-        //             ui.add(egui::DragValue::new(px));
-        //         });
-        //         strip.cell(|ui| {
-        //             ui.add(egui::DragValue::new(py));
-        //         });
-        //         strip.cell(|ui| {
-        //             if ui.button("⊗").clicked() {
-        //                 commands.push(ToolResponse::Delete(*k));
-        //             }
-        //         });
-        //     });
-
         ui.horizontal(|ui| {
             let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
