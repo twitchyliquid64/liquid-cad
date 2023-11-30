@@ -31,10 +31,10 @@ impl ConstraintData {
         self.constraints.iter()
     }
 
-    pub fn add(&mut self, c: Constraint) {
+    pub fn add(&mut self, c: Constraint) -> Option<ConstraintKey> {
         for c2 in self.constraints.values() {
             if c.conflicts(c2) {
-                return;
+                return None;
             }
         }
 
@@ -46,6 +46,7 @@ impl ConstraintData {
                 self.by_feature.get_mut(&fk).unwrap().insert(k);
             }
         }
+        Some(k)
     }
 
     pub fn delete(&mut self, ck: ConstraintKey) {

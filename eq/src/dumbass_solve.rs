@@ -112,8 +112,8 @@ pub struct DumbassSolver {
 }
 
 impl DumbassSolver {
-    const MAX_ITER: usize = 350;
-    const DELTA_MUL: f64 = 1.15;
+    const MAX_ITER: usize = 450;
+    const STEP_MUL: f64 = 1.0;
 
     const AVG_FX_TOLERANCE: f64 = 0.0008;
 
@@ -140,11 +140,6 @@ impl DumbassSolver {
         }
     }
 
-    fn apply_multiplier(iteration: usize) -> f64 {
-        // in WRA: plot 1.15 - sigmoid(x/18)/6, x=0..90
-        return DumbassSolver::DELTA_MUL - sigmoid(iteration as f64 / 18.0) / 6.0;
-    }
-
     fn solve_step(&mut self, st: &mut DumbassSolverState) {
         let DumbassSolver { x, fx, j, .. } = self;
 
@@ -157,7 +152,7 @@ impl DumbassSolver {
         // Compute jacobian
         for (row, jacs) in st.jacobians.iter().enumerate() {
             for (col, j_fn) in jacs.iter().enumerate() {
-                let mut v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
+                let v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
                     Concrete::Float(f) => f as f64,
                     Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
@@ -170,7 +165,7 @@ impl DumbassSolver {
 
         // Softmax the jacobian for each variable, multiplied by
         // the proportion of variables which are non-zero
-        let softmax_mul = 1.0 / (st.vars.len() as f64);
+        let total_terms = st.vars.len() as f64;
         for mut col in j.column_iter_mut() {
             let exp_sum = col.iter().fold(0.0, |acc, x| acc + x.exp());
             let terms_non_zero = col
@@ -178,7 +173,7 @@ impl DumbassSolver {
                 .map(|j| *j == 0.0)
                 .fold(0.0, |acc, zero| acc + if zero { 0.0 } else { 1.0 });
             for j in col.iter_mut() {
-                *j *= j.exp() / exp_sum * softmax_mul * (terms_non_zero / 1.0);
+                *j *= j.exp() / exp_sum * terms_non_zero / total_terms;
             }
         }
 
@@ -200,8 +195,7 @@ impl DumbassSolver {
         // );
 
         // Update guesses
-        let adjustment =
-            (fx.transpose() * &*j).transpose() * -DumbassSolver::apply_multiplier(self.iteration);
+        let adjustment = (fx.transpose() * &*j).transpose() * -DumbassSolver::STEP_MUL;
         *x += adjustment;
     }
 
@@ -321,7 +315,7 @@ mod tests {
         solver.x[1] = 3.000;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 65);
+        assert!(solver.iteration < 80);
         assert!(ret[0].1 < 0.0001);
         assert!(solver.x[0] < 0.1);
     }
@@ -353,7 +347,7 @@ mod tests {
         solver.x[1] = -3000.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 150);
+        assert!(solver.iteration < 120);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
 
@@ -365,7 +359,7 @@ mod tests {
         solver.x[1] = 800.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 200);
+        assert!(solver.iteration < 160);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
     }

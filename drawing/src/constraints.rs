@@ -57,7 +57,7 @@ impl Constraint {
             LineLength(_, fk, ..) => vec![fk.clone()],
             LineAlongCardinal(_, fk, ..) => vec![fk.clone()],
             PointLerpLine(_, l_fk, p_fk, _) => vec![l_fk.clone(), p_fk.clone()],
-            LineLengthsEqual(_, l1, l2) => vec![l1.clone(), l2.clone()],
+            LineLengthsEqual(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
         }
     }
 
@@ -83,7 +83,7 @@ impl Constraint {
             (PointLerpLine(_, l_fk1, p_fk1, _), PointLerpLine(_, l_fk2, p_fk2, _)) => {
                 l_fk1 == l_fk2 && p_fk1 == p_fk2
             }
-            (LineLengthsEqual(_, l11, l12), LineLengthsEqual(_, l21, l22)) => {
+            (LineLengthsEqual(_, l11, l12, ..), LineLengthsEqual(_, l21, l22, ..)) => {
                 (l11 == l21 && l12 == l22) || (l11 == l22 && l12 == l21)
             }
             _ => false,
@@ -395,7 +395,7 @@ impl Constraint {
                 }
             }
 
-            LineLengthsEqual(_, l1, l2) => {
+            LineLengthsEqual(_, l1, l2, ..) => {
                 if let (
                     Some(Feature::LineSegment(_, p11, p12)),
                     Some(Feature::LineSegment(_, p21, p22)),

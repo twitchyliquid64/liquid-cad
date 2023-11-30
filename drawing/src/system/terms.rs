@@ -120,5 +120,7 @@ impl TermAllocator {
     }
 
     /// Records deletion of a constraint, so its index can be used.
-    pub fn delete_constraint(&mut self, _fk: ConstraintKey) {}
+    pub fn delete_constraint(&mut self, _ck: ConstraintKey) {}
+
+    pub fn inform_new_constraint(&mut self, _ck: ConstraintKey) {}
 }

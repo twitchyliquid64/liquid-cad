@@ -214,8 +214,10 @@ impl Data {
 
     /// Adds a constraint, solving to update based on any affects.
     pub fn add_constraint(&mut self, c: Constraint) {
-        self.constraints.add(c);
-        self.solve_and_apply();
+        if let Some(ck) = self.constraints.add(c) {
+            self.terms.inform_new_constraint(ck);
+            self.solve_and_apply();
+        }
     }
 
     /// Removes a constraint, solving to update based on any affects.
@@ -351,6 +353,7 @@ impl Data {
                 let dependent_constraints = self.constraints.by_feature(&k);
                 for c in dependent_constraints {
                     self.constraints.delete(c);
+                    self.terms.delete_constraint(c);
                 }
 
                 // Find and also remove any features dependent on what we just removed.
