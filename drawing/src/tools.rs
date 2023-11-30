@@ -172,6 +172,30 @@ fn lerp_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn equal_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    painter.line_segment(
+        [
+            c + egui::Vec2 { x: 8.5, y: -4.5 },
+            c + egui::Vec2 { x: -8.5, y: 4.5 },
+        ],
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::WHITE,
+        },
+    );
+    painter.line_segment(
+        [
+            c + egui::Vec2 { x: -1.5, y: -1.5 },
+            c + egui::Vec2 { x: 1.5, y: 1.5 },
+        ],
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::LIGHT_RED,
+        },
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -182,6 +206,7 @@ enum Tool {
     Horizontal,
     Vertical,
     Lerp(Option<FeatureKey>),
+    Equal(Option<FeatureKey>),
 }
 
 impl Tool {
@@ -194,6 +219,7 @@ impl Tool {
             (Tool::Horizontal, Tool::Horizontal) => true,
             (Tool::Vertical, Tool::Vertical) => true,
             (Tool::Lerp(_), Tool::Lerp(_)) => true,
+            (Tool::Equal(_), Tool::Equal(_)) => true,
             _ => false,
         }
     }
@@ -207,6 +233,7 @@ impl Tool {
             Tool::Horizontal,
             Tool::Vertical,
             Tool::Lerp(None),
+            Tool::Equal(None),
         ]
     }
 
@@ -389,7 +416,7 @@ impl Tool {
                     (
                         Hover::Feature {
                             k,
-                            feature: crate::Feature::Point(_, x, y),
+                            feature: crate::Feature::Point(..),
                         },
                         None,
                         true,
@@ -419,6 +446,64 @@ impl Tool {
                     | (
                         Hover::Feature {
                             feature: crate::Feature::LineSegment(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    ) => Some(ToolResponse::SwitchToPointer),
+
+                    _ => None,
+                };
+                if c.is_some() {
+                    return c;
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+
+                None
+            }
+
+            Tool::Equal(l1) => {
+                let c = match (hover, &l1, response.clicked()) {
+                    // No first line, clicked on a line
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        },
+                        None,
+                        true,
+                    ) => {
+                        *l1 = Some(*k);
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first line, clicked on a line
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        },
+                        Some(starting_line),
+                        true,
+                    ) => {
+                        let starting_line = starting_line.clone();
+                        *l1 = None;
+                        Some(ToolResponse::NewEqual(starting_line, *k))
+                    }
+                    (Hover::None, Some(_), true) => {
+                        *l1 = None;
+                        Some(ToolResponse::Handled)
+                    }
+                    // No first line, clicked empty space or point
+                    (Hover::None, None, true)
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::Point(..),
                             ..
                         },
                         None,
@@ -509,6 +594,17 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("constrain lerp: click line");
             }
+
+            Tool::Equal(None) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain equal: click 1st line");
+            }
+            Tool::Equal(Some(_)) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain equal: click 2nd line");
+            }
         }
     }
 
@@ -521,6 +617,7 @@ impl Tool {
             Tool::Horizontal => horizontal_tool_icon,
             Tool::Vertical => vertical_tool_icon,
             Tool::Lerp(_) => lerp_tool_icon,
+            Tool::Equal(_) => equal_tool_icon,
         }
     }
 
@@ -585,7 +682,7 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d, v, h, i2) = ui.input(|i| {
+            let (l, p, s, d, v, h, i2, e) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
@@ -594,35 +691,40 @@ impl Toolbar {
                     i.key_pressed(egui::Key::V),
                     i.key_pressed(egui::Key::H),
                     i.key_pressed(egui::Key::I),
+                    i.key_pressed(egui::Key::E),
                 )
             });
-            match (l, p, s, d, v, h, i2) {
-                (true, _, _, _, _, _, _) => {
+            match (l, p, s, d, v, h, i2, e) {
+                (true, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _, _, _, _, _) => {
+                (_, true, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true, _, _, _, _) => {
+                (_, _, true, _, _, _, _, _) => {
                     self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, true, _, _, _) => {
+                (_, _, _, true, _, _, _, _) => {
                     self.current = Some(Tool::Dimension);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, true, _, _) => {
+                (_, _, _, _, true, _, _, _) => {
                     self.current = Some(Tool::Vertical);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, true, _) => {
+                (_, _, _, _, _, true, _, _) => {
                     self.current = Some(Tool::Horizontal);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, true) => {
+                (_, _, _, _, _, _, true, _) => {
                     self.current = Some(Tool::Lerp(None));
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, _, _, _, true) => {
+                    self.current = Some(Tool::Equal(None));
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}

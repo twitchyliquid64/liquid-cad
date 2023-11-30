@@ -110,6 +110,7 @@ impl Data {
             })
             .collect();
         let mut solver_state = eq::solve::DumbassSolverState::new(known, unresolved, residuals);
+        // println!("solver input: {:?}", solver_state);
         let mut solver = eq::solve::DumbassSolver::new_with_initials(&solver_state, initials);
         match solver.solve(&mut solver_state) {
             Ok(results) => {

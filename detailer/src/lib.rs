@@ -164,6 +164,14 @@ impl<'a> Widget<'a> {
                                                 meta,
                                             )
                                         }
+                                        Some(Constraint::LineLengthsEqual(..)) => {
+                                            Widget::show_constraint_line_equal(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                            )
+                                        }
                                         None => {}
                                     });
                                 }
@@ -351,6 +359,27 @@ impl<'a> Widget<'a> {
                     .speed(0.005),
             );
             *changed |= dv.changed();
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_line_equal(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        _changed: &mut bool,
+        k: &ConstraintKey,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            let text_rect = ui.add(egui::Label::new("Equal length").wrap(false)).rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {

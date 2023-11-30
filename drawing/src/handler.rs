@@ -15,6 +15,7 @@ pub enum ToolResponse {
     NewLineCardinalConstraint(FeatureKey, bool), // true = horizontal
     NewPointLerp(FeatureKey, FeatureKey),        // point, line
     ConstraintDelete(ConstraintKey),
+    NewEqual(FeatureKey, FeatureKey),
 }
 
 #[derive(Debug, Default)]
@@ -126,6 +127,22 @@ impl Handler {
                             l_fk,
                             p_fk,
                             0.5,
+                        ));
+
+                        tools.clear();
+                    }
+                    _ => {}
+                }
+            }
+            ToolResponse::NewEqual(l1, l2) => {
+                match (drawing.features.get(l1), drawing.features.get(l2)) {
+                    (Some(Feature::LineSegment(..)), Some(Feature::LineSegment(..))) => {
+                        // TODO: Delete/modify existing constraints that would clash, if any
+
+                        drawing.add_constraint(Constraint::LineLengthsEqual(
+                            ConstraintMeta::default(),
+                            l1,
+                            l2,
                         ));
 
                         tools.clear();
