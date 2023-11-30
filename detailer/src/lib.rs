@@ -343,7 +343,7 @@ impl<'a> Widget<'a> {
         changed: &mut bool,
         k: &ConstraintKey,
         amt: &mut f32,
-        meta: &mut ConstraintMeta,
+        _meta: &mut ConstraintMeta,
     ) {
         let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
         ui.horizontal(|ui| {
@@ -376,7 +376,6 @@ impl<'a> Widget<'a> {
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             let text_rect = ui.add(egui::Label::new("Equal length").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);

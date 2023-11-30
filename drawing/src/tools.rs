@@ -210,6 +210,43 @@ enum Tool {
 }
 
 impl Tool {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Tool::Point => "Create Point",
+            Tool::Line(_) => "Create Line",
+            Tool::Fixed => "Constrain to co-ords",
+            Tool::Dimension => "Constrain length/radius",
+            Tool::Horizontal => "Constrain horizontal",
+            Tool::Vertical => "Constrain vertical",
+            Tool::Lerp(_) => "Constrain point along line",
+            Tool::Equal(_) => "Constrain lengths as equal",
+        }
+    }
+    pub fn key(&self) -> Option<&'static str> {
+        match self {
+            Tool::Point => Some("P"),
+            Tool::Line(_) => Some("L"),
+            Tool::Fixed => Some("S"),
+            Tool::Dimension => Some("D"),
+            Tool::Horizontal => Some("H"),
+            Tool::Vertical => Some("V"),
+            Tool::Lerp(_) => Some("I"),
+            Tool::Equal(_) => Some("E"),
+        }
+    }
+    pub fn long_tooltop(&self) -> Option<&'static str> {
+        match self {
+            Tool::Point => Some("Creates points.\n\nClick anywhere in free space to create a point."),
+            Tool::Line(_) => Some("Creates lines from existing points.\n\nClick on the first point and then the second to create a line."),
+            Tool::Fixed => Some("Constraints a point to be at specific co-ordinates.\n\nClick a point to constrain it to (0,0). Co-ordinates can be changed later in the selection UI."),
+            Tool::Dimension => Some("Constrains a line to have a specific length.\n\nClick a line to constrain it to its current length. The length can be changed later in the selection UI."),
+            Tool::Horizontal => Some("Constrains a line to be horizontal."),
+            Tool::Vertical => Some("Constrains a line to be vertical."),
+            Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
+            Tool::Equal(_) => Some("Constrains a line to be equal in length to another line."),
+        }
+    }
+
     pub fn same_tool(&self, other: &Self) -> bool {
         match (self, other) {
             (Tool::Point, Tool::Point) => true,
@@ -785,7 +822,69 @@ impl Toolbar {
                 .as_ref()
                 .map(|t| t.same_tool(tool))
                 .unwrap_or(false);
-            tool.paint_icon(painter, hp, params, active, i);
+
+            let tool_icon_bounds = tool.paint_icon(painter, hp, params, active, i);
+            // Show tooltip about tool if hovered
+            if let Some(hp) = hp {
+                if tool_icon_bounds.contains(hp) {
+                    response.clone().on_hover_ui_at_pointer(|ui| {
+                        let mut job = egui::text::LayoutJob::default();
+                        let font_id = egui::FontId {
+                            size: 16.0,
+                            family: params.font_id.family.clone(),
+                        };
+                        job.append(
+                            tool.name(),
+                            0.0,
+                            egui::text::TextFormat {
+                                font_id: font_id.clone(),
+                                valign: egui::Align::TOP,
+                                color: egui::Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+
+                        if let Some(key) = tool.key() {
+                            job.append(
+                                "(",
+                                8.0,
+                                egui::text::TextFormat {
+                                    font_id: font_id.clone(),
+                                    color: egui::Color32::WHITE,
+                                    valign: egui::Align::TOP,
+                                    ..Default::default()
+                                },
+                            );
+                            job.append(
+                                key,
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id: font_id.clone(),
+                                    color: egui::Color32::WHITE,
+                                    valign: egui::Align::TOP,
+                                    underline: egui::Stroke::new(1.0, egui::Color32::WHITE),
+                                    ..Default::default()
+                                },
+                            );
+                            job.append(
+                                ")",
+                                0.0,
+                                egui::text::TextFormat {
+                                    font_id,
+                                    color: egui::Color32::WHITE,
+                                    valign: egui::Align::TOP,
+                                    ..Default::default()
+                                },
+                            );
+                        }
+
+                        ui.label(job);
+                        if let Some(long_tooltop) = tool.long_tooltop() {
+                            ui.label(long_tooltop);
+                        }
+                    });
+                }
+            }
         }
 
         if let (Some(hp), Some(tool)) = (hp, self.current.as_ref()) {
