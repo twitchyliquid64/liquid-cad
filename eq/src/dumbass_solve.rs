@@ -109,13 +109,22 @@ pub struct DumbassSolver {
     fx: OVector<f64, Dyn>,
     // jacobian by [residual, variable]
     j: OMatrix<f64, Dyn, Dyn>,
+
+    // sign bitfield of adjustment at last iteration
+    adj_sign_hash: Option<usize>,
+    // accumulated momentum to add to multiplier, incremented by
+    // (MOMENTUM_STEP+MOMENTUM_DIV / (resets+MOMENTUM_DIV))
+    momentum: f64,
+    momentum_div: usize,
 }
 
 impl DumbassSolver {
     const MAX_ITER: usize = 450;
-    const STEP_MUL: f64 = 1.0;
 
-    const AVG_FX_TOLERANCE: f64 = 0.0008;
+    const MOMENTUM_STEP: f64 = 0.65;
+    const MOMENTUM_DIV: usize = 4;
+
+    const AVG_FX_TOLERANCE: f64 = 0.0005;
 
     pub fn new(st: &DumbassSolverState) -> Self {
         let iteration = 0;
@@ -125,6 +134,9 @@ impl DumbassSolver {
             x: DVector::from_element(st.vars.len(), -8.001),
             fx: DVector::from_element(st.residuals.len(), 0.0),
             j: DMatrix::from_element(st.residuals.len(), st.vars.len(), 0.0),
+            adj_sign_hash: None,
+            momentum: 0.0,
+            momentum_div: 0,
         }
     }
 
@@ -137,6 +149,9 @@ impl DumbassSolver {
             x: DVector::from(initials),
             fx: DVector::from_element(st.residuals.len(), 0.0),
             j: DMatrix::from_element(st.residuals.len(), st.vars.len(), 0.0),
+            adj_sign_hash: None,
+            momentum: 0.0,
+            momentum_div: 0,
         }
     }
 
@@ -194,9 +209,32 @@ impl DumbassSolver {
         //     fx
         // );
 
+        // Compute adjustment
+        let adjustment = (fx.transpose() * &*j).transpose() * -1.0;
+
+        // Compute sign hash
+        let sign_hash = adjustment.iter().enumerate().fold(0, |acc, (i, x)| {
+            acc | if x.signum() == 1.0 { 1 } else { 0 } << i
+        });
+        // println!(
+        //     "{}: sign_hash: {} -- {}",
+        //     self.iteration, sign_hash, self.momentum
+        // );
+
+        // Compute momentum - revert accumulation if any jacobian changed sign
+        if let Some(last_sign_hash) = self.adj_sign_hash {
+            if last_sign_hash == sign_hash {
+                self.momentum += DumbassSolver::MOMENTUM_STEP
+                    / (DumbassSolver::MOMENTUM_DIV + self.momentum_div) as f64;
+            } else {
+                self.momentum = 0.0;
+                self.momentum_div += 1;
+            }
+        }
+        self.adj_sign_hash = Some(sign_hash);
+
         // Update guesses
-        let adjustment = (fx.transpose() * &*j).transpose() * -DumbassSolver::STEP_MUL;
-        *x += adjustment;
+        *x += adjustment * (1.0 + self.momentum);
     }
 
     pub fn solve(
@@ -352,7 +390,7 @@ mod tests {
         solver.x[1] = -3000.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 120);
+        assert!(solver.iteration < 50);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
 
@@ -364,7 +402,7 @@ mod tests {
         solver.x[1] = 800.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 160);
+        assert!(solver.iteration < 50);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
     }
