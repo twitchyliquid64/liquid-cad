@@ -112,14 +112,23 @@ impl Data {
         let mut solver_state = eq::solve::DumbassSolverState::new(known, unresolved, residuals);
         // println!("solver input: {:?}", solver_state);
         let mut solver = eq::solve::DumbassSolver::new_with_initials(&solver_state, initials);
-        match solver.solve(&mut solver_state) {
-            Ok(results) => {
-                for (v, f) in results {
-                    let term = self.terms.get_var_ref(&v).expect("no such var");
-                    self.apply_solved(&term, f);
+        let results = match solver.solve(&mut solver_state) {
+            Ok(results) => Some(results),
+            Err((avg_err, results)) => {
+                println!("solve failed: {}", avg_err);
+                if avg_err < 24.0 {
+                    Some(results)
+                } else {
+                    None
                 }
             }
-            Err(_) => println!("solve failed!"),
+        };
+
+        if let Some(results) = results {
+            for (v, f) in results {
+                let term = self.terms.get_var_ref(&v).expect("no such var");
+                self.apply_solved(&term, f);
+            }
         }
     }
 

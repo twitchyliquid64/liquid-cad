@@ -199,26 +199,31 @@ impl DumbassSolver {
         *x += adjustment;
     }
 
-    pub fn solve(&mut self, st: &mut DumbassSolverState) -> Result<Vec<(Variable, f64)>, ()> {
+    pub fn solve(
+        &mut self,
+        st: &mut DumbassSolverState,
+    ) -> Result<Vec<(Variable, f64)>, (f64, Vec<(Variable, f64)>)> {
+        let mut total_fx = 999999.0;
         while self.iteration < DumbassSolver::MAX_ITER {
             self.solve_step(st);
 
-            let total_fx = self.fx.iter().fold(0.0, |acc, x| acc + x.abs());
+            total_fx = self.fx.iter().fold(0.0, |acc, x| acc + x.abs());
             if (total_fx.abs() / st.vars.len() as f64) < DumbassSolver::AVG_FX_TOLERANCE {
                 break;
             }
             self.iteration += 1;
         }
 
+        let results = st
+            .vars
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (v.clone(), self.x[i]))
+            .collect();
         if self.iteration < DumbassSolver::MAX_ITER {
-            Ok(st
-                .vars
-                .iter()
-                .enumerate()
-                .map(|(i, v)| (v.clone(), self.x[i]))
-                .collect())
+            Ok(results)
         } else {
-            Err(())
+            Err((total_fx, results))
         }
     }
 }

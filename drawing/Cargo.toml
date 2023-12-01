@@ -7,10 +7,13 @@ rust-version = "1.71"
 
 
 [dependencies]
-egui = "0.24.0"
+egui = "0.24.1"
 slotmap = {version = "^1.0", features = ["serde"]}
 serde = { version = "1", features = ["derive"] }
 
 # For solver
 eq = {version = "0.1.0", path = "../eq"}
 num = "0.4"
+
+# For arcs
+kurbo = "0.10"

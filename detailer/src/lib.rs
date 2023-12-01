@@ -111,6 +111,13 @@ impl<'a> Widget<'a> {
                                 meta,
                             )
                         }
+                        Some(Feature::Arc(meta, ..)) => Widget::show_selection_entry_arc(
+                            ui,
+                            &mut commands,
+                            &mut changed,
+                            &k,
+                            meta,
+                        ),
                         None => {}
                     }
 
@@ -444,6 +451,40 @@ impl<'a> Widget<'a> {
             use slotmap::Key;
             let text_rect = ui
                 .add(egui::Label::new(format!("Line {:?}", k.data())).wrap(false))
+                .rect;
+            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
+                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
+            }
+
+            *changed |= ui
+                .add_sized(
+                    [r.x / 4., text_height * 1.4],
+                    egui::Checkbox::new(&mut meta.construction, "🚧"),
+                )
+                .changed();
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::Delete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_selection_entry_arc(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &FeatureKey,
+        meta: &mut FeatureMeta,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            use slotmap::Key;
+            let text_rect = ui
+                .add(egui::Label::new(format!("Arc {:?}", k.data())).wrap(false))
                 .rect;
             if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
                 ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);

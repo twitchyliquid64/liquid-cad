@@ -24,19 +24,22 @@ impl Default for App {
 
         let p1 = drawing
             .features
-            .insert(Feature::Point(FeatureMeta::default(), -88., 0.));
+            .insert(Feature::Point(FeatureMeta::default(), -50., 0.));
         let p2 = drawing
             .features
             .insert(Feature::Point(FeatureMeta::default(), 0., 0.));
         let p3 = drawing
             .features
-            .insert(Feature::Point(FeatureMeta::default(), 88., 0.));
+            .insert(Feature::Point(FeatureMeta::default(), 50., -50.));
+        // drawing
+        //     .features
+        //     .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
+        // drawing
+        //     .features
+        //     .insert(Feature::LineSegment(FeatureMeta::default(), p2, p3));
         drawing
             .features
-            .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
-        drawing
-            .features
-            .insert(Feature::LineSegment(FeatureMeta::default(), p2, p3));
+            .insert(Feature::Arc(FeatureMeta::default(), p1, p2, p3));
 
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();
