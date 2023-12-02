@@ -8,6 +8,43 @@ pub fn sigmoid(v: f64) -> f64 {
     1.0 / (1.0 + f64::exp(-v))
 }
 
+/// Hyperparameters for the DumbassSolver.
+#[derive(Clone, Debug)]
+pub struct DumbassSolverParams {
+    /// The maximum number of iterations.
+    pub max_iter: usize,
+    /// A multiplier for how much the jacobian contributes to
+    /// the adjustment.
+    pub step_mul: f64,
+
+    /// How much to increase the learning rate by if the gradient
+    /// we are descending hasn't changed shape.
+    pub momentum_step: f64,
+    /// A divisor for the momentum increment, itself incremented every
+    /// time the curve we are descending changes shape (i.e. we overshot
+    /// the solution).
+    pub momentum_div: usize,
+    /// The initial value for momentum.
+    pub momentum_windup: f64,
+
+    /// The average error for all residuals at which we terminate iterations
+    /// and consider the system solved.
+    pub terminate_at_avg_fx: f64,
+}
+
+impl Default for DumbassSolverParams {
+    fn default() -> Self {
+        Self {
+            max_iter: 450,
+            step_mul: -0.99,
+            momentum_step: 0.5,
+            momentum_div: 2,
+            momentum_windup: 0.15,
+            terminate_at_avg_fx: 0.0005,
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct DumbassSolverState {
     resolved: HashMap<Variable, Concrete>,
@@ -77,16 +114,31 @@ impl<'a> Resolver for VarResolver<'a> {
 /// zero if the constraint holds). We then update the values based on how
 /// wrong the residuals were: in the right direction and the right amount.
 ///
-/// Whats the right direction and right amount? thats based on the jacobian
-/// of the residual function with respect to each variable we are trying to solve for.
-/// Don't be scared by the 'jacobian' term, it basically just means the derivative
-/// with respect to a variable. So basically it represents the 'slope' of how much
-/// the correctness of the function contributes to some variable, so thats where
-/// we get our 'right direction' and 'right amount' information.
+/// Whats the right direction and right amount? thats based on the
+/// jacobian of the residual function with respect to each variable we are
+/// trying to solve for. Don't be scared by the 'jacobian' term, it
+/// basically just means the derivative with respect to a variable. So
+/// it represents the 'slope' of how much the correctness of the function
+/// contributes to some variable, so thats where we get our
+/// 'right direction' and 'right amount' information.
 ///
 /// For instance, lets say our residual function is: 5 - x (AKA the
 /// correct solution for x is 5). The derivative with respect to
 /// x is just: -x. Thats all that means.
+///
+/// So yeah, we work out the jacobian of the residual functions with the
+/// current guesses, and we work out the error of the residual functions.
+/// We multiply those together with some system of multipliers, adjust them using
+/// softmax so the value is fairly distributed across the residuals, and add that
+/// to the current guesses to get the guesses for the next iteration.
+///
+/// In machine-learning land this system of multipliers is called the
+/// 'learning rate'. If the jacobians are not oscillating around some
+/// local minima, we increment it slightly so we learn faster and hence
+/// reach the solution sooner - the kids call this 'adaptive'. If we do
+/// end up racing past a solution (as determined by the sign of any jacobian
+/// changing), we increment a divisor for our learning rate increment
+/// so we build up momentum slower.
 ///
 /// Anyway, my intent in calling this a dumbass solver was to
 /// try and get across that I have no idea what I'm doing, and
@@ -96,11 +148,9 @@ impl<'a> Resolver for VarResolver<'a> {
 ///
 /// Where possible, I will always tradeoff being understandable
 /// and practical over being clever and efficient.
-///
-/// I have a few random multipliers in here, that I thought would
-/// help convergence at the time. Idk if they actually do.
 #[derive(Clone, Debug)]
 pub struct DumbassSolver {
+    params: DumbassSolverParams,
     iteration: usize,
 
     // guess of each variable
@@ -119,14 +169,8 @@ pub struct DumbassSolver {
 }
 
 impl DumbassSolver {
-    const MAX_ITER: usize = 450;
-
-    const MOMENTUM_STEP: f64 = 0.65;
-    const MOMENTUM_DIV: usize = 4;
-
-    const AVG_FX_TOLERANCE: f64 = 0.0005;
-
     pub fn new(st: &DumbassSolverState) -> Self {
+        let params = DumbassSolverParams::default();
         let iteration = 0;
 
         Self {
@@ -135,12 +179,14 @@ impl DumbassSolver {
             fx: DVector::from_element(st.residuals.len(), 0.0),
             j: DMatrix::from_element(st.residuals.len(), st.vars.len(), 0.0),
             adj_sign_hash: None,
-            momentum: 0.0,
-            momentum_div: 0,
+            momentum: params.momentum_windup,
+            momentum_div: params.momentum_div,
+            params,
         }
     }
 
     pub fn new_with_initials(st: &DumbassSolverState, initials: Vec<f64>) -> Self {
+        let params = DumbassSolverParams::default();
         let iteration = 0;
 
         assert!(st.vars.len() == initials.len());
@@ -150,8 +196,9 @@ impl DumbassSolver {
             fx: DVector::from_element(st.residuals.len(), 0.0),
             j: DMatrix::from_element(st.residuals.len(), st.vars.len(), 0.0),
             adj_sign_hash: None,
-            momentum: 0.0,
-            momentum_div: 0,
+            momentum: params.momentum_windup,
+            momentum_div: params.momentum_div,
+            params,
         }
     }
 
@@ -171,9 +218,6 @@ impl DumbassSolver {
                     Concrete::Float(f) => f as f64,
                     Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
-                // if v.is_nan() {
-                //     v = 0.0;
-                // }
                 j[(row, col)] = v;
             }
         }
@@ -210,7 +254,7 @@ impl DumbassSolver {
         // );
 
         // Compute adjustment
-        let adjustment = (fx.transpose() * &*j).transpose() * -1.0;
+        let adjustment = (fx.transpose() * &*j).transpose() * self.params.step_mul;
 
         // Compute sign hash
         let sign_hash = adjustment.iter().enumerate().fold(0, |acc, (i, x)| {
@@ -224,8 +268,7 @@ impl DumbassSolver {
         // Compute momentum - revert accumulation if any jacobian changed sign
         if let Some(last_sign_hash) = self.adj_sign_hash {
             if last_sign_hash == sign_hash {
-                self.momentum += DumbassSolver::MOMENTUM_STEP
-                    / (DumbassSolver::MOMENTUM_DIV + self.momentum_div) as f64;
+                self.momentum += self.params.momentum_step / self.momentum_div as f64;
             } else {
                 self.momentum = 0.0;
                 self.momentum_div += 1;
@@ -241,12 +284,12 @@ impl DumbassSolver {
         &mut self,
         st: &mut DumbassSolverState,
     ) -> Result<Vec<(Variable, f64)>, (f64, Vec<(Variable, f64)>)> {
-        let mut total_fx = 999999.0;
-        while self.iteration < DumbassSolver::MAX_ITER {
+        let mut total_fx = f64::MAX;
+        while self.iteration < self.params.max_iter {
             self.solve_step(st);
 
             total_fx = self.fx.iter().fold(0.0, |acc, x| acc + x.abs());
-            if (total_fx.abs() / st.vars.len() as f64) < DumbassSolver::AVG_FX_TOLERANCE {
+            if (total_fx.abs() / st.vars.len() as f64) < self.params.terminate_at_avg_fx {
                 break;
             }
             self.iteration += 1;
@@ -258,7 +301,7 @@ impl DumbassSolver {
             .enumerate()
             .map(|(i, v)| (v.clone(), self.x[i]))
             .collect();
-        if self.iteration < DumbassSolver::MAX_ITER {
+        if self.iteration < self.params.max_iter {
             Ok(results)
         } else {
             Err((total_fx, results))
@@ -319,7 +362,7 @@ mod tests {
         solver.x[1] = 1.000;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 15);
+        assert!(solver.iteration <= 8);
         assert!(ret[0].1 < 0.1);
         let f = (ret[0].1 + ret[1].1).abs();
         assert!(f > 4.9 && f < 5.1); // trashy check but gets the point across.
@@ -330,7 +373,7 @@ mod tests {
         solver.x[1] = 1.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 15);
+        assert!(solver.iteration <= 8);
         // trashy check but gets the point across.
         assert!(ret[0].1 > 3.4 && ret[0].1 < 3.6);
         assert!(ret[1].1 > 3.4 && ret[1].1 < 3.6);
@@ -358,7 +401,7 @@ mod tests {
         solver.x[1] = 3.000;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 80);
+        assert!(solver.iteration < 50);
         assert!(ret[0].1 < 0.0001);
         assert!(solver.x[0] < 0.1);
     }
@@ -402,7 +445,7 @@ mod tests {
         solver.x[1] = 800.0;
         let ret = solver.solve(&mut state).unwrap();
 
-        assert!(solver.iteration < 50);
+        assert!(solver.iteration < 70);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
     }
