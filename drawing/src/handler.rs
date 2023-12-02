@@ -8,6 +8,7 @@ pub enum ToolResponse {
     SwitchToPointer,
     NewPoint(egui::Pos2),
     NewLineSegment(FeatureKey, FeatureKey),
+    NewArc(FeatureKey, FeatureKey),
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
@@ -53,6 +54,29 @@ impl Handler {
                 }
 
                 drawing.features.insert(l);
+            }
+
+            ToolResponse::NewArc(fk1, fk2) => {
+                let (f1, f2) = (
+                    drawing.features.get(fk1).unwrap(),
+                    drawing.features.get(fk2).unwrap(),
+                );
+                let (p1, p2) = match (f1, f2) {
+                    (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                        (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                    }
+                    _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                };
+                let mid = p1.lerp(p2, 0.5);
+
+                let mid_fk =
+                    drawing
+                        .features
+                        .insert(Feature::Point(FeatureMeta::default(), mid.x, mid.y));
+                let a = Feature::Arc(FeatureMeta::default(), fk1, mid_fk, fk2);
+                drawing.features.insert(a);
+
+                tools.clear();
             }
 
             ToolResponse::Delete(k) => {

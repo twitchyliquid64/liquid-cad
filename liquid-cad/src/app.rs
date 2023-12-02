@@ -17,10 +17,6 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         let mut drawing = drawing::Data::default();
-        // drawing.features.insert(drawing::Feature::Point(-88., -88.));
-        // drawing.features.insert(drawing::Feature::Point(188., -88.));
-        // drawing.features.insert(drawing::Feature::Point(188., 188.));
-        // drawing.features.insert(drawing::Feature::Point(-88., 188.));
 
         let p1 = drawing
             .features
@@ -31,15 +27,12 @@ impl Default for App {
         let p3 = drawing
             .features
             .insert(Feature::Point(FeatureMeta::default(), 50., -50.));
-        // drawing
-        //     .features
-        //     .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
-        // drawing
-        //     .features
-        //     .insert(Feature::LineSegment(FeatureMeta::default(), p2, p3));
         drawing
             .features
-            .insert(Feature::Arc(FeatureMeta::default(), p1, p2, p3));
+            .insert(Feature::LineSegment(FeatureMeta::default(), p2, p1));
+        drawing
+            .features
+            .insert(Feature::LineSegment(FeatureMeta::default(), p3, p2));
 
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();

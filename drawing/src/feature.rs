@@ -215,7 +215,6 @@ impl Feature {
                 };
                 let stroke = egui::Stroke::new(1.0, color);
 
-                use std::f32::consts::{PI, TAU};
                 let a = kurbo::Arc::from_svg_arc(&kurbo::SvgArc {
                     from: (start.x as f64, start.y as f64).into(),
                     to: (end.x as f64, end.y as f64).into(),
@@ -246,29 +245,6 @@ impl Feature {
                     painter.add(shape);
                     last = (p.x as f32, p.y as f32);
                 })
-
-                // let (diff_start, diff_end) = (start - center, end - center);
-                // let q1 = (diff_start.x * diff_start.x) + (diff_start.y * diff_start.y);
-                // let q2 = q1 + diff_start.x * diff_end.x + diff_start.y * diff_end.y;
-                // let k2 = (4.0 / 3.0) * ((2.0 * q1 * q2).sqrt() - q2)
-                //     / (diff_start.x * diff_end.y - diff_start.y * diff_end.x);
-
-                // let cp1 = egui::Pos2 {
-                //     x: center.x + diff_start.x - k2 * diff_start.y,
-                //     y: center.y + diff_start.y + k2 * diff_start.x,
-                // };
-                // let cp2 = egui::Pos2 {
-                //     x: center.x + diff_end.x + k2 * diff_end.y,
-                //     y: center.y + diff_end.y - k2 * diff_end.x,
-                // };
-
-                // let shape = egui::epaint::CubicBezierShape::from_points_stroke(
-                //     [start, cp1, cp2, end],
-                //     false,
-                //     egui::Color32::TRANSPARENT,
-                //     stroke,
-                // );
-                // painter.add(shape);
             }
         }
     }
