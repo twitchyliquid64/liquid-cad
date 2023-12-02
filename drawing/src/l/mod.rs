@@ -128,8 +128,6 @@ pub struct Arc {
 impl Arc {
     // returns the start angle & end angle
     pub fn angles(&self) -> (f32, f32) {
-        use std::f32::consts::PI;
-
         let d_start = self.start - self.center;
         let d_end = self.end - self.center;
 
@@ -137,13 +135,6 @@ impl Arc {
         let angle_end = f32::atan2(d_end.y, d_end.x);
 
         (angle_start, angle_end)
-    }
-
-    pub fn start_angle(&self) -> f32 {
-        self.angles().0
-    }
-    pub fn end_angle(&self) -> f32 {
-        self.angles().1
     }
 
     pub fn distance_to_point_sq(&self, point: &Pos2) -> f32 {
@@ -174,24 +165,5 @@ impl Arc {
 
             d_start.min(d_end).powi(2)
         }
-    }
-
-    pub fn control_points(&self) -> [Pos2; 2] {
-        let (diff_start, diff_end) = (self.start - self.center, self.end - self.center);
-        let q1 = (diff_start.x * diff_start.x) + (diff_start.y * diff_start.y);
-        let q2 = q1 + diff_start.x * diff_end.x + diff_start.y * diff_end.y;
-        let k2 = (4.0 / 3.0) * ((2.0 * q1 * q2).sqrt() - q2)
-            / (diff_start.x * diff_end.y - diff_start.y * diff_end.x);
-
-        [
-            egui::Pos2 {
-                x: self.center.x + diff_start.x - k2 * diff_start.y,
-                y: self.center.y + diff_start.y + k2 * diff_start.x,
-            },
-            egui::Pos2 {
-                x: self.center.x + diff_end.x + k2 * diff_end.y,
-                y: self.center.y + diff_end.y - k2 * diff_end.x,
-            },
-        ]
     }
 }
