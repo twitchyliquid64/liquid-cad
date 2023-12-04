@@ -231,7 +231,7 @@ impl<'a> Widget<'a> {
         changed: &mut bool,
         k: &ConstraintKey,
         d: &mut f32,
-        axis: &mut Option<Axis>,
+        aa_info: &mut Option<(Axis, bool)>,
         _ref_pt: &mut DimensionDisplay,
         meta: &mut ConstraintMeta,
     ) {
@@ -251,7 +251,7 @@ impl<'a> Widget<'a> {
                 *changed |= dv.changed();
             }
 
-            if *changed && *d < 0. && axis.is_none() {
+            if *changed && *d < 0. {
                 *d = 0.;
             }
 
@@ -265,19 +265,31 @@ impl<'a> Widget<'a> {
         ui.horizontal(|ui| {
             let r = ui.available_size();
 
-            match axis {
-                Some(a) => {
+            match aa_info {
+                Some((a, is_neg)) => {
                     let text_rect = ui.add(egui::Label::new("⏵ Cardinality").wrap(false)).rect;
                     ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
-                    match a {
-                        Axis::TopBottom => ui.label("+V"),
-                        Axis::LeftRight => ui.label("+H"),
-                    };
+                    let text_rect = match (a, &is_neg) {
+                        (Axis::TopBottom, false) => ui.label("+V"),
+                        (Axis::TopBottom, true) => ui.label("-V"),
+                        (Axis::LeftRight, false) => ui.label("+H"),
+                        (Axis::LeftRight, true) => ui.label("-H"),
+                    }
+                    .rect;
+                    ui.add_space(
+                        ui.spacing().interact_size.x + (ui.spacing().item_spacing.x * 7.0 / 6.0)
+                            - text_rect.width(),
+                    );
+
+                    if ui.button("invert").clicked() {
+                        *is_neg = !*is_neg;
+                        *changed = true;
+                    }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                         if ui.button("⊗").clicked() {
-                            *axis = None;
+                            *aa_info = None;
                             *changed = true;
                         }
                     });
@@ -290,12 +302,20 @@ impl<'a> Widget<'a> {
                         .rect;
                     ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
+                    if ui.button("-V").clicked() {
+                        *aa_info = Some((Axis::TopBottom, true));
+                        *changed = true;
+                    }
                     if ui.button("+V").clicked() {
-                        *axis = Some(Axis::TopBottom);
+                        *aa_info = Some((Axis::TopBottom, false));
+                        *changed = true;
+                    }
+                    if ui.button("-H").clicked() {
+                        *aa_info = Some((Axis::LeftRight, true));
                         *changed = true;
                     }
                     if ui.button("+H").clicked() {
-                        *axis = Some(Axis::LeftRight);
+                        *aa_info = Some((Axis::LeftRight, false));
                         *changed = true;
                     }
                 }

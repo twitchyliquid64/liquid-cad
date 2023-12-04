@@ -41,7 +41,7 @@ pub enum Constraint {
         ConstraintMeta,
         FeatureKey,
         f32,
-        Option<Axis>,
+        Option<(Axis, bool)>, // true = negative relationship
         DimensionDisplay,
     ),
     LineAlongCardinal(ConstraintMeta, FeatureKey, Axis),
@@ -169,7 +169,7 @@ impl Constraint {
                 };
             }
 
-            LineLength(_, k, d, axis, dd) => {
+            LineLength(_, k, d, aa_info, dd) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let (a, b) = match (
                         drawing.features.get(*f1).unwrap(),
@@ -184,10 +184,12 @@ impl Constraint {
                     crate::l::draw::DimensionLengthOverlay {
                         a,
                         b,
-                        val: &match axis {
+                        val: &match aa_info {
                             None => format!("{:.3}", d),
-                            Some(Axis::LeftRight) => format!("H{:+.3}", d),
-                            Some(Axis::TopBottom) => format!("V{:+.3}", d),
+                            Some((Axis::LeftRight, false)) => format!("H+{:.3}", d),
+                            Some((Axis::LeftRight, true)) => format!("H-{:.3}", d),
+                            Some((Axis::TopBottom, false)) => format!("V+{:.3}", d),
+                            Some((Axis::TopBottom, true)) => format!("V+{:.3}", d),
                         },
                         reference: egui::Vec2::new(dd.x, dd.y),
                         hovered: params.hovered,
@@ -250,7 +252,7 @@ impl Constraint {
                     ),
                 ]
             }
-            LineLength(_, k, d, axis, _) => {
+            LineLength(_, k, d, aa_info, _) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let td = &drawing.terms.get_feature_term(*k, TermType::ScalarDistance);
                     let (x1, y1, x2, y2) = (
@@ -260,8 +262,8 @@ impl Constraint {
                         &drawing.terms.get_feature_term(*f2, TermType::PositionY),
                     );
 
-                    match axis {
-                        Some(Axis::LeftRight) => vec![
+                    match aa_info {
+                        Some((Axis::LeftRight, is_neg)) => vec![
                             Expression::Equal(
                                 Box::new(Expression::Variable(td.into())),
                                 Box::new(Expression::Rational(
@@ -271,17 +273,24 @@ impl Constraint {
                             ),
                             Expression::Equal(
                                 Box::new(Expression::Variable(td.into())),
-                                Box::new(Expression::Difference(
-                                    Box::new(Expression::Variable(x1.into())),
-                                    Box::new(Expression::Variable(x2.into())),
-                                )),
+                                Box::new(if *is_neg {
+                                    Expression::Difference(
+                                        Box::new(Expression::Variable(x1.into())),
+                                        Box::new(Expression::Variable(x2.into())),
+                                    )
+                                } else {
+                                    Expression::Difference(
+                                        Box::new(Expression::Variable(x2.into())),
+                                        Box::new(Expression::Variable(x1.into())),
+                                    )
+                                }),
                             ),
                             Expression::Equal(
                                 Box::new(Expression::Variable(y2.into())),
                                 Box::new(Expression::Variable(y1.into())),
                             ),
                         ],
-                        Some(Axis::TopBottom) => vec![
+                        Some((Axis::TopBottom, is_neg)) => vec![
                             Expression::Equal(
                                 Box::new(Expression::Variable(td.into())),
                                 Box::new(Expression::Rational(
@@ -291,10 +300,17 @@ impl Constraint {
                             ),
                             Expression::Equal(
                                 Box::new(Expression::Variable(td.into())),
-                                Box::new(Expression::Difference(
-                                    Box::new(Expression::Variable(y1.into())),
-                                    Box::new(Expression::Variable(y2.into())),
-                                )),
+                                Box::new(if *is_neg {
+                                    Expression::Difference(
+                                        Box::new(Expression::Variable(y1.into())),
+                                        Box::new(Expression::Variable(y2.into())),
+                                    )
+                                } else {
+                                    Expression::Difference(
+                                        Box::new(Expression::Variable(y2.into())),
+                                        Box::new(Expression::Variable(y1.into())),
+                                    )
+                                }),
                             ),
                             Expression::Equal(
                                 Box::new(Expression::Variable(x2.into())),
