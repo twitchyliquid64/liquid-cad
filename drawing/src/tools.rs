@@ -296,7 +296,7 @@ impl Tool {
         match self {
             Tool::Point => Some("P"),
             Tool::Line(_) => Some("L"),
-            Tool::Arc(_) => Some("A"),
+            Tool::Arc(_) => Some("R"),
             Tool::Circle(_) => None,
             Tool::Fixed => Some("S"),
             Tool::Dimension => Some("D"),
@@ -943,7 +943,7 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d, v, h, i2, e, a) = ui.input(|i| {
+            let (l, p, s, d, v, h, i2, e, r) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
@@ -953,10 +953,10 @@ impl Toolbar {
                     i.key_pressed(egui::Key::H),
                     i.key_pressed(egui::Key::I),
                     i.key_pressed(egui::Key::E),
-                    i.key_pressed(egui::Key::A),
+                    i.key_pressed(egui::Key::R),
                 )
             });
-            match (l, p, s, d, v, h, i2, e, a) {
+            match (l, p, s, d, v, h, i2, e, r) {
                 (true, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);

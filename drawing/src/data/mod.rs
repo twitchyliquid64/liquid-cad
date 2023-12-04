@@ -354,9 +354,17 @@ impl Data {
     /// other features which depend on a removed feature. A solve occurs
     /// if a feature was deleted, to apply any side-effects of the delete.
     pub fn delete_feature(&mut self, k: FeatureKey) -> bool {
+        let out = self.delete_feature_impl(k);
+        if out {
+            self.solve_and_apply();
+        }
+        out
+    }
+
+    fn delete_feature_impl(&mut self, k: FeatureKey) -> bool {
         self.selected_map.remove(&k);
 
-        let out = match self.features.remove(k) {
+        match self.features.remove(k) {
             Some(_v) => {
                 // Find and remove any constraints dependent on what we just removed.
                 let dependent_constraints = self.constraints.by_feature(&k);
@@ -386,19 +394,13 @@ impl Data {
 
                 self.terms.delete_feature(k);
                 for k in to_delete {
-                    self.delete_feature(k);
+                    self.delete_feature_impl(k);
                 }
 
                 true
             }
             None => false,
-        };
-
-        if out {
-            self.solve_and_apply();
         }
-
-        out
     }
 
     /// Deletes the currently-selected features.
