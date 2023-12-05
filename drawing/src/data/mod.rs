@@ -735,4 +735,176 @@ mod tests {
             Some(Feature::Point(FeatureMeta::default(), -15.0, 0.0,)).as_ref()
         );
     }
+
+    #[test]
+    fn solve_eqidistant() {
+        //        p1
+        // d=14 /   \ d=14
+        //     /     \
+        //   p0       p2
+        // (-5, 0)  (5, 0)
+
+        let mut data = Data::default();
+        data.load(
+            vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: -5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 10.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![2, 1],
+                    ..SerializedFeature::default()
+                },
+            ],
+            vec![
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (-5.0, 0.0),
+                    feature_idx: vec![0],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (5.0, 0.0),
+                    feature_idx: vec![2],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![3],
+                    amt: 14.0,
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![4],
+                    amt: 14.0,
+                    ..SerializedConstraint::default()
+                },
+            ],
+        )
+        .unwrap();
+
+        let point = data.features_iter().map(|(_fk, f)| f).nth(1).unwrap();
+        assert!(matches!(point, Feature::Point(_, x, y) if x.abs() < 0.005 && y > &11.0 ));
+    }
+
+    #[test]
+    fn solve_parallel() {
+        //        p1 (3, 4)  p3
+        //      /           /
+        //     /           /
+        //   p0          p2
+        // (0, 0)    (10, 0)
+
+        let mut data = Data::default();
+        data.load(
+            vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 3.0,
+                    y: 4.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 10.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![2, 3],
+                    ..SerializedFeature::default()
+                },
+            ],
+            vec![
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (0.0, 0.0),
+                    feature_idx: vec![0],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (3.0, 4.0),
+                    feature_idx: vec![1],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (10.0, 0.0),
+                    feature_idx: vec![2],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![4],
+                    amt: 5.0,
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![5],
+                    amt: 5.0,
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "lines_parallel".to_string(),
+                    feature_idx: vec![4, 5],
+                    ..SerializedConstraint::default()
+                },
+            ],
+        )
+        .unwrap();
+
+        let point = data.features_iter().map(|(_fk, f)| f).nth(3).unwrap();
+        assert!(
+            matches!(point, Feature::Point(_, x, y) if (13.0 - x).abs() < 0.005 && (4.0 - y).abs() < 0.005 )
+        );
+    }
 }

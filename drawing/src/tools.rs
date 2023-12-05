@@ -262,6 +262,30 @@ fn circle_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn parallel_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    painter.line_segment(
+        [
+            c + egui::Vec2 { x: 8.5, y: -4.5 },
+            c + egui::Vec2 { x: -8.5, y: 4.5 },
+        ],
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::WHITE,
+        },
+    );
+    painter.line_segment(
+        [
+            c + egui::Vec2 { x: 8.5, y: -4.5 } + egui::Vec2 { x: 0., y: -2.5 },
+            c + egui::Vec2 { x: -8.5, y: 4.5 } + egui::Vec2 { x: 0., y: -2.5 },
+        ],
+        egui::Stroke {
+            width: TOOL_ICON_STROKE,
+            color: egui::Color32::WHITE,
+        },
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -275,6 +299,7 @@ enum Tool {
     Vertical,
     Lerp(Option<FeatureKey>),
     Equal(Option<FeatureKey>),
+    Parallel(Option<FeatureKey>),
 }
 
 impl Tool {
@@ -290,6 +315,7 @@ impl Tool {
             Tool::Vertical => "Constrain vertical",
             Tool::Lerp(_) => "Constrain point along line",
             Tool::Equal(_) => "Constrain lengths as equal",
+            Tool::Parallel(_) => "Constrain lines as parallel",
         }
     }
     pub fn key(&self) -> Option<&'static str> {
@@ -304,6 +330,7 @@ impl Tool {
             Tool::Vertical => Some("V"),
             Tool::Lerp(_) => Some("I"),
             Tool::Equal(_) => Some("E"),
+            Tool::Parallel(_) => None,
         }
     }
     pub fn long_tooltop(&self) -> Option<&'static str> {
@@ -318,6 +345,7 @@ impl Tool {
             Tool::Vertical => Some("Constrains a line to be vertical."),
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
             Tool::Equal(_) => Some("Constrains a line to be equal in length to another line."),
+            Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nClick on the first line, and then the second line to create this constraint."),
         }
     }
 
@@ -333,6 +361,7 @@ impl Tool {
             (Tool::Vertical, Tool::Vertical) => true,
             (Tool::Lerp(_), Tool::Lerp(_)) => true,
             (Tool::Equal(_), Tool::Equal(_)) => true,
+            (Tool::Parallel(_), Tool::Parallel(_)) => true,
             _ => false,
         }
     }
@@ -349,6 +378,7 @@ impl Tool {
             Tool::Vertical,
             Tool::Lerp(None),
             Tool::Equal(None),
+            Tool::Parallel(None),
         ]
     }
 
@@ -722,6 +752,64 @@ impl Tool {
 
                 None
             }
+
+            Tool::Parallel(l1) => {
+                let c = match (hover, &l1, response.clicked()) {
+                    // No first line, clicked on a line
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        },
+                        None,
+                        true,
+                    ) => {
+                        *l1 = Some(*k);
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first line, clicked on a line
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        },
+                        Some(starting_line),
+                        true,
+                    ) => {
+                        let starting_line = starting_line.clone();
+                        *l1 = None;
+                        Some(ToolResponse::NewParallelLine(starting_line, *k))
+                    }
+                    (Hover::None, Some(_), true) => {
+                        *l1 = None;
+                        Some(ToolResponse::Handled)
+                    }
+                    // No first line, clicked empty space or point
+                    (Hover::None, None, true)
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::Point(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    ) => Some(ToolResponse::SwitchToPointer),
+
+                    _ => None,
+                };
+                if c.is_some() {
+                    return c;
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+
+                None
+            }
         }
     }
 
@@ -864,6 +952,17 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("constrain equal: click 2nd line");
             }
+
+            Tool::Parallel(None) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain parallel: click 1st line");
+            }
+            Tool::Parallel(Some(_)) => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain parallel: click 2nd line");
+            }
         }
     }
 
@@ -879,6 +978,7 @@ impl Tool {
             Tool::Vertical => vertical_tool_icon,
             Tool::Lerp(_) => lerp_tool_icon,
             Tool::Equal(_) => equal_tool_icon,
+            Tool::Parallel(_) => parallel_tool_icon,
         }
     }
 

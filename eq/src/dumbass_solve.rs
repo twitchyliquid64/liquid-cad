@@ -214,10 +214,16 @@ impl DumbassSolver {
         // Compute jacobian
         for (row, jacs) in st.jacobians.iter().enumerate() {
             for (col, j_fn) in jacs.iter().enumerate() {
-                let v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
+                let mut v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
                     Concrete::Float(f) => f as f64,
                     Concrete::Rational(r) => r.to_f64().unwrap(),
                 };
+                // TODO: These conditionals are not quite right
+                if v.is_nan() {
+                    v = 0.;
+                } else if v.is_infinite() {
+                    v = v.signum();
+                }
                 j[(row, col)] = v;
             }
         }
@@ -238,16 +244,18 @@ impl DumbassSolver {
 
         // Compute residuals
         for (row, exp) in st.residuals.iter().enumerate() {
-            let res = match exp.evaluate(&mut resolver, 0).unwrap() {
+            let mut res = match exp.evaluate(&mut resolver, 0).unwrap() {
                 Concrete::Float(f) => f as f64,
                 Concrete::Rational(r) => r.to_f64().unwrap(),
             };
-            fx[row] = res;
+            if res.is_nan() {
+                res = f64::INFINITY;
+            }
+            fx[row] = res.clamp(-99999.0, 99999.0);
         }
 
         // println!(
-        //     "mul={}\nx:{}j:{}fx:{}",
-        //     DumbassSolver::apply_multiplier(self.iteration),
+        //     "x:{}j:{}fx:{}",
         //     x,
         //     j,
         //     fx

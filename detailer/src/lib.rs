@@ -179,6 +179,14 @@ impl<'a> Widget<'a> {
                                                 &ck,
                                             )
                                         }
+                                        Some(Constraint::LinesParallel(..)) => {
+                                            Widget::show_constraint_lines_parallel(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                            )
+                                        }
                                         None => {}
                                     });
                                 }
@@ -405,6 +413,26 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
 
             let text_rect = ui.add(egui::Label::new("Equal length").wrap(false)).rect;
+            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_lines_parallel(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        _changed: &mut bool,
+        k: &ConstraintKey,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+
+            let text_rect = ui.add(egui::Label::new("Parallel").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {

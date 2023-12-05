@@ -64,33 +64,42 @@ pub enum Constraint {
     LineAlongCardinal(ConstraintMeta, FeatureKey, Axis),
     PointLerpLine(ConstraintMeta, FeatureKey, FeatureKey, f32),
     LineLengthsEqual(ConstraintMeta, FeatureKey, FeatureKey),
+    LinesParallel(ConstraintMeta, FeatureKey, FeatureKey),
 }
 
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match self {
             Fixed(_, fk, ..) => vec![fk.clone()],
             LineLength(_, fk, ..) => vec![fk.clone()],
             LineAlongCardinal(_, fk, ..) => vec![fk.clone()],
             PointLerpLine(_, l_fk, p_fk, _) => vec![l_fk.clone(), p_fk.clone()],
             LineLengthsEqual(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
+            LinesParallel(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
             LineLength(..) => matches!(ft, &Feature::LineSegment(..)),
             LineAlongCardinal(..) => matches!(ft, &Feature::LineSegment(..)),
             PointLerpLine(..) => matches!(ft, &Feature::LineSegment(..)),
             LineLengthsEqual(..) => matches!(ft, &Feature::LineSegment(..)),
+            LinesParallel(..) => matches!(ft, &Feature::LineSegment(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
             (LineLength(_, f1, ..), LineLength(_, f2, ..)) => f1 == f2,
@@ -103,6 +112,9 @@ impl Constraint {
             (LineLengthsEqual(_, l11, l12, ..), LineLengthsEqual(_, l21, l22, ..)) => {
                 (l11 == l21 && l12 == l22) || (l11 == l22 && l12 == l21)
             }
+            (LinesParallel(_, l11, l12, ..), LinesParallel(_, l21, l22, ..)) => {
+                (l11 == l21 && l12 == l22) || (l11 == l22 && l12 == l21)
+            }
             _ => false,
         }
     }
@@ -113,7 +125,9 @@ impl Constraint {
         hp: egui::Pos2,
         vp: &crate::Viewport,
     ) -> Option<f32> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match self {
             Fixed(..) => None,
             LineLength(_, fk, _, _, dd) => {
@@ -160,6 +174,7 @@ impl Constraint {
             }
             PointLerpLine(..) => None,
             LineLengthsEqual(..) => None,
+            LinesParallel(..) => None,
         }
     }
 
@@ -170,7 +185,9 @@ impl Constraint {
         params: &crate::PaintParams,
         painter: &egui::Painter,
     ) {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match self {
             Fixed(_, k, _, _) => {
                 if let Some(Feature::Point(_, x, y)) = drawing.features.get(*k) {
@@ -241,11 +258,14 @@ impl Constraint {
 
             PointLerpLine(..) => {}
             LineLengthsEqual(..) => {}
+            LinesParallel(..) => {}
         }
     }
 
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
-        use Constraint::{Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, PointLerpLine};
+        use Constraint::{
+            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+        };
         match self {
             Fixed(_, k, x, y) => {
                 let (tx, ty) = (
@@ -472,6 +492,55 @@ impl Constraint {
                     unreachable!();
                 }
             }
+
+            LinesParallel(_, l1, l2, ..) => {
+                if let (
+                    Some(Feature::LineSegment(_, p11, p12)),
+                    Some(Feature::LineSegment(_, p21, p22)),
+                ) = (drawing.features.get(*l1), drawing.features.get(*l2))
+                {
+                    let (x11, y11, x12, y12) = (
+                        &drawing.terms.get_feature_term(*p11, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*p11, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*p12, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*p12, TermType::PositionY),
+                    );
+                    let (x21, y21, x22, y22) = (
+                        &drawing.terms.get_feature_term(*p21, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*p21, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*p22, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*p22, TermType::PositionY),
+                    );
+
+                    vec![Expression::Equal(
+                        Box::new(Expression::Integer(0.into())),
+                        Box::new(Expression::Difference(
+                            Box::new(Expression::Product(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(x12.into())),
+                                    Box::new(Expression::Variable(x11.into())),
+                                )),
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(y22.into())),
+                                    Box::new(Expression::Variable(y21.into())),
+                                )),
+                            )),
+                            Box::new(Expression::Product(
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(y12.into())),
+                                    Box::new(Expression::Variable(y11.into())),
+                                )),
+                                Box::new(Expression::Difference(
+                                    Box::new(Expression::Variable(x22.into())),
+                                    Box::new(Expression::Variable(x21.into())),
+                                )),
+                            )),
+                        )),
+                    )]
+                } else {
+                    unreachable!();
+                }
+            }
         }
     }
 
@@ -530,6 +599,18 @@ impl Constraint {
 
                 Ok(SerializedConstraint {
                     kind: "line_lengths_equal".to_string(),
+                    meta: meta.clone(),
+                    feature_idx: vec![*fk1_idx, *fk2_idx],
+                    ..SerializedConstraint::default()
+                })
+            }
+
+            Constraint::LinesParallel(meta, fk1, fk2) => {
+                let (fk1_idx, fk2_idx) =
+                    (fk_to_idx.get(fk1).ok_or(())?, fk_to_idx.get(fk2).ok_or(())?);
+
+                Ok(SerializedConstraint {
+                    kind: "lines_parallel".to_string(),
                     meta: meta.clone(),
                     feature_idx: vec![*fk1_idx, *fk2_idx],
                     ..SerializedConstraint::default()
@@ -604,6 +685,16 @@ impl Constraint {
                     return Err(());
                 }
                 Ok(Self::LineLengthsEqual(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                ))
+            }
+            "lines_parallel" => {
+                if sc.feature_idx.len() < 2 {
+                    return Err(());
+                }
+                Ok(Self::LinesParallel(
                     sc.meta,
                     *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
                     *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
@@ -719,6 +810,16 @@ mod tests {
                 ..SerializedConstraint::default()
             }),
         );
+        assert_eq!(
+            Constraint::LinesParallel(ConstraintMeta::default(), point_key, point_key,)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "lines_parallel".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42, 42],
+                ..SerializedConstraint::default()
+            }),
+        );
     }
 
     #[test]
@@ -774,6 +875,6 @@ mod tests {
             ),
         );
 
-        // TODO: PointLerpLine, LineLengthsEqual
+        // TODO: PointLerpLine, LineLengthsEqual, LinesParallel
     }
 }

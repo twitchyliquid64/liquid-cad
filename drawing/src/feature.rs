@@ -226,7 +226,7 @@ impl Feature {
                 };
                 let stroke = egui::Stroke::new(1.0, color);
 
-                let a = kurbo::Arc::from_svg_arc(&kurbo::SvgArc {
+                if let Some(a) = kurbo::Arc::from_svg_arc(&kurbo::SvgArc {
                     from: (start.x as f64, start.y as f64).into(),
                     to: (end.x as f64, end.y as f64).into(),
                     radii: r.into(),
@@ -237,25 +237,24 @@ impl Feature {
                         let dcross = d_start.x * d_end.y - d_end.x * d_start.y;
                         dcross < 0.0
                     },
-                })
-                .unwrap();
-
-                let mut last = (start.x, start.y);
-                a.to_cubic_beziers(0.1, |p1, p2, p| {
-                    let shape = egui::epaint::CubicBezierShape::from_points_stroke(
-                        [
-                            last.into(),
-                            (p1.x as f32, p1.y as f32).into(),
-                            (p2.x as f32, p2.y as f32).into(),
-                            (p.x as f32, p.y as f32).into(),
-                        ],
-                        false,
-                        egui::Color32::TRANSPARENT,
-                        stroke,
-                    );
-                    painter.add(shape);
-                    last = (p.x as f32, p.y as f32);
-                })
+                }) {
+                    let mut last = (start.x, start.y);
+                    a.to_cubic_beziers(0.1, |p1, p2, p| {
+                        let shape = egui::epaint::CubicBezierShape::from_points_stroke(
+                            [
+                                last.into(),
+                                (p1.x as f32, p1.y as f32).into(),
+                                (p2.x as f32, p2.y as f32).into(),
+                                (p.x as f32, p.y as f32).into(),
+                            ],
+                            false,
+                            egui::Color32::TRANSPARENT,
+                            stroke,
+                        );
+                        painter.add(shape);
+                        last = (p.x as f32, p.y as f32);
+                    })
+                }
             }
         }
     }
