@@ -3,11 +3,9 @@ use crate::{Constraint, ConstraintKey};
 use slotmap::HopSlotMap;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct ConstraintData {
     constraints: HopSlotMap<ConstraintKey, Constraint>,
-
-    #[serde(skip)]
     by_feature: HashMap<FeatureKey, HashSet<ConstraintKey>>,
 }
 

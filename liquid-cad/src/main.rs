@@ -9,7 +9,11 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 220.0]),
+            .with_min_inner_size([300.0, 220.0])
+            .with_app_id("liquid CAD")
+            .with_title("liquid CAD"),
+        follow_system_theme: false,
+        default_theme: eframe::Theme::Dark,
         ..Default::default()
     };
     eframe::run_native(
@@ -25,7 +29,11 @@ fn main() {
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-    let web_options = eframe::WebOptions::default();
+    let web_options = eframe::WebOptions {
+        follow_system_theme: false,
+        default_theme: eframe::Theme::Dark,
+        ..eframe::WebOptions::default()
+    };
 
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()

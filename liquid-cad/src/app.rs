@@ -4,8 +4,8 @@ use drawing::{self, Feature, FeatureMeta};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
+    #[serde(skip)]
     drawing: drawing::Data,
-
     #[serde(skip)]
     handler: drawing::Handler,
     #[serde(skip)]
@@ -50,19 +50,30 @@ impl Default for App {
 
 impl App {
     /// Called once before the first frame.
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        // if let Some(storage) = cc.storage {
-        //     return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        // }
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let mut app = Self::default();
 
-        Default::default()
+        if let Some(storage) = cc.storage {
+            if let Some(saved) = eframe::get_value::<(
+                Vec<drawing::SerializedFeature>,
+                Vec<drawing::SerializedConstraint>,
+            )>(storage, eframe::APP_KEY)
+            {
+                if app.drawing.load(saved.0, saved.1).err().is_some() {
+                    println!("Failed to load diagram from storage");
+                }
+            }
+        }
+
+        app
     }
 }
 
 impl eframe::App for App {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+        let (features, constraints) = self.drawing.serialize();
+        eframe::set_value(storage, eframe::APP_KEY, &(features, constraints));
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
@@ -84,8 +95,6 @@ impl eframe::App for App {
                     });
                     ui.add_space(16.0);
                 }
-
-                egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });
 

@@ -33,11 +33,8 @@ impl Handler {
                 let pos = drawing.vp.screen_to_point(pos);
                 let p = Feature::Point(FeatureMeta::default(), pos.x, pos.y);
 
-                // Make sure it doesnt already exist
-                for v in drawing.features.values() {
-                    if v == &p {
-                        return;
-                    }
+                if drawing.feature_exists(&p) {
+                    return;
                 }
 
                 drawing.features.insert(p);
@@ -46,11 +43,8 @@ impl Handler {
             ToolResponse::NewLineSegment(p1, p2) => {
                 let l = Feature::LineSegment(FeatureMeta::default(), p2, p1);
 
-                // Make sure it doesnt already exist
-                for v in drawing.features.values() {
-                    if v == &l {
-                        return;
-                    }
+                if drawing.feature_exists(&l) {
+                    return;
                 }
 
                 drawing.features.insert(l);

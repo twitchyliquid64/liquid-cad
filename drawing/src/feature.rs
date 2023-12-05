@@ -1,5 +1,6 @@
 use super::{Data, PaintParams, Viewport};
 use crate::l::{Arc, LineSegment};
+use std::collections::HashMap;
 
 slotmap::new_key_type! {
     pub struct FeatureKey;
@@ -12,7 +13,17 @@ pub struct FeatureMeta {
     pub construction: bool,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SerializedFeature {
+    pub kind: String,
+    pub meta: FeatureMeta,
+    pub using_idx: Vec<usize>,
+
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Clone)]
 pub enum Feature {
     Point(FeatureMeta, f32, f32),
     LineSegment(FeatureMeta, FeatureKey, FeatureKey),
@@ -247,5 +258,181 @@ impl Feature {
                 })
             }
         }
+    }
+
+    /// Serialize returns a structure suitable for serialization to disk. Any point
+    /// which maybe referenced from the current feature must be present in fk_to_idx.
+    pub fn serialize(
+        &self,
+        fk_to_idx: &HashMap<FeatureKey, usize>,
+    ) -> Result<SerializedFeature, ()> {
+        match self {
+            Feature::Point(meta, x, y) => Ok(SerializedFeature {
+                kind: "pt".to_string(),
+                meta: meta.clone(),
+                using_idx: vec![],
+                x: *x,
+                y: *y,
+            }),
+
+            Feature::LineSegment(meta, p1, p2) => {
+                let (p1_idx, p2_idx) = (fk_to_idx.get(p1).ok_or(())?, fk_to_idx.get(p2).ok_or(())?);
+
+                Ok(SerializedFeature {
+                    kind: "line".to_string(),
+                    meta: meta.clone(),
+                    using_idx: vec![*p1_idx, *p2_idx],
+                    x: 0.0,
+                    y: 0.0,
+                })
+            }
+
+            Feature::Arc(meta, start, center, end) => {
+                let (start_idx, center_idx, end_idx) = (
+                    fk_to_idx.get(start).ok_or(())?,
+                    fk_to_idx.get(center).ok_or(())?,
+                    fk_to_idx.get(end).ok_or(())?,
+                );
+
+                Ok(SerializedFeature {
+                    kind: "arc".to_string(),
+                    meta: meta.clone(),
+                    using_idx: vec![*start_idx, *center_idx, *end_idx],
+                    x: 0.0,
+                    y: 0.0,
+                })
+            }
+        }
+    }
+
+    pub fn deserialize(
+        sf: SerializedFeature,
+        idx_to_fk: &HashMap<usize, FeatureKey>,
+    ) -> Result<Self, ()> {
+        match sf.kind.as_str() {
+            "pt" => Ok(Self::Point(sf.meta, sf.x, sf.y)),
+            "line" => {
+                if sf.using_idx.len() < 2 {
+                    return Err(());
+                }
+                Ok(Self::LineSegment(
+                    sf.meta,
+                    *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sf.using_idx[1]).ok_or(())?,
+                ))
+            }
+            "arc" => {
+                if sf.using_idx.len() < 3 {
+                    return Err(());
+                }
+                Ok(Self::Arc(
+                    sf.meta,
+                    *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sf.using_idx[1]).ok_or(())?,
+                    *idx_to_fk.get(&sf.using_idx[2]).ok_or(())?,
+                ))
+            }
+            _ => Err(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slotmap::Key;
+
+    #[test]
+    fn serialize() {
+        assert_eq!(
+            Feature::Point(FeatureMeta::default(), 1.5, 2.5).serialize(&HashMap::new()),
+            Ok(SerializedFeature {
+                kind: "pt".to_string(),
+                meta: FeatureMeta::default(),
+                using_idx: vec![],
+                x: 1.5,
+                y: 2.5,
+            }),
+        );
+
+        let point_key = FeatureKey::null();
+
+        assert_eq!(
+            Feature::LineSegment(FeatureMeta::default(), point_key, point_key)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedFeature {
+                kind: "line".to_string(),
+                meta: FeatureMeta::default(),
+                using_idx: vec![42, 42],
+                x: 0.0,
+                y: 0.0,
+            }),
+        );
+
+        assert_eq!(
+            Feature::Arc(FeatureMeta::default(), point_key, point_key, point_key)
+                .serialize(&HashMap::from([(point_key, 22)])),
+            Ok(SerializedFeature {
+                kind: "arc".to_string(),
+                meta: FeatureMeta::default(),
+                using_idx: vec![22, 22, 22],
+                x: 0.0,
+                y: 0.0,
+            }),
+        );
+
+        // Missing
+        assert_eq!(
+            Feature::LineSegment(FeatureMeta::default(), point_key, point_key)
+                .serialize(&HashMap::new()),
+            Err(()),
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        assert_eq!(
+            Feature::deserialize(
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    x: 1.5,
+                    y: 2.5,
+                    ..SerializedFeature::default()
+                },
+                &HashMap::new()
+            ),
+            Ok(Feature::Point(FeatureMeta::default(), 1.5, 2.5)),
+        );
+        assert_eq!(
+            Feature::deserialize(
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![3, 3],
+                    ..SerializedFeature::default()
+                },
+                &HashMap::from([(3, FeatureKey::null())]),
+            ),
+            Ok(Feature::LineSegment(
+                FeatureMeta::default(),
+                FeatureKey::null(),
+                FeatureKey::null()
+            )),
+        );
+        assert_eq!(
+            Feature::deserialize(
+                SerializedFeature {
+                    kind: "arc".to_string(),
+                    using_idx: vec![1, 1, 1],
+                    ..SerializedFeature::default()
+                },
+                &HashMap::from([(1, FeatureKey::null())]),
+            ),
+            Ok(Feature::Arc(
+                FeatureMeta::default(),
+                FeatureKey::null(),
+                FeatureKey::null(),
+                FeatureKey::null()
+            )),
+        );
     }
 }

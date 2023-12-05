@@ -5,9 +5,11 @@ pub(crate) mod l;
 mod data;
 pub use data::{Data, Hover, Viewport};
 mod feature;
-pub use feature::{Feature, FeatureKey, FeatureMeta};
+pub use feature::{Feature, FeatureKey, FeatureMeta, SerializedFeature};
 mod constraints;
-pub use constraints::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
+pub use constraints::{
+    Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay, SerializedConstraint,
+};
 pub mod handler;
 mod system;
 pub use handler::Handler;

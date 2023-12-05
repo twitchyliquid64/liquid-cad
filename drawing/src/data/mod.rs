@@ -1,6 +1,6 @@
 use crate::system::{TermAllocator, TermRef, TermType};
-use crate::{Constraint, ConstraintKey};
-use crate::{Feature, FeatureKey};
+use crate::{Constraint, ConstraintKey, SerializedConstraint};
+use crate::{Feature, FeatureKey, SerializedFeature};
 use slotmap::HopSlotMap;
 use std::collections::HashMap;
 
@@ -26,14 +26,13 @@ pub enum Hover {
 }
 
 /// Data stores state about the drawing and what it is composed of.
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug)]
 pub struct Data {
     pub features: HopSlotMap<FeatureKey, Feature>,
     pub constraints: ConstraintData,
     pub vp: Viewport,
 
     pub selected_map: HashMap<FeatureKey, usize>,
-    #[serde(skip)]
     pub selected_constraint: Option<ConstraintKey>,
 
     pub terms: TermAllocator,
@@ -206,6 +205,15 @@ impl Data {
         features.get_mut(k)
     }
 
+    pub fn feature_exists(&self, f: &Feature) -> bool {
+        for v in self.features.values() {
+            if v == f {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Iterates through the constraints.
     pub fn constraints_iter(&self) -> slotmap::hop::Iter<'_, ConstraintKey, Constraint> {
         self.constraints.iter()
@@ -223,9 +231,16 @@ impl Data {
 
     /// Adds a constraint, solving to update based on any affects.
     pub fn add_constraint(&mut self, c: Constraint) {
+        if self.add_constraint_impl(c) {
+            self.solve_and_apply();
+        }
+    }
+    fn add_constraint_impl(&mut self, c: Constraint) -> bool {
         if let Some(ck) = self.constraints.add(c) {
             self.terms.inform_new_constraint(ck);
-            self.solve_and_apply();
+            true
+        } else {
+            false
         }
     }
 
@@ -451,5 +466,273 @@ impl Data {
     /// Returns true if the feature with the given key is currently selected.
     pub fn feature_selected(&self, feature: &FeatureKey) -> bool {
         self.selected_map.get(feature).is_some()
+    }
+
+    pub fn serialize(&self) -> (Vec<SerializedFeature>, Vec<SerializedConstraint>) {
+        // First pass just get points
+        let mut feature_keys = HashMap::with_capacity(self.features.len());
+        let mut features: Vec<SerializedFeature> = self
+            .features
+            .iter()
+            .filter(|(_fk, f)| matches!(f, Feature::Point(..)))
+            .map(|(fk, f)| {
+                feature_keys.insert(fk, feature_keys.len());
+                f.serialize(&feature_keys).unwrap()
+            })
+            .collect();
+
+        features.reserve(self.features.len());
+
+        // Second pass gets non-points
+        for (fk, f) in self.features.iter() {
+            if feature_keys.contains_key(&fk) {
+                continue;
+            }
+            feature_keys.insert(fk, feature_keys.len());
+            features.push(f.serialize(&feature_keys).unwrap());
+        }
+
+        (
+            features,
+            self.constraints
+                .iter()
+                .map(|(_ck, c)| c.serialize(&feature_keys).unwrap())
+                .collect(),
+        )
+    }
+
+    pub fn load(
+        &mut self,
+        features: Vec<SerializedFeature>,
+        constraints: Vec<SerializedConstraint>,
+    ) -> Result<(), ()> {
+        self.features = HopSlotMap::default();
+        self.constraints = ConstraintData::default();
+
+        let mut feature_keys = HashMap::with_capacity(features.len());
+
+        for (i, sf) in features.into_iter().enumerate() {
+            let fk = self
+                .features
+                .insert(Feature::deserialize(sf, &feature_keys).unwrap());
+            feature_keys.insert(i, fk);
+        }
+        for sc in constraints.into_iter() {
+            self.add_constraint_impl(Constraint::deserialize(sc, &feature_keys).unwrap());
+        }
+
+        // println!("features: {:?}", self.features);
+        // println!("constraints: {:?}", self.constraints);
+        self.solve_and_apply();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Axis, ConstraintMeta, DimensionDisplay, SerializedConstraint};
+    use crate::{FeatureMeta, SerializedFeature};
+
+    #[test]
+    fn serialize_features() {
+        let mut data = Data::default();
+        let p1 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 0.0, 0.0));
+        let p2 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 5.0, 0.0));
+        data.features
+            .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
+        let p3 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 2.5, 0.0));
+        data.features
+            .insert(Feature::Arc(FeatureMeta::default(), p1, p3, p2));
+
+        assert_eq!(
+            data.serialize().0,
+            vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    meta: FeatureMeta::default(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    meta: FeatureMeta::default(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    meta: FeatureMeta::default(),
+                    using_idx: vec![],
+                    x: 2.5,
+                    y: 0.0,
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    meta: FeatureMeta::default(),
+                    using_idx: vec![0, 1],
+                    x: 0.0,
+                    y: 0.0,
+                },
+                SerializedFeature {
+                    kind: "arc".to_string(),
+                    meta: FeatureMeta::default(),
+                    using_idx: vec![0, 2, 1],
+                    x: 0.0,
+                    y: 0.0,
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn serialize_constraints() {
+        let mut data = Data::default();
+        let p1 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 0.0, 0.0));
+        let p2 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 5.0, 0.0));
+        let line1 = data
+            .features
+            .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
+        let p3 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 5.0, -5.0));
+        let line2 = data
+            .features
+            .insert(Feature::LineSegment(FeatureMeta::default(), p2, p3));
+
+        data.add_constraint(Constraint::Fixed(ConstraintMeta::default(), p1, 0., 0.));
+        data.add_constraint(Constraint::LineLength(
+            ConstraintMeta::default(),
+            line2,
+            5.0,
+            Some((Axis::TopBottom, true)),
+            DimensionDisplay::default(),
+        ));
+        data.add_constraint(Constraint::LineLengthsEqual(
+            ConstraintMeta::default(),
+            line1,
+            line2,
+        ));
+
+        assert_eq!(
+            data.serialize(),
+            (
+                vec![
+                    SerializedFeature {
+                        kind: "pt".to_string(),
+                        meta: FeatureMeta::default(),
+                        using_idx: vec![],
+                        x: 0.0,
+                        y: 0.0,
+                    },
+                    SerializedFeature {
+                        kind: "pt".to_string(),
+                        meta: FeatureMeta::default(),
+                        using_idx: vec![],
+                        x: 5.0,
+                        y: 0.0,
+                    },
+                    SerializedFeature {
+                        kind: "pt".to_string(),
+                        meta: FeatureMeta::default(),
+                        using_idx: vec![],
+                        x: 5.0,
+                        y: -5.0,
+                    },
+                    SerializedFeature {
+                        kind: "line".to_string(),
+                        meta: FeatureMeta::default(),
+                        using_idx: vec![0, 1],
+                        ..SerializedFeature::default()
+                    },
+                    SerializedFeature {
+                        kind: "line".to_string(),
+                        meta: FeatureMeta::default(),
+                        using_idx: vec![1, 2],
+                        ..SerializedFeature::default()
+                    },
+                ],
+                vec![
+                    SerializedConstraint {
+                        kind: "fixed".to_string(),
+                        at: (0.0, 0.0),
+                        feature_idx: vec![0],
+                        ..SerializedConstraint::default()
+                    },
+                    SerializedConstraint {
+                        kind: "length".to_string(),
+                        feature_idx: vec![4],
+                        amt: 5.0,
+                        cardinality: Some((Axis::TopBottom, true)),
+                        ..SerializedConstraint::default()
+                    },
+                    SerializedConstraint {
+                        kind: "line_lengths_equal".to_string(),
+                        feature_idx: vec![3, 4],
+                        ..SerializedConstraint::default()
+                    }
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn load_basic() {
+        let mut data = Data::default();
+        data.load(
+            vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+            ],
+            vec![
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (0.0, 0.0),
+                    feature_idx: vec![0],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![2],
+                    amt: 15.0,
+                    cardinality: Some((Axis::LeftRight, true)),
+                    ..SerializedConstraint::default()
+                },
+            ],
+        )
+        .unwrap();
+
+        // So we loaded two points, with a line that constrained the
+        // second point such that it was at (-15, 0). Lets test
+        // that was solved.
+        assert_eq!(
+            data.features_iter().map(|(_fk, f)| f).nth(1),
+            Some(Feature::Point(FeatureMeta::default(), -15.0, 0.0,)).as_ref()
+        );
     }
 }

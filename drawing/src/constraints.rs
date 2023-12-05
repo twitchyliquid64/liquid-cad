@@ -1,6 +1,7 @@
 use crate::system::{TermRef, TermType};
 use crate::{Feature, FeatureKey};
 use eq::{Expression, Rational};
+use std::collections::HashMap;
 
 slotmap::new_key_type! {
     pub struct ConstraintKey;
@@ -34,7 +35,23 @@ impl Axis {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SerializedConstraint {
+    pub kind: String,
+    pub meta: ConstraintMeta,
+    pub feature_idx: Vec<usize>,
+
+    /// Only used for Constraint::Fixed
+    pub at: (f32, f32),
+    /// Only used for Constraint::LineLength & Constraint::PointLerpLine
+    pub amt: f32,
+    /// Only used for Constraint::LineLength
+    pub cardinality: Option<(Axis, bool)>,
+    /// Only used for Constraint::LineLength
+    pub ref_offset: DimensionDisplay,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Constraint {
     Fixed(ConstraintMeta, FeatureKey, f32, f32),
     LineLength(
@@ -457,6 +474,144 @@ impl Constraint {
             }
         }
     }
+
+    /// Serialize returns a structure suitable for serialization to disk. Any feature
+    /// which maybe referenced from the current constraint must be present in fk_to_idx.
+    pub fn serialize(
+        &self,
+        fk_to_idx: &HashMap<FeatureKey, usize>,
+    ) -> Result<SerializedConstraint, ()> {
+        match self {
+            Constraint::Fixed(meta, fk, x, y) => Ok(SerializedConstraint {
+                kind: "fixed".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                at: (*x, *y),
+                ..SerializedConstraint::default()
+            }),
+            Constraint::LineLength(meta, fk, d, axis, ref_offset) => Ok(SerializedConstraint {
+                kind: "length".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                amt: *d,
+                cardinality: axis.clone(),
+                ref_offset: ref_offset.clone(),
+                ..SerializedConstraint::default()
+            }),
+
+            Constraint::LineAlongCardinal(meta, fk, Axis::TopBottom) => Ok(SerializedConstraint {
+                kind: "vertical".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                ..SerializedConstraint::default()
+            }),
+            Constraint::LineAlongCardinal(meta, fk, Axis::LeftRight) => Ok(SerializedConstraint {
+                kind: "horizontal".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                ..SerializedConstraint::default()
+            }),
+
+            Constraint::PointLerpLine(meta, fk1, fk2, amt) => {
+                let (fk1_idx, fk2_idx) =
+                    (fk_to_idx.get(fk1).ok_or(())?, fk_to_idx.get(fk2).ok_or(())?);
+
+                Ok(SerializedConstraint {
+                    kind: "point_lerp".to_string(),
+                    meta: meta.clone(),
+                    feature_idx: vec![*fk1_idx, *fk2_idx],
+                    amt: *amt,
+                    ..SerializedConstraint::default()
+                })
+            }
+            Constraint::LineLengthsEqual(meta, fk1, fk2) => {
+                let (fk1_idx, fk2_idx) =
+                    (fk_to_idx.get(fk1).ok_or(())?, fk_to_idx.get(fk2).ok_or(())?);
+
+                Ok(SerializedConstraint {
+                    kind: "line_lengths_equal".to_string(),
+                    meta: meta.clone(),
+                    feature_idx: vec![*fk1_idx, *fk2_idx],
+                    ..SerializedConstraint::default()
+                })
+            }
+        }
+    }
+
+    pub fn deserialize(
+        sc: SerializedConstraint,
+        idx_to_fk: &HashMap<usize, FeatureKey>,
+    ) -> Result<Self, ()> {
+        match sc.kind.as_str() {
+            "fixed" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::Fixed(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    sc.at.0,
+                    sc.at.1,
+                ))
+            }
+            "length" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::LineLength(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    sc.amt,
+                    sc.cardinality,
+                    sc.ref_offset,
+                ))
+            }
+
+            "vertical" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::LineAlongCardinal(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    Axis::TopBottom,
+                ))
+            }
+            "horizontal" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::LineAlongCardinal(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    Axis::LeftRight,
+                ))
+            }
+
+            "point_lerp" => {
+                if sc.feature_idx.len() < 2 {
+                    return Err(());
+                }
+                Ok(Self::PointLerpLine(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                    sc.amt,
+                ))
+            }
+            "line_lengths_equal" => {
+                if sc.feature_idx.len() < 2 {
+                    return Err(());
+                }
+                Ok(Self::LineLengthsEqual(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                ))
+            }
+            _ => Err(()),
+        }
+    }
 }
 
 fn distance_eq(_d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &TermRef) -> Expression {
@@ -479,4 +634,146 @@ fn distance_eq(_d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &Term
         )),
         true,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize() {
+        use slotmap::Key;
+        let point_key = FeatureKey::null();
+
+        assert_eq!(
+            Constraint::Fixed(ConstraintMeta::default(), point_key, 2.0, 1.0)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "fixed".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42],
+                at: (2.0, 1.0),
+                ..SerializedConstraint::default()
+            }),
+        );
+
+        assert_eq!(
+            Constraint::LineLength(
+                ConstraintMeta::default(),
+                point_key,
+                85.0,
+                None,
+                DimensionDisplay { x: 2.0, y: 5.0 }
+            )
+            .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "length".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42],
+                amt: 85.0,
+                ref_offset: DimensionDisplay { x: 2.0, y: 5.0 },
+                ..SerializedConstraint::default()
+            }),
+        );
+
+        assert_eq!(
+            Constraint::LineAlongCardinal(ConstraintMeta::default(), point_key, Axis::TopBottom,)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "vertical".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42],
+                ..SerializedConstraint::default()
+            }),
+        );
+        assert_eq!(
+            Constraint::LineAlongCardinal(ConstraintMeta::default(), point_key, Axis::LeftRight,)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "horizontal".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42],
+                ..SerializedConstraint::default()
+            }),
+        );
+
+        assert_eq!(
+            Constraint::PointLerpLine(ConstraintMeta::default(), point_key, point_key, 0.5,)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "point_lerp".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42, 42],
+                amt: 0.5,
+                ..SerializedConstraint::default()
+            }),
+        );
+
+        assert_eq!(
+            Constraint::LineLengthsEqual(ConstraintMeta::default(), point_key, point_key,)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "line_lengths_equal".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42, 42],
+                ..SerializedConstraint::default()
+            }),
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        use slotmap::Key;
+        let k = FeatureKey::null();
+
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    feature_idx: vec![1],
+                    at: (2.0, 1.0),
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::Fixed(ConstraintMeta::default(), k, 2.0, 1.0),
+        );
+
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "vertical".to_string(),
+                    feature_idx: vec![1],
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::LineAlongCardinal(ConstraintMeta::default(), k, Axis::TopBottom,),
+        );
+
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "length".to_string(),
+                    feature_idx: vec![1],
+                    amt: 66.0,
+                    cardinality: Some((Axis::LeftRight, false)),
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::LineLength(
+                ConstraintMeta::default(),
+                k,
+                66.0,
+                Some((Axis::LeftRight, false)),
+                DimensionDisplay::default(),
+            ),
+        );
+
+        // TODO: PointLerpLine, LineLengthsEqual
+    }
 }
