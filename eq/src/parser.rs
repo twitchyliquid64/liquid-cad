@@ -37,6 +37,12 @@ pub(super) fn parse_expr<'a>() -> impl Parser<'a, &'a str, Expression> {
         let abs = text::keyword("abs")
             .then(expr.clone().delimited_by(just('('), just(')')))
             .map(|(_, e)| Expression::Abs(Box::new(e)));
+        let sin = text::keyword("sin")
+            .then(expr.clone().delimited_by(just('('), just(')')))
+            .map(|(_, e)| Expression::Trig(TrigOp::Sin, Box::new(e)));
+        let cos = text::keyword("cos")
+            .then(expr.clone().delimited_by(just('('), just(')')))
+            .map(|(_, e)| Expression::Trig(TrigOp::Cos, Box::new(e)));
 
         let atom = number
             .or(var_with_coeff)
@@ -44,6 +50,8 @@ pub(super) fn parse_expr<'a>() -> impl Parser<'a, &'a str, Expression> {
             .or(sqrt)
             .or(sqrt_pm)
             .or(abs)
+            .or(sin)
+            .or(cos)
             .or(expr.delimited_by(just('('), just(')')))
             .or(ident.map(|i: &str| Expression::Variable(i.into())))
             .padded();

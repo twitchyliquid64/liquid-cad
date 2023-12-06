@@ -1033,10 +1033,10 @@ mod tests {
         assert_eq!(
             SubSolver::default().all_residuals(&mut state),
             vec![
+                Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),
+                Expression::parse("d2 - (sqrt((x2-x1)^2 + (y2-y1)^2))", false).unwrap(),
                 Expression::parse("d1 - 5", false).unwrap(),
                 Expression::parse("d2 - 5", false).unwrap(),
-                Expression::parse("d2 - (sqrt((x2-x1)^2 + (y2-y1)^2))", false).unwrap(),
-                Expression::parse("d1 - (sqrt((x1-x0)^2 + (y1-y0)^2))", false).unwrap(),
             ],
         );
 

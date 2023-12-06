@@ -68,6 +68,12 @@ impl StaticResolver {
 }
 
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum TrigOp {
+    Sin,
+    Cos,
+}
+
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ExprHash(u64);
 
 impl From<&Expression> for ExprHash {
@@ -101,6 +107,8 @@ pub enum Expression {
     Abs(Box<Self>),
     // Sqrt of one expression, .1 is true if it can be either plus or minus.
     Sqrt(Box<Self>, bool),
+    // Trigonometry operation.
+    Trig(TrigOp, Box<Self>),
 
     /// Sum of 2 expressions.
     Sum(Box<Self>, Box<Self>),
@@ -149,7 +157,8 @@ impl Expression {
             Expression::Neg(a)
             | Expression::Sqrt(a, _)
             | Expression::Abs(a)
-            | Expression::Subtitution(_, a, _) => a.walk(cb),
+            | Expression::Subtitution(_, a, _)
+            | Expression::Trig(_, a) => a.walk(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
         }
@@ -175,7 +184,8 @@ impl Expression {
             Expression::Neg(a)
             | Expression::Sqrt(a, _)
             | Expression::Abs(a)
-            | Expression::Subtitution(_, a, _) => a.walk_mut(cb),
+            | Expression::Subtitution(_, a, _)
+            | Expression::Trig(_, a) => a.walk_mut(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
         }
@@ -196,6 +206,9 @@ impl Expression {
                 }
                 Expression::Quotient(_, _) | Expression::Variable(_) => {
                     cost += 5;
+                }
+                Expression::Trig(_, _) => {
+                    cost += 8;
                 }
                 Expression::Power(_, _) | Expression::Abs(_) => {
                     cost += 10;
@@ -234,9 +247,10 @@ impl Expression {
             Expression::Quotient(a, b) => a.num_solutions() * b.num_solutions(),
             Expression::Power(a, b) => a.num_solutions() * b.num_solutions(),
 
-            Expression::Neg(a) | Expression::Abs(a) | Expression::Subtitution(_, a, _) => {
-                a.num_solutions()
-            }
+            Expression::Neg(a)
+            | Expression::Abs(a)
+            | Expression::Subtitution(_, a, _)
+            | Expression::Trig(_, a) => a.num_solutions(),
 
             Expression::Sqrt(a, is_pm) => {
                 if *is_pm {
@@ -330,6 +344,13 @@ impl Expression {
                 }
             }
 
+            Expression::Trig(op, a) => {
+                let v = a.evaluate(r, which)?.as_f64();
+                Ok(Concrete::Float(match op {
+                    TrigOp::Sin => v.sin(),
+                    TrigOp::Cos => v.cos(),
+                }))
+            }
             Expression::Neg(a) => match a.evaluate(r, which)? {
                 Concrete::Rational(a) => Ok(Concrete::Rational(-a)),
                 Concrete::Float(a) => Ok(Concrete::Float(-a)),
@@ -387,7 +408,10 @@ impl Expression {
                 b.simplify();
             }
             // unary
-            Expression::Neg(a) | Expression::Sqrt(a, _) | Expression::Abs(a) => a.simplify(),
+            Expression::Neg(a)
+            | Expression::Sqrt(a, _)
+            | Expression::Abs(a)
+            | Expression::Trig(_, a) => a.simplify(),
             // no sub-expressions
             Expression::Integer(_)
             | Expression::Rational(_, _)
@@ -455,6 +479,13 @@ impl Expression {
             if let Expression::Neg(b) = a.as_ref() {
                 let temp = b.to_owned();
                 let _ = std::mem::replace(&mut *a, temp);
+            }
+        }
+
+        // Neg of a neg
+        if let Expression::Neg(a) = self {
+            if let Expression::Neg(aa) = a.as_ref() {
+                *self = aa.as_ref().clone();
             }
         }
     }
@@ -613,6 +644,20 @@ impl Expression {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        if let Expression::Trig(op, a) = self {
+            if let Expression::Integer(aa) = a.as_ref() {
+                match (op, aa == &num::bigint::BigInt::from(0)) {
+                    (TrigOp::Sin, true) => {
+                        *self = Expression::Integer(0.into());
+                    }
+                    (TrigOp::Cos, true) => {
+                        *self = Expression::Integer(1.into());
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -1008,6 +1053,16 @@ impl Expression {
             }
             Expression::Integer(_) | Expression::Rational(_, _) => Expression::Integer(0.into()),
 
+            Expression::Trig(op, a) => match op {
+                TrigOp::Sin => Expression::Product(
+                    Box::new(Expression::Trig(TrigOp::Cos, a.clone())),
+                    Box::new(a.d_wrt(v)),
+                ),
+                TrigOp::Cos => Expression::Neg(Box::new(Expression::Product(
+                    Box::new(Expression::Trig(TrigOp::Sin, a.clone())),
+                    Box::new(a.d_wrt(v)),
+                ))),
+            },
             Expression::Neg(a) => Expression::Neg(Box::new(a.d_wrt(v))),
             Expression::Sum(a, b) => Expression::Sum(Box::new(a.d_wrt(v)), Box::new(b.d_wrt(v))),
             Expression::Difference(a, b) => {
@@ -1163,6 +1218,15 @@ impl Display for Expression {
         match self {
             Expression::Subtitution(_, e, _) => write!(f, "&[{}]", e),
             Expression::Neg(e) => write!(f, "-{}", e),
+            Expression::Trig(op, e) => write!(
+                f,
+                "{}({})",
+                match op {
+                    TrigOp::Sin => "sin",
+                    TrigOp::Cos => "cos",
+                },
+                e
+            ),
             Expression::Abs(e) => write!(f, "abs({})", e),
             Expression::Sqrt(a, pm) => match pm {
                 false => write!(f, "sqrt({})", a),
@@ -1362,6 +1426,14 @@ mod tests {
                 Box::new(Expression::Integer((-2).into())),
                 Box::new(Expression::Variable("x".into())),
             ))
+        );
+        assert_eq!(
+            Expression::parse("cos(2-2)", true),
+            Ok(Expression::Integer(1.into()))
+        );
+        assert_eq!(
+            Expression::parse("sin(2-2)", true),
+            Ok(Expression::Integer(0.into()))
         );
     }
 
@@ -1912,6 +1984,31 @@ mod tests {
                 .as_f64(),
             2.0,
         );
+        assert_eq!(
+            Expression::parse("cos(0)", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64(),
+            1.0,
+        );
+        assert_eq!(
+            Expression::parse("sin(0)", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64(),
+            0.0,
+        );
+        assert!(
+            (0.5 - Expression::parse("sin(1/2 + 1/50 + 1/97)", false)
+                .unwrap()
+                .evaluate(&mut StaticResolver::new([]), 0)
+                .unwrap()
+                .as_f64())
+            .abs()
+                < 0.01
+        );
 
         // Test multiple-results of sqrt
         // First case: non-pm, should give unary solution.
@@ -2065,6 +2162,19 @@ mod tests {
                 .unwrap()
                 .derivative_wrt(&"x".into()),
             Expression::parse("-6", true).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("cos(-x)", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("sin(-x)", true).unwrap(),
+        );
+        assert_eq!(
+            Expression::parse("sin(-x)", false)
+                .unwrap()
+                .derivative_wrt(&"x".into()),
+            Expression::parse("-cos(-x)", true).unwrap(),
         );
     }
 
