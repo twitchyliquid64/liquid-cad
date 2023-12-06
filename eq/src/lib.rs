@@ -1080,6 +1080,33 @@ impl Expression {
         d
     }
 
+    pub fn as_residual(&self) -> Result<Expression, ()> {
+        if let Expression::Equal(a, b) = self {
+            if matches!(a.as_ref(), Expression::Integer(i) if i == &num::bigint::BigInt::from(0)) {
+                return Ok(b.as_ref().clone());
+            }
+            if let Expression::Variable(_) = a.as_ref() {
+                // Special case: try and eliminate division
+                if let Expression::Sum(aa, b) = b.as_ref() {
+                    if let Expression::Quotient(ba, bb) = aa.as_ref() {
+                        return Ok(Expression::Difference(
+                            Box::new(Expression::Product(
+                                Box::new(Expression::Difference(a.clone(), b.clone())),
+                                bb.clone(),
+                            )),
+                            ba.clone(),
+                        ));
+                    }
+                }
+
+                return Ok(Expression::Difference(a.clone(), b.clone()));
+            }
+            Err(())
+        } else {
+            Err(())
+        }
+    }
+
     pub fn parse<'a>(
         expression: &'a str,
         simplify: bool,
@@ -2038,6 +2065,45 @@ mod tests {
                 .unwrap()
                 .derivative_wrt(&"x".into()),
             Expression::parse("-6", true).unwrap(),
+        );
+    }
+
+    #[test]
+    fn as_residual() {
+        assert_eq!(
+            Expression::parse("0 = x/2 + 5", false)
+                .unwrap()
+                .as_residual()
+                .unwrap(),
+            Expression::parse("x/2 + 5", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("x = -5", false)
+                .unwrap()
+                .as_residual()
+                .unwrap(),
+            Expression::parse("x - -5", false).unwrap(),
+        );
+
+        assert_eq!(
+            Expression::parse("d = sqrt_pm((((x1 - x4))^2 + ((y1 - y4))^2))", false)
+                .unwrap()
+                .as_residual()
+                .unwrap(),
+            Expression::parse("d - sqrt_pm((((x1 - x4))^2 + ((y1 - y4))^2))", false).unwrap(),
+        );
+
+        // x2 = (((y2 - y3) * (x1 - x4)) / (y1 - y4)) + x3
+        // x2 - x3 = ((y2 - y3) * (x1 - x4)) / (y1 - y4)
+        // (x2 - x3) * (y1 - y4) = (y2 - y3) * (x1 - x4)
+        // (x2 - x3) * (y1 - y4) - (y2 - y3) * (x1 - x4)
+        assert_eq!(
+            Expression::parse("x2 = ((((y2 - y3) * (x1 - x4)) / (y1 - y4)) + x3)", false)
+                .unwrap()
+                .as_residual()
+                .unwrap(),
+            Expression::parse("((x2 - x3) * (y1 - y4)) - ((y2 - y3) * (x1 - x4))", false).unwrap(),
         );
     }
 }

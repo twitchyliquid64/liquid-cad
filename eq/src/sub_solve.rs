@@ -474,6 +474,11 @@ impl SubSolver {
                     continue;
                 }
 
+                // let eq = Expression::Equal(
+                //     Box::new(Expression::Variable(for_var.clone())),
+                //     Box::new(ei.expr.clone()),
+                // )
+                // .as_residual().unwrap();
                 let eq = Expression::Difference(
                     Box::new(Expression::Variable(for_var.clone())),
                     Box::new(ei.expr.clone()),

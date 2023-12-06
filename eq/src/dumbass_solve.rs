@@ -251,7 +251,7 @@ impl DumbassSolver {
             if res.is_nan() {
                 res = f64::INFINITY;
             }
-            fx[row] = res.clamp(-99999.0, 99999.0);
+            fx[row] = res.clamp(-999999.0, 999999.0);
         }
 
         // println!(
