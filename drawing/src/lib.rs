@@ -257,7 +257,7 @@ impl<'a> Widget<'a> {
         // All clicks get keyboard focus.
         // println!("focus-w: {:?}", response.ctx.memory(|mem| mem.focus()));
         if response.clicked() && !response.lost_focus() {
-            ui.memory_mut(|mem| mem.request_focus(response.id));
+            self.set_focus(ui, response);
         }
 
         // Handle: clicks altering selection
@@ -303,6 +303,19 @@ impl<'a> Widget<'a> {
         }
 
         current_input
+    }
+
+    fn set_focus(&self, ui: &egui::Ui, response: &egui::Response) {
+        ui.memory_mut(|mem| {
+            mem.request_focus(response.id);
+            mem.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    escape: true,
+                    ..Default::default()
+                },
+            );
+        });
     }
 
     fn draw(
@@ -501,6 +514,7 @@ impl<'a> Widget<'a> {
         // Handle input
         let current_input = if let Some(c) = self.tools.handle_input(ui, hp, &hover, &response) {
             self.handler.handle(self.drawing, self.tools, c);
+            self.set_focus(ui, &response);
             None
         } else {
             self.handle_input(ui, hp, &hover, &mut response)
