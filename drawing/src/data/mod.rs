@@ -12,6 +12,9 @@ pub use viewport::Viewport;
 mod constraint_data;
 pub use constraint_data::ConstraintData;
 
+pub mod group;
+use group::Group;
+
 #[derive(Clone, Debug)]
 pub enum Hover {
     None,
@@ -29,15 +32,17 @@ pub enum Hover {
 pub struct SerializedDrawing {
     pub features: Vec<SerializedFeature>,
     pub constraints: Vec<SerializedConstraint>,
+    pub groups: Vec<group::SerializedGroup>,
     pub viewport: Viewport,
 }
 
-/// Data stores state about the drawing and what it is composed of.
+/// Data stores live state about the drawing and what it is composed of.
 #[derive(Clone, Debug)]
 pub struct Data {
     pub features: HopSlotMap<FeatureKey, Feature>,
     pub constraints: ConstraintData,
     pub vp: Viewport,
+    pub groups: Vec<Group>,
 
     pub selected_map: HashMap<FeatureKey, usize>,
     pub selected_constraint: Option<ConstraintKey>,
@@ -51,6 +56,7 @@ impl Default for Data {
             features: HopSlotMap::default(),
             constraints: ConstraintData::default(),
             vp: Viewport::default(),
+            groups: vec![],
             selected_map: HashMap::default(),
             selected_constraint: None,
             terms: TermAllocator::default(),
@@ -385,6 +391,9 @@ impl Data {
 
     fn delete_feature_impl(&mut self, k: FeatureKey) -> bool {
         self.selected_map.remove(&k);
+        for g in self.groups.iter_mut() {
+            g.trim_feature_if_present(k);
+        }
 
         match self.features.remove(k) {
             Some(_v) => {
@@ -506,6 +515,11 @@ impl Data {
                 .iter()
                 .map(|(_ck, c)| c.serialize(&feature_keys).unwrap())
                 .collect(),
+            groups: self
+                .groups
+                .iter()
+                .map(|g| g.serialize(&feature_keys).unwrap())
+                .collect(),
             viewport: self.vp.clone(),
         }
     }
@@ -526,6 +540,12 @@ impl Data {
         for sc in drawing.constraints.into_iter() {
             self.add_constraint_impl(Constraint::deserialize(sc, &feature_keys).unwrap());
         }
+
+        self.groups = drawing
+            .groups
+            .into_iter()
+            .map(|sg| Group::deserialize(sg, &feature_keys).unwrap())
+            .collect();
 
         // println!("features: {:?}", self.features);
         // println!("constraints: {:?}", self.constraints);
@@ -696,6 +716,35 @@ mod tests {
     }
 
     #[test]
+    fn serialize_groups() {
+        let mut data = Data::default();
+        let p1 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 0.0, 0.0));
+        let p2 = data
+            .features
+            .insert(Feature::Point(FeatureMeta::default(), 5.0, 0.0));
+        let l1 = data
+            .features
+            .insert(Feature::LineSegment(FeatureMeta::default(), p1, p2));
+
+        data.groups = vec![Group {
+            typ: group::GroupType::Boundary,
+            name: "yolo".into(),
+            features: vec![p1, p2, l1],
+        }];
+
+        assert_eq!(
+            data.serialize().groups,
+            vec![group::SerializedGroup {
+                typ: group::GroupType::Boundary,
+                name: "yolo".into(),
+                features_idx: vec![0, 1, 2],
+            },],
+        );
+    }
+
+    #[test]
     fn load_basic() {
         let mut data = Data::default();
         data.load(SerializedDrawing {
@@ -731,6 +780,12 @@ mod tests {
                     ..SerializedConstraint::default()
                 },
             ],
+            groups: vec![group::SerializedGroup {
+                typ: group::GroupType::Interior,
+                name: "yeet".into(),
+                features_idx: vec![0, 1, 2],
+                ..group::SerializedGroup::default()
+            }],
             ..SerializedDrawing::default()
         })
         .unwrap();
@@ -741,6 +796,21 @@ mod tests {
         assert_eq!(
             data.features_iter().map(|(_fk, f)| f).nth(1),
             Some(Feature::Point(FeatureMeta::default(), -15.0, 0.0,)).as_ref()
+        );
+
+        // Make sure that group exists too
+        assert_eq!(
+            data.groups,
+            vec![Group {
+                typ: group::GroupType::Interior,
+                name: "yeet".into(),
+                features: vec![
+                    data.features_iter().map(|(fk, _f)| fk).nth(0).unwrap(),
+                    data.features_iter().map(|(fk, _f)| fk).nth(1).unwrap(),
+                    data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap(),
+                ],
+                ..Group::default()
+            },],
         );
     }
 
@@ -915,6 +985,39 @@ mod tests {
         let point = data.features_iter().map(|(_fk, f)| f).nth(3).unwrap();
         assert!(
             matches!(point, Feature::Point(_, x, y) if (13.0 - x).abs() < 0.005 && (4.0 - y).abs() < 0.005 )
+        );
+    }
+
+    #[test]
+    fn feature_also_deleted_from_group() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![SerializedFeature {
+                kind: "pt".to_string(),
+                using_idx: vec![],
+                ..SerializedFeature::default()
+            }],
+            groups: vec![group::SerializedGroup {
+                typ: group::GroupType::Interior,
+                name: "yeet".into(),
+                features_idx: vec![0],
+                ..group::SerializedGroup::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        data.delete_feature(data.features_iter().map(|(fk, _f)| fk).nth(0).unwrap());
+
+        // Make sure that group no longer has any features
+        assert_eq!(
+            data.groups,
+            vec![Group {
+                typ: group::GroupType::Interior,
+                name: "yeet".into(),
+                features: vec![],
+                ..Group::default()
+            },],
         );
     }
 }

@@ -92,7 +92,7 @@ impl eframe::App for App {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
@@ -101,11 +101,26 @@ impl eframe::App for App {
                         if ui.button("New").clicked() {
                             *self = App::default();
                         }
+                        if ui.button("Save").clicked() {
+                            self.save(frame.storage_mut().unwrap());
+                        }
                         if ui.button("Reset egui state").clicked() {
                             ctx.memory_mut(|mem| *mem = Default::default());
                         }
                         if ui.button("Quit").clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
+                    ui.add_space(16.0);
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    ui.menu_button("File", |ui| {
+                        if ui.button("New").clicked() {
+                            *self = App::default();
+                        }
+                        if ui.button("Save").clicked() {
+                            self.save(frame.storage_mut().unwrap());
                         }
                     });
                     ui.add_space(16.0);

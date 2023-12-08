@@ -3,7 +3,7 @@
 pub(crate) mod l;
 
 mod data;
-pub use data::{Data, Hover, SerializedDrawing, Viewport};
+pub use data::{group::*, Data, Hover, SerializedDrawing, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta, SerializedFeature};
 mod constraints;

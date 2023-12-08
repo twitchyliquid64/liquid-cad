@@ -18,6 +18,8 @@ pub enum ToolResponse {
     ConstraintDelete(ConstraintKey),
     NewEqual(FeatureKey, FeatureKey),
     NewParallelLine(FeatureKey, FeatureKey),
+
+    DeleteGroup(usize),
 }
 
 #[derive(Debug, Default)]
@@ -29,6 +31,9 @@ impl Handler {
             ToolResponse::Handled => {}
             ToolResponse::SwitchToPointer => {
                 tools.clear();
+            }
+            ToolResponse::DeleteGroup(idx) => {
+                drawing.groups.remove(idx);
             }
             ToolResponse::NewPoint(pos) => {
                 let pos = drawing.vp.screen_to_point(pos);

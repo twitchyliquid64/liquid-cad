@@ -1,12 +1,13 @@
 use drawing::Handler;
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
 use drawing::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
+use drawing::{Group, GroupType};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
     #[default]
     Selection,
-    System,
+    Groups,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -54,10 +55,10 @@ impl<'a> Widget<'a> {
                     self.state.tab = Tab::Selection
                 };
                 if ui
-                    .selectable_label(self.state.tab == Tab::System, "System")
+                    .selectable_label(self.state.tab == Tab::Groups, "Groups")
                     .clicked()
                 {
-                    self.state.tab = Tab::System
+                    self.state.tab = Tab::Groups
                 };
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
@@ -69,7 +70,7 @@ impl<'a> Widget<'a> {
             ui.separator();
             match self.state.tab {
                 Tab::Selection => self.show_selection_tab(ui),
-                Tab::System => self.show_system_tab(ui),
+                Tab::Groups => self.show_groups_tab(ui),
             }
         });
     }
@@ -553,5 +554,88 @@ impl<'a> Widget<'a> {
         });
     }
 
-    fn show_system_tab(&mut self, _ui: &egui::Ui) {}
+    fn show_groups_tab(&mut self, ui: &mut egui::Ui) {
+        let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.label("Groups are a collection of drawing elements that form a path. Use them to label collections of elements as interior geometry, boundary geometry, etc.");
+            ui.add_space(10.0);
+
+            for (i, group) in self.drawing.groups.iter_mut().enumerate() {
+                ui.push_id(i, |ui| {
+                    let id = ui.make_persistent_id("header_group");
+                    egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                        .show_header(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let r = ui.available_size();
+
+                                let name_input = egui::widgets::TextEdit::singleline(&mut group.name)
+                                    .hint_text("Group name")
+                                    .desired_width(r.x / 2.0)
+                                    .clip_text(true);
+                                ui.add(name_input);
+
+                                egui::ComboBox::from_id_source("type combo")
+                                    .selected_text(format!("{:?}", group.typ))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut group.typ, GroupType::Interior, "Interior");
+                                        ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary");
+                                    }
+                                );
+
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                                    if ui.button("⊗").clicked() {
+                                        commands.push(ToolResponse::DeleteGroup(i));
+                                    }
+                                });
+                            });
+                        })
+                        .body(|ui| {
+                            ui.horizontal(|ui| {
+                                let r = ui.available_size();
+                                let text_rect = ui.add(egui::Label::new(format!("{} features", group.features.len())).wrap(false)).rect;
+
+                                if text_rect.width() < r.x / 2. {
+                                    ui.add_space(r.x / 2. - text_rect.width());
+                                }
+                                if ui.button("Select").clicked() {
+                                    self.drawing.selected_constraint = None;
+                                    self.drawing.selected_map = std::collections::HashMap::from_iter(
+                                        group.features.iter().enumerate().map(|(i, fk)| (*fk, i))
+                                    );
+                                };
+                            });
+
+                            ui.horizontal(|ui| {
+                                if ui.button("+ Add from selection").clicked() {
+                                    for fk in self.drawing.selected_map.keys() {
+                                        if group.features.iter().position(|k| k == fk).is_none() {
+                                            group.features.push(*fk);
+                                        }
+                                    }
+                                };
+                            });
+                        });
+                    });
+            }
+
+            ui.add_space(10.0);
+            if ui.button("New +").clicked() {
+                let g_len = self.drawing.groups.len();
+                self.drawing.groups.push(Group{
+                    name: "Unnamed group".into(),
+                    typ: if g_len == 0 {
+                        GroupType::Boundary
+                    } else {
+                        GroupType::Interior
+                    },
+                    ..Group::default()
+                });
+            }
+        });
+
+        for c in commands.drain(..) {
+            self.handler.handle(self.drawing, self.tools, c);
+        }
+    }
 }
