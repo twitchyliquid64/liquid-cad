@@ -25,6 +25,13 @@ pub enum Hover {
     },
 }
 
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct SerializedDrawing {
+    pub features: Vec<SerializedFeature>,
+    pub constraints: Vec<SerializedConstraint>,
+    pub viewport: Viewport,
+}
+
 /// Data stores state about the drawing and what it is composed of.
 #[derive(Clone, Debug)]
 pub struct Data {
@@ -468,7 +475,7 @@ impl Data {
         self.selected_map.get(feature).is_some()
     }
 
-    pub fn serialize(&self) -> (Vec<SerializedFeature>, Vec<SerializedConstraint>) {
+    pub fn serialize(&self) -> SerializedDrawing {
         // First pass just get points
         let mut feature_keys = HashMap::with_capacity(self.features.len());
         let mut features: Vec<SerializedFeature> = self
@@ -492,32 +499,31 @@ impl Data {
             features.push(f.serialize(&feature_keys).unwrap());
         }
 
-        (
+        SerializedDrawing {
             features,
-            self.constraints
+            constraints: self
+                .constraints
                 .iter()
                 .map(|(_ck, c)| c.serialize(&feature_keys).unwrap())
                 .collect(),
-        )
+            viewport: self.vp.clone(),
+        }
     }
 
-    pub fn load(
-        &mut self,
-        features: Vec<SerializedFeature>,
-        constraints: Vec<SerializedConstraint>,
-    ) -> Result<(), ()> {
+    pub fn load(&mut self, drawing: SerializedDrawing) -> Result<(), ()> {
         self.features = HopSlotMap::default();
         self.constraints = ConstraintData::default();
+        self.vp = drawing.viewport;
 
-        let mut feature_keys = HashMap::with_capacity(features.len());
+        let mut feature_keys = HashMap::with_capacity(drawing.features.len());
 
-        for (i, sf) in features.into_iter().enumerate() {
+        for (i, sf) in drawing.features.into_iter().enumerate() {
             let fk = self
                 .features
                 .insert(Feature::deserialize(sf, &feature_keys).unwrap());
             feature_keys.insert(i, fk);
         }
-        for sc in constraints.into_iter() {
+        for sc in drawing.constraints.into_iter() {
             self.add_constraint_impl(Constraint::deserialize(sc, &feature_keys).unwrap());
         }
 
@@ -552,7 +558,7 @@ mod tests {
             .insert(Feature::Arc(FeatureMeta::default(), p1, p3, p2));
 
         assert_eq!(
-            data.serialize().0,
+            data.serialize().features,
             vec![
                 SerializedFeature {
                     kind: "pt".to_string(),
@@ -628,8 +634,8 @@ mod tests {
 
         assert_eq!(
             data.serialize(),
-            (
-                vec![
+            SerializedDrawing {
+                features: vec![
                     SerializedFeature {
                         kind: "pt".to_string(),
                         meta: FeatureMeta::default(),
@@ -664,7 +670,7 @@ mod tests {
                         ..SerializedFeature::default()
                     },
                 ],
-                vec![
+                constraints: vec![
                     SerializedConstraint {
                         kind: "fixed".to_string(),
                         at: (0.0, 0.0),
@@ -683,16 +689,17 @@ mod tests {
                         feature_idx: vec![3, 4],
                         ..SerializedConstraint::default()
                     }
-                ]
-            )
+                ],
+                ..SerializedDrawing::default()
+            }
         );
     }
 
     #[test]
     fn load_basic() {
         let mut data = Data::default();
-        data.load(
-            vec![
+        data.load(SerializedDrawing {
+            features: vec![
                 SerializedFeature {
                     kind: "pt".to_string(),
                     using_idx: vec![],
@@ -709,7 +716,7 @@ mod tests {
                     ..SerializedFeature::default()
                 },
             ],
-            vec![
+            constraints: vec![
                 SerializedConstraint {
                     kind: "fixed".to_string(),
                     at: (0.0, 0.0),
@@ -724,7 +731,8 @@ mod tests {
                     ..SerializedConstraint::default()
                 },
             ],
-        )
+            ..SerializedDrawing::default()
+        })
         .unwrap();
 
         // So we loaded two points, with a line that constrained the
@@ -745,8 +753,8 @@ mod tests {
         // (-5, 0)  (5, 0)
 
         let mut data = Data::default();
-        data.load(
-            vec![
+        data.load(SerializedDrawing {
+            features: vec![
                 SerializedFeature {
                     kind: "pt".to_string(),
                     using_idx: vec![],
@@ -779,7 +787,7 @@ mod tests {
                     ..SerializedFeature::default()
                 },
             ],
-            vec![
+            constraints: vec![
                 SerializedConstraint {
                     kind: "fixed".to_string(),
                     at: (-5.0, 0.0),
@@ -805,7 +813,8 @@ mod tests {
                     ..SerializedConstraint::default()
                 },
             ],
-        )
+            ..SerializedDrawing::default()
+        })
         .unwrap();
 
         let point = data.features_iter().map(|(_fk, f)| f).nth(1).unwrap();
@@ -821,8 +830,8 @@ mod tests {
         // (0, 0)    (10, 0)
 
         let mut data = Data::default();
-        data.load(
-            vec![
+        data.load(SerializedDrawing {
+            features: vec![
                 SerializedFeature {
                     kind: "pt".to_string(),
                     using_idx: vec![],
@@ -862,7 +871,7 @@ mod tests {
                     ..SerializedFeature::default()
                 },
             ],
-            vec![
+            constraints: vec![
                 SerializedConstraint {
                     kind: "fixed".to_string(),
                     at: (0.0, 0.0),
@@ -899,7 +908,8 @@ mod tests {
                     ..SerializedConstraint::default()
                 },
             ],
-        )
+            ..SerializedDrawing::default()
+        })
         .unwrap();
 
         let point = data.features_iter().map(|(_fk, f)| f).nth(3).unwrap();

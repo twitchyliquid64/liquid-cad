@@ -54,13 +54,29 @@ impl App {
         let mut app = Self::default();
 
         if let Some(storage) = cc.storage {
-            if let Some(saved) = eframe::get_value::<(
+            if let Some(saved) =
+                eframe::get_value::<drawing::SerializedDrawing>(storage, eframe::APP_KEY)
+            {
+                if app.drawing.load(saved).err().is_some() {
+                    println!("Failed to load diagram from storage");
+                }
+            } else if let Some(saved) = eframe::get_value::<(
                 Vec<drawing::SerializedFeature>,
                 Vec<drawing::SerializedConstraint>,
             )>(storage, eframe::APP_KEY)
             {
-                if app.drawing.load(saved.0, saved.1).err().is_some() {
-                    println!("Failed to load diagram from storage");
+                // Legacy path
+                if app
+                    .drawing
+                    .load(drawing::SerializedDrawing {
+                        features: saved.0,
+                        constraints: saved.1,
+                        ..drawing::SerializedDrawing::default()
+                    })
+                    .err()
+                    .is_some()
+                {
+                    println!("Failed to load diagram from storage (legacy)");
                 }
             }
         }
@@ -72,8 +88,7 @@ impl App {
 impl eframe::App for App {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        let (features, constraints) = self.drawing.serialize();
-        eframe::set_value(storage, eframe::APP_KEY, &(features, constraints));
+        eframe::set_value(storage, eframe::APP_KEY, &self.drawing.serialize());
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.

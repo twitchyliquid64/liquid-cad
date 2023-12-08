@@ -3,7 +3,7 @@
 pub(crate) mod l;
 
 mod data;
-pub use data::{Data, Hover, Viewport};
+pub use data::{Data, Hover, SerializedDrawing, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta, SerializedFeature};
 mod constraints;
@@ -497,8 +497,10 @@ impl<'a> Widget<'a> {
             .memory_mut(|mem| mem.data.get_temp::<bool>(state_id))
             .unwrap_or(false);
         if !has_init {
-            self.drawing.vp.x = -rect.width() / 2.;
-            self.drawing.vp.y = -rect.height() / 2.;
+            if self.drawing.vp.eq(&Viewport::default()) {
+                self.drawing.vp.x = -rect.width() / 2.;
+                self.drawing.vp.y = -rect.height() / 2.;
+            }
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(state_id, true);
                 mem.request_focus(response.id); // request focus initially

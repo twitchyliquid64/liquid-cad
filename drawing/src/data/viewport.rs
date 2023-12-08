@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct Viewport {
     pub x: f32,
     pub y: f32,
