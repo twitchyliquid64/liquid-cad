@@ -556,6 +556,7 @@ impl<'a> Widget<'a> {
 
     fn show_groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
+        let mut boundary_group_set: Option<usize> = None;
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.label("Groups are a collection of drawing elements that form a path. Use them to label collections of elements as interior geometry, boundary geometry, etc.");
@@ -579,7 +580,9 @@ impl<'a> Widget<'a> {
                                     .selected_text(format!("{:?}", group.typ))
                                     .show_ui(ui, |ui| {
                                         ui.selectable_value(&mut group.typ, GroupType::Interior, "Interior");
-                                        ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary");
+                                        if ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary").changed() {
+                                            boundary_group_set = Some(i);
+                                        };
                                     }
                                 );
 
@@ -625,9 +628,11 @@ impl<'a> Widget<'a> {
                             });
                         });
                     });
+
+                ui.add_space(6.0);
             }
 
-            ui.add_space(10.0);
+            ui.add_space(6.0);
             if ui.button("New +").clicked() {
                 let g_len = self.drawing.groups.len();
                 self.drawing.groups.push(Group{
@@ -642,6 +647,13 @@ impl<'a> Widget<'a> {
             }
         });
 
+        if let Some(idx) = boundary_group_set {
+            for (i, g) in self.drawing.groups.iter_mut().enumerate() {
+                if i != idx && g.typ == GroupType::Boundary {
+                    g.typ = GroupType::Interior;
+                }
+            }
+        }
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, self.tools, c);
         }
