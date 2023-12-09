@@ -564,7 +564,7 @@ impl<'a> Widget<'a> {
             for (i, group) in self.drawing.groups.iter_mut().enumerate() {
                 ui.push_id(i, |ui| {
                     let id = ui.make_persistent_id("header_group");
-                    egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                    egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
                         .show_header(ui, |ui| {
                             ui.horizontal(|ui| {
                                 let r = ui.available_size();
@@ -604,11 +604,19 @@ impl<'a> Widget<'a> {
                                         group.features.iter().enumerate().map(|(i, fk)| (*fk, i))
                                     );
                                 };
+                                if ui.add_enabled(group.features.len() > 0, egui::Button::new("Clear")).clicked() {
+                                    group.features.clear();
+                                };
                             });
 
                             ui.horizontal(|ui| {
                                 if ui.button("+ Add from selection").clicked() {
                                     for fk in self.drawing.selected_map.keys() {
+                                        if let Some(f) = self.drawing.features.get(*fk) {
+                                            if f.is_point() || f.is_construction() {
+                                                continue;
+                                            }
+                                        }
                                         if group.features.iter().position(|k| k == fk).is_none() {
                                             group.features.push(*fk);
                                         }

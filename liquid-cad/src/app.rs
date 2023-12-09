@@ -1,5 +1,5 @@
 use detailer;
-use drawing::{self, Feature, FeatureMeta};
+use drawing;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -16,29 +16,11 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let mut drawing = drawing::Data::default();
-
-        let p1 = drawing
-            .features
-            .insert(Feature::Point(FeatureMeta::default(), -50., 0.));
-        let p2 = drawing
-            .features
-            .insert(Feature::Point(FeatureMeta::default(), 0., 0.));
-        let p3 = drawing
-            .features
-            .insert(Feature::Point(FeatureMeta::default(), 50., -50.));
-        drawing
-            .features
-            .insert(Feature::LineSegment(FeatureMeta::default(), p2, p1));
-        drawing
-            .features
-            .insert(Feature::LineSegment(FeatureMeta::default(), p3, p2));
-
+        let drawing = drawing::Data::default();
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();
         let detailer_state = detailer::State::default();
 
-        drawing.constraints.populate_cache();
         Self {
             drawing,
             handler,
@@ -59,24 +41,6 @@ impl App {
             {
                 if app.drawing.load(saved).err().is_some() {
                     println!("Failed to load diagram from storage");
-                }
-            } else if let Some(saved) = eframe::get_value::<(
-                Vec<drawing::SerializedFeature>,
-                Vec<drawing::SerializedConstraint>,
-            )>(storage, eframe::APP_KEY)
-            {
-                // Legacy path
-                if app
-                    .drawing
-                    .load(drawing::SerializedDrawing {
-                        features: saved.0,
-                        constraints: saved.1,
-                        ..drawing::SerializedDrawing::default()
-                    })
-                    .err()
-                    .is_some()
-                {
-                    println!("Failed to load diagram from storage (legacy)");
                 }
             }
         }

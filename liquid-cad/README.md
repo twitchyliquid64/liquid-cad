@@ -2,9 +2,7 @@
 
 ### Backlog
 
- * Implement the concept of groups: a series of features which form a shape.
-  * Groups UI, make group from selection, make group using picker
-  * Group type: perimeter, internal
+ * make group using picker
  * Export to OpenSCAD polygon
  * Export to STL
  * New constraints:

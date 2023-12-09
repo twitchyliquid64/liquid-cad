@@ -56,6 +56,13 @@ impl Feature {
     pub fn is_point(&self) -> bool {
         matches!(self, Feature::Point(_, _, _))
     }
+    pub fn is_construction(&self) -> bool {
+        match self {
+            Feature::Point(meta, ..) => meta.construction,
+            Feature::LineSegment(meta, ..) => meta.construction,
+            Feature::Arc(meta, ..) => meta.construction,
+        }
+    }
 
     pub fn depends_on(&self) -> [Option<FeatureKey>; 3] {
         match self {
