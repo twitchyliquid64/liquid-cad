@@ -218,7 +218,7 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             let text_rect = ui.add(egui::Label::new("Fixed").wrap(false)).rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(px))
@@ -249,7 +249,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
 
             let text_rect = ui.add(egui::Label::new("Length").wrap(false)).rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             let dv = ui.add_sized([50., text_height * 1.4], egui::DragValue::new(d));
             if meta.focus_to {
@@ -277,7 +277,7 @@ impl<'a> Widget<'a> {
             match aa_info {
                 Some((a, is_neg)) => {
                     let text_rect = ui.add(egui::Label::new("⏵ Cardinality").wrap(false)).rect;
-                    ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+                    ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
                     let text_rect = match (a, &is_neg) {
                         (Axis::TopBottom, false) => ui.label("+V"),
@@ -309,7 +309,7 @@ impl<'a> Widget<'a> {
                     let text_rect = ui
                         .add(egui::Label::new("⏵ Constrain cardinality").wrap(false))
                         .rect;
-                    ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+                    ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
                     if ui.button("-V").clicked() {
                         *aa_info = Some((Axis::TopBottom, true));
@@ -353,7 +353,7 @@ impl<'a> Widget<'a> {
                     .wrap(false),
                 )
                 .rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             let resp = ui.add_sized(
                 [100. + ui.spacing().item_spacing.x, text_height * 1.4],
@@ -386,7 +386,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
 
             let text_rect = ui.add(egui::Label::new("Point lerp").wrap(false)).rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             let dv = ui.add_sized(
                 [50., text_height * 1.4],
@@ -414,7 +414,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
 
             let text_rect = ui.add(egui::Label::new("Equal length").wrap(false)).rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
@@ -434,7 +434,7 @@ impl<'a> Widget<'a> {
             let r = ui.available_size();
 
             let text_rect = ui.add(egui::Label::new("Parallel").wrap(false)).rect;
-            ui.add_space(r.x / 2. - text_rect.width() - ui.spacing().item_spacing.x);
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
@@ -458,19 +458,24 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            let text_rect = ui
-                .add(egui::Label::new(format!("Point {:?}", k.data())).wrap(false))
-                .rect;
-            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
-                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
-            }
+            ui.add_sized(
+                [80., text_height * 1.4],
+                egui::Label::new(format!("Point {:?}", k.data()))
+                    .wrap(false)
+                    .truncate(true),
+            );
 
             *changed |= ui
-                .add_sized(
-                    [r.x / 4., text_height * 1.4],
-                    egui::Checkbox::new(&mut meta.construction, "🚧"),
-                )
+                .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
+            ui.add(
+                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
+                    .rounding(5.0),
+            );
+
+            if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
+                ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
+            }
 
             *changed |= ui
                 .add_sized([50., text_height * 1.4], egui::DragValue::new(px))
@@ -498,19 +503,24 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            let text_rect = ui
-                .add(egui::Label::new(format!("Line {:?}", k.data())).wrap(false))
-                .rect;
-            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
-                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
-            }
+            ui.add_sized(
+                [80., text_height * 1.4],
+                egui::Label::new(format!("Line {:?}", k.data()))
+                    .wrap(false)
+                    .truncate(true),
+            );
 
             *changed |= ui
-                .add_sized(
-                    [r.x / 4., text_height * 1.4],
-                    egui::Checkbox::new(&mut meta.construction, "🚧"),
-                )
+                .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
+            ui.add(
+                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
+                    .rounding(5.0),
+            );
+
+            if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
+                ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
+            }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
@@ -532,19 +542,24 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            let text_rect = ui
-                .add(egui::Label::new(format!("Arc {:?}", k.data())).wrap(false))
-                .rect;
-            if text_rect.width() < r.x / 4. - ui.spacing().item_spacing.x {
-                ui.add_space(r.x / 4. - text_rect.width() - ui.spacing().item_spacing.x);
-            }
+            ui.add_sized(
+                [80., text_height * 1.4],
+                egui::Label::new(format!("Arc {:?}", k.data()))
+                    .wrap(false)
+                    .truncate(true),
+            );
 
             *changed |= ui
-                .add_sized(
-                    [r.x / 4., text_height * 1.4],
-                    egui::Checkbox::new(&mut meta.construction, "🚧"),
-                )
+                .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
+            ui.add(
+                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
+                    .rounding(5.0),
+            );
+
+            if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
+                ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
+            }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
@@ -579,6 +594,8 @@ impl<'a> Widget<'a> {
                                 egui::ComboBox::from_id_source("type combo")
                                     .selected_text(format!("{:?}", group.typ))
                                     .show_ui(ui, |ui| {
+                                        ui.style_mut().wrap = Some(false);
+                                        ui.set_min_width(60.0);
                                         ui.selectable_value(&mut group.typ, GroupType::Interior, "Interior");
                                         if ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary").changed() {
                                             boundary_group_set = Some(i);

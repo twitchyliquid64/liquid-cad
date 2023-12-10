@@ -33,6 +33,8 @@ impl Default for App {
 impl App {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+
         let mut app = Self::default();
 
         if let Some(storage) = cc.storage {
