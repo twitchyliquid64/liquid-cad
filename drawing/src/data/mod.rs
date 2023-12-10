@@ -667,6 +667,7 @@ mod tests {
             ConstraintMeta::default(),
             line1,
             line2,
+            None,
         ));
 
         assert_eq!(
@@ -1002,6 +1003,81 @@ mod tests {
         let point = data.features_iter().map(|(_fk, f)| f).nth(3).unwrap();
         assert!(
             matches!(point, Feature::Point(_, x, y) if (13.0 - x).abs() < 0.005 && (4.0 - y).abs() < 0.005 )
+        );
+    }
+
+    #[test]
+    fn solve_line_lengths_ratio() {
+        //   p0 ----- p1
+        // (0, 0)  (5, 0)
+        //   |
+        //   | d = 2.0 * d(p0, p1)
+        //   |
+        //  p2
+
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: -5.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 2],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (0.0, 0.0),
+                    feature_idx: vec![0],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "fixed".to_string(),
+                    at: (5.0, 0.0),
+                    feature_idx: vec![1],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "vertical".to_string(),
+                    feature_idx: vec![4],
+                    ..SerializedConstraint::default()
+                },
+                SerializedConstraint {
+                    kind: "line_lengths_equal".to_string(),
+                    feature_idx: vec![3, 4],
+                    amt: 2.0,
+                    ..SerializedConstraint::default()
+                },
+            ],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        let point = data.features_iter().map(|(_fk, f)| f).nth(2).unwrap();
+        assert!(
+            matches!(point, Feature::Point(_, x, y) if x.abs() < 0.005 && (10.0 + y).abs() < 0.05 )
         );
     }
 

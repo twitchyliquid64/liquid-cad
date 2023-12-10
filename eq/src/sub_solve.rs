@@ -226,19 +226,20 @@ impl SubSolver {
             // As a special case, if the equation only has one solution
             // then we store the numeric result rather than the equation.
             if out.expr.num_solutions() == 1 {
-                let cc = out.expr.evaluate(st, 0).unwrap();
-                match cc {
-                    Concrete::Float(ref f) if !f.is_nan() && !f.is_infinite() => {
-                        st.resolved
-                            .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
-                        return Ok(SolvePlan::Concrete(cc));
+                if let Ok(cc) = out.expr.evaluate(st, 0) {
+                    match cc {
+                        Concrete::Float(ref f) if !f.is_nan() && !f.is_infinite() => {
+                            st.resolved
+                                .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
+                            return Ok(SolvePlan::Concrete(cc));
+                        }
+                        Concrete::Rational(_) => {
+                            st.resolved
+                                .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
+                            return Ok(SolvePlan::Concrete(cc));
+                        }
+                        _ => {}
                     }
-                    Concrete::Rational(_) => {
-                        st.resolved
-                            .insert(var.clone(), SolvePlan::Concrete(cc.clone()));
-                        return Ok(SolvePlan::Concrete(cc));
-                    }
-                    _ => {}
                 }
             }
 

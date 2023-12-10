@@ -10,7 +10,7 @@
  * New tools:
   * Circle
  * Fix instability with parallel tool
- * Allow equal constraints to optionally be a ratio
+ * Save-as, Load-from
 
 ### Testing locally
 

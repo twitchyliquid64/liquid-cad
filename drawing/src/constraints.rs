@@ -63,7 +63,7 @@ pub enum Constraint {
     ),
     LineAlongCardinal(ConstraintMeta, FeatureKey, Axis),
     PointLerpLine(ConstraintMeta, FeatureKey, FeatureKey, f32),
-    LineLengthsEqual(ConstraintMeta, FeatureKey, FeatureKey),
+    LineLengthsEqual(ConstraintMeta, FeatureKey, FeatureKey, Option<f32>),
     LinesParallel(ConstraintMeta, FeatureKey, FeatureKey),
 }
 
@@ -448,7 +448,7 @@ impl Constraint {
                 }
             }
 
-            LineLengthsEqual(_, l1, l2, ..) => {
+            LineLengthsEqual(_, l1, l2, multiplier, ..) => {
                 if let (
                     Some(Feature::LineSegment(_, p11, p12)),
                     Some(Feature::LineSegment(_, p21, p22)),
@@ -477,7 +477,16 @@ impl Constraint {
                     vec![
                         Expression::Equal(
                             Box::new(Expression::Variable(d2.into())),
-                            Box::new(Expression::Variable(d1.into())),
+                            Box::new(match multiplier {
+                                Some(a) => Expression::Product(
+                                    Box::new(Expression::Rational(
+                                        Rational::from_float(*a).unwrap(),
+                                        true,
+                                    )),
+                                    Box::new(Expression::Variable(d1.into())),
+                                ),
+                                None => Expression::Variable(d1.into()),
+                            }),
                         ),
                         Expression::Equal(
                             Box::new(Expression::Variable(d1.into())),
@@ -593,7 +602,7 @@ impl Constraint {
                     ..SerializedConstraint::default()
                 })
             }
-            Constraint::LineLengthsEqual(meta, fk1, fk2) => {
+            Constraint::LineLengthsEqual(meta, fk1, fk2, ratio) => {
                 let (fk1_idx, fk2_idx) =
                     (fk_to_idx.get(fk1).ok_or(())?, fk_to_idx.get(fk2).ok_or(())?);
 
@@ -601,6 +610,7 @@ impl Constraint {
                     kind: "line_lengths_equal".to_string(),
                     meta: meta.clone(),
                     feature_idx: vec![*fk1_idx, *fk2_idx],
+                    amt: ratio.unwrap_or(0.0),
                     ..SerializedConstraint::default()
                 })
             }
@@ -688,6 +698,7 @@ impl Constraint {
                     sc.meta,
                     *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
                     *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                    if sc.amt == 0.0 { None } else { Some(sc.amt) },
                 ))
             }
             "lines_parallel" => {
@@ -801,12 +812,28 @@ mod tests {
         );
 
         assert_eq!(
-            Constraint::LineLengthsEqual(ConstraintMeta::default(), point_key, point_key,)
+            Constraint::LineLengthsEqual(ConstraintMeta::default(), point_key, point_key, None)
                 .serialize(&HashMap::from([(point_key, 42)])),
             Ok(SerializedConstraint {
                 kind: "line_lengths_equal".to_string(),
                 meta: ConstraintMeta::default(),
                 feature_idx: vec![42, 42],
+                ..SerializedConstraint::default()
+            }),
+        );
+        assert_eq!(
+            Constraint::LineLengthsEqual(
+                ConstraintMeta::default(),
+                point_key,
+                point_key,
+                Some(0.5)
+            )
+            .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "line_lengths_equal".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42, 42],
+                amt: 0.5,
                 ..SerializedConstraint::default()
             }),
         );
@@ -875,6 +902,32 @@ mod tests {
             ),
         );
 
-        // TODO: PointLerpLine, LineLengthsEqual, LinesParallel
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "line_lengths_equal".to_string(),
+                    feature_idx: vec![1, 1],
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::LineLengthsEqual(ConstraintMeta::default(), k, k, None,),
+        );
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "line_lengths_equal".to_string(),
+                    feature_idx: vec![1, 1],
+                    amt: 0.5,
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::LineLengthsEqual(ConstraintMeta::default(), k, k, Some(0.5),),
+        );
+
+        // TODO: PointLerpLine, LinesParallel
     }
 }

@@ -172,14 +172,19 @@ impl<'a> Widget<'a> {
                                                 meta,
                                             )
                                         }
-                                        Some(Constraint::LineLengthsEqual(..)) => {
-                                            Widget::show_constraint_line_equal(
-                                                ui,
-                                                &mut commands,
-                                                &mut changed,
-                                                &ck,
-                                            )
-                                        }
+                                        Some(Constraint::LineLengthsEqual(
+                                            _meta,
+                                            _k1,
+                                            _k2,
+                                            ratio,
+                                            ..,
+                                        )) => Widget::show_constraint_line_equal(
+                                            ui,
+                                            &mut commands,
+                                            ratio,
+                                            &mut changed,
+                                            &ck,
+                                        ),
                                         Some(Constraint::LinesParallel(..)) => {
                                             Widget::show_constraint_lines_parallel(
                                                 ui,
@@ -407,14 +412,28 @@ impl<'a> Widget<'a> {
     fn show_constraint_line_equal(
         ui: &mut egui::Ui,
         commands: &mut Vec<ToolResponse>,
-        _changed: &mut bool,
+        ratio: &mut Option<f32>,
+        changed: &mut bool,
         k: &ConstraintKey,
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             let text_rect = ui.add(egui::Label::new("Equal length").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
+
+            if ratio.is_none() {
+                let resp = ui.add_sized(
+                    [100. + ui.spacing().item_spacing.x, text_height * 1.4],
+                    egui::Button::new("set multiplier"),
+                );
+
+                if resp.clicked() {
+                    *changed |= true;
+                    *ratio = Some(0.5);
+                }
+            }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
@@ -422,6 +441,28 @@ impl<'a> Widget<'a> {
                 }
             });
         });
+
+        if let Some(m) = ratio {
+            ui.horizontal(|ui| {
+                let r = ui.available_size();
+                let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+                let text_rect = ui.add(egui::Label::new("⏵ Multiplier").wrap(false)).rect;
+                ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
+
+                let dv = ui.add_sized(
+                    [50., text_height * 1.4],
+                    egui::DragValue::new(m).clamp_range(0.05..=20.0).speed(0.01),
+                );
+                *changed |= dv.changed();
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    if ui.button("⊗").clicked() {
+                        commands.push(ToolResponse::ConstraintLinesEqualRemoveMultiplier(*k));
+                    }
+                });
+            });
+        }
     }
 
     fn show_constraint_lines_parallel(

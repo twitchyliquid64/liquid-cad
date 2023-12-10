@@ -15,9 +15,11 @@ pub enum ToolResponse {
     NewLineLengthConstraint(FeatureKey),
     NewLineCardinalConstraint(FeatureKey, bool), // true = horizontal
     NewPointLerp(FeatureKey, FeatureKey),        // point, line
-    ConstraintDelete(ConstraintKey),
     NewEqual(FeatureKey, FeatureKey),
     NewParallelLine(FeatureKey, FeatureKey),
+
+    ConstraintDelete(ConstraintKey),
+    ConstraintLinesEqualRemoveMultiplier(ConstraintKey),
 
     DeleteGroup(usize),
 }
@@ -111,7 +113,6 @@ impl Handler {
             ToolResponse::NewFixedConstraint(k) => match drawing.features.get(k) {
                 Some(Feature::Point(..)) => {
                     drawing.add_constraint(Constraint::Fixed(ConstraintMeta::default(), k, 0., 0.));
-
                     tools.clear();
                 }
                 _ => {}
@@ -255,6 +256,7 @@ impl Handler {
                             ConstraintMeta::default(),
                             l1,
                             l2,
+                            None,
                         ));
 
                         tools.clear();
@@ -262,6 +264,18 @@ impl Handler {
                     _ => {}
                 }
             }
+            ToolResponse::ConstraintLinesEqualRemoveMultiplier(ck) => {
+                match drawing.constraints.get_mut(ck) {
+                    Some(Constraint::LineLengthsEqual(_meta, _l1, _l2, multiplier)) => {
+                        *multiplier = None;
+                        drawing.changed_in_ui();
+                    }
+                    _ => {
+                        unreachable!();
+                    }
+                }
+            }
+
             ToolResponse::NewParallelLine(l1, l2) => {
                 match (drawing.features.get(l1), drawing.features.get(l2)) {
                     (Some(Feature::LineSegment(..)), Some(Feature::LineSegment(..))) => {
