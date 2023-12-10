@@ -1083,4 +1083,212 @@ mod tests {
                 *amt == 0.5,
         ));
     }
+
+    #[test]
+    fn applying_horizontal_sets_line_length_cardinality_positive() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![SerializedConstraint {
+                kind: "length".to_string(),
+                feature_idx: vec![2],
+                amt: 5.0,
+                ..SerializedConstraint::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        // Simulate creating a horizontal constraint
+        let line_fk = data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap();
+        let mut tools = crate::tools::Toolbar::default();
+        crate::Handler::default().handle(
+            &mut data,
+            &mut tools,
+            crate::handler::ToolResponse::NewLineCardinalConstraint(line_fk, true), // true = horizontal
+        );
+
+        // Make sure that line length constraint got updated with an axis
+        assert!(matches!(
+            data.constraints.iter().next().unwrap().1,
+            Constraint::LineLength(_, c_fk, _amt, Some((Axis::LeftRight, false)), ..)
+                if c_fk == &line_fk,
+        ));
+    }
+
+    #[test]
+    fn applying_horizontal_sets_line_length_cardinality_negative() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![1, 0],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![SerializedConstraint {
+                kind: "length".to_string(),
+                feature_idx: vec![2],
+                amt: 5.0,
+                ..SerializedConstraint::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        // Simulate creating a horizontal constraint
+        let line_fk = data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap();
+        let mut tools = crate::tools::Toolbar::default();
+        crate::Handler::default().handle(
+            &mut data,
+            &mut tools,
+            crate::handler::ToolResponse::NewLineCardinalConstraint(line_fk, true), // true = horizontal
+        );
+
+        // Make sure that line length constraint got updated with an axis
+        assert!(matches!(
+            data.constraints.iter().next().unwrap().1,
+            Constraint::LineLength(_, c_fk, _amt, Some((Axis::LeftRight, true)), ..)
+                if c_fk == &line_fk,
+        ));
+    }
+
+    #[test]
+    fn applying_line_length_to_horizontal_sets_cardinality_positive() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![SerializedConstraint {
+                kind: "horizontal".to_string(),
+                feature_idx: vec![2],
+                ..SerializedConstraint::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        // Simulate creating a line length constraint
+        let line_fk = data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap();
+        let mut tools = crate::tools::Toolbar::default();
+        crate::Handler::default().handle(
+            &mut data,
+            &mut tools,
+            crate::handler::ToolResponse::NewLineLengthConstraint(line_fk),
+        );
+
+        // Make sure that the only constraint is the line length constraint we want
+        assert!(data.constraints.iter().len() == 1);
+        assert!(matches!(
+            data.constraints.iter().next().unwrap().1,
+            Constraint::LineLength(_, c_fk, amt, Some((Axis::LeftRight, false)), ..)
+                if c_fk == &line_fk && *amt == 5.0,
+        ));
+    }
+
+    #[test]
+    fn applying_line_length_to_horizontal_sets_cardinality_negative() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: -5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![SerializedConstraint {
+                kind: "horizontal".to_string(),
+                feature_idx: vec![2],
+                ..SerializedConstraint::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        // Simulate creating a line length constraint
+        let line_fk = data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap();
+        let mut tools = crate::tools::Toolbar::default();
+        crate::Handler::default().handle(
+            &mut data,
+            &mut tools,
+            crate::handler::ToolResponse::NewLineLengthConstraint(line_fk),
+        );
+
+        // Make sure that the only constraint is the line length constraint we want
+        assert!(data.constraints.iter().len() == 1);
+        assert!(matches!(
+            data.constraints.iter().next().unwrap().1,
+            Constraint::LineLength(_, c_fk, amt, Some((Axis::LeftRight, true)), ..)
+                if c_fk == &line_fk && *amt == 5.0,
+        ));
+    }
 }

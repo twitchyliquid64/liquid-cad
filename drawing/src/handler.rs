@@ -130,38 +130,104 @@ impl Handler {
                     };
 
                     let d = p1.distance(p2);
+                    let mut cardinality: Option<(Axis, bool)> = None;
+
+                    // If we are dimensioning a line which already has a cardinality, remove the
+                    // cardinality constraint and just roll it into our length constraint.
+                    for ck in drawing.constraints_by_feature(&k).into_iter() {
+                        match drawing.constraints.get_mut(ck) {
+                            Some(Constraint::LineAlongCardinal(_, _, axis, ..)) => {
+                                cardinality = Some((
+                                    axis.clone(),
+                                    match axis {
+                                        Axis::TopBottom => p1.y > p2.y,
+                                        Axis::LeftRight => p1.x > p2.x,
+                                    },
+                                ));
+                                drawing.delete_constraint(ck);
+                            }
+                            _ => {}
+                        }
+                    }
 
                     drawing.add_constraint(Constraint::LineLength(
                         ConstraintMeta::default(),
                         k,
                         d,
-                        None,
+                        cardinality,
                         DimensionDisplay { x: 0., y: 35.0 },
                     ));
-
                     tools.clear();
                 }
                 _ => {}
             },
             ToolResponse::NewLineCardinalConstraint(k, is_horizontal) => {
-                match drawing.features.get(k) {
-                    Some(Feature::LineSegment(_, _f1, _f2)) => {
-                        // TODO: Delete/modify existing constraints that would clash, if any
-
-                        drawing.add_constraint(Constraint::LineAlongCardinal(
-                            ConstraintMeta::default(),
-                            k,
-                            if is_horizontal {
-                                Axis::LeftRight
-                            } else {
-                                Axis::TopBottom
-                            },
-                        ));
-
-                        tools.clear();
+                let want_axis = if is_horizontal {
+                    Axis::LeftRight
+                } else {
+                    Axis::TopBottom
+                };
+                let (p1, p2) = match drawing.features.get(k) {
+                    Some(Feature::LineSegment(_, f1, f2)) => {
+                        let (f1, f2) = (
+                            drawing.features.get(*f1).unwrap(),
+                            drawing.features.get(*f2).unwrap(),
+                        );
+                        match (f1, f2) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        }
                     }
-                    _ => {}
+                    _ => unreachable!(),
+                };
+
+                // Delete any existing Cardinal constraint that were opposite
+                let clashing_constraints: Vec<_> = drawing
+                    .constraints_by_feature(&k)
+                    .into_iter()
+                    .filter_map(|ck| match drawing.constraints.get(ck) {
+                        Some(Constraint::LineAlongCardinal(_, _, axis, ..)) => {
+                            if axis != &want_axis {
+                                Some(ck)
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                for ck in clashing_constraints {
+                    drawing.delete_constraint(ck);
                 }
+
+                // Instead of making a new constraint, setup cardinality on a distance
+                // constraint if one exists.
+                for ck in drawing.constraints_by_feature(&k).into_iter() {
+                    match drawing.constraints.get_mut(ck) {
+                        Some(Constraint::LineLength(_, _fk, _dist, cardinality, ..)) => {
+                            *cardinality = Some((
+                                want_axis.clone(),
+                                match want_axis {
+                                    Axis::TopBottom => p1.y > p2.y,
+                                    Axis::LeftRight => p1.x > p2.x,
+                                },
+                            ));
+                            drawing.changed_in_ui();
+                            tools.clear();
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+
+                drawing.add_constraint(Constraint::LineAlongCardinal(
+                    ConstraintMeta::default(),
+                    k,
+                    want_axis,
+                ));
+                tools.clear();
             }
             ToolResponse::NewPointLerp(p_fk, l_fk) => {
                 match (drawing.features.get(p_fk), drawing.features.get(l_fk)) {

@@ -10,7 +10,6 @@
  * New tools:
   * Circle
  * Fix instability with parallel tool
- * Make horizontal/vertical tool applied to a dimensioned line just set its cardinality & vice versa
  * Allow equal constraints to optionally be a ratio
 
 ### Testing locally
