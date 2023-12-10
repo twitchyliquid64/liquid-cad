@@ -67,12 +67,34 @@ impl Handler {
                     }
                     _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
                 };
-                let mid = p1.lerp(p2, 0.5);
 
-                let mid_fk =
-                    drawing
-                        .features
-                        .insert(Feature::Point(FeatureMeta::default(), mid.x, mid.y));
+                // Create the midpoint point.
+                let mid = p1.lerp(p2, 0.5);
+                let mid_fk = drawing.features.insert(Feature::Point(
+                    FeatureMeta::default_construction(),
+                    mid.x,
+                    mid.y,
+                ));
+
+                // Create a line between the points if none exists.
+                let line_fk = match drawing.find_line_between(&fk1, &fk2) {
+                    Some(fk) => fk,
+                    None => drawing.features.insert(Feature::LineSegment(
+                        FeatureMeta::default_construction(),
+                        fk1,
+                        fk2,
+                    )),
+                };
+
+                // Constrain the midpoint to be at the 0.5 lerp of the line.
+                drawing.add_constraint(Constraint::PointLerpLine(
+                    ConstraintMeta::default(),
+                    line_fk,
+                    mid_fk,
+                    0.5,
+                ));
+
+                // Finally, create the arc feature.
                 let a = Feature::Arc(FeatureMeta::default(), fk1, mid_fk, fk2);
                 drawing.features.insert(a);
 

@@ -307,6 +307,23 @@ impl Data {
         }
     }
 
+    /// Returns the line between the two specified points, if any.
+    pub fn find_line_between(&self, p1: &FeatureKey, p2: &FeatureKey) -> Option<FeatureKey> {
+        self.features
+            .iter()
+            .filter_map(|(fk, f)| match f {
+                Feature::LineSegment(_, lp1, lp2, ..) => {
+                    if (lp1 == p1 && lp2 == p2) || (lp2 == p1 && lp1 == p2) {
+                        Some(fk)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+            .next()
+    }
+
     /// Returns the feature the screen coordinates are hovering over, if any.
     fn find_screen_feature(&self, hp: egui::Pos2) -> Option<(FeatureKey, Feature)> {
         let mut closest: Option<(FeatureKey, f32, bool)> = None;
@@ -1019,5 +1036,51 @@ mod tests {
                 ..Group::default()
             },],
         );
+    }
+
+    #[test]
+    fn new_arc_constrains_midpoint() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+            ],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        // Simulate creating an Arc with the Arc tool
+        let (pt1, pt2) = (
+            data.features_iter().map(|(fk, _f)| fk).nth(0).unwrap(),
+            data.features_iter().map(|(fk, _f)| fk).nth(1).unwrap(),
+        );
+        let mut tools = crate::tools::Toolbar::default();
+        crate::Handler::default().handle(
+            &mut data,
+            &mut tools,
+            crate::handler::ToolResponse::NewArc(pt1, pt2),
+        );
+
+        // See if we now have a constraint that applies to the new midpoint,
+        // lerp'ing it to the midpoint of the line between
+        assert!(matches!(
+            data.constraints.iter().next().unwrap().1,
+            Constraint::PointLerpLine(_, _l_fk, mid_fk, amt)
+                if mid_fk == &data.features_iter().map(|(fk, _f)| fk).nth(2).unwrap() &&
+                *amt == 0.5,
+        ));
     }
 }

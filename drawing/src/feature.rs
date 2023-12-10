@@ -13,6 +13,12 @@ pub struct FeatureMeta {
     pub construction: bool,
 }
 
+impl FeatureMeta {
+    pub fn default_construction() -> Self {
+        Self { construction: true }
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SerializedFeature {
     pub kind: String,
