@@ -27,6 +27,7 @@ pub struct SerializedFeature {
 
     pub x: f32,
     pub y: f32,
+    pub r: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,7 @@ pub enum Feature {
     Point(FeatureMeta, f32, f32),
     LineSegment(FeatureMeta, FeatureKey, FeatureKey),
     Arc(FeatureMeta, FeatureKey, FeatureKey, FeatureKey), // start, center, end
+    Circle(FeatureMeta, FeatureKey, f32),                 // center, radius
 }
 
 impl Default for Feature {
@@ -44,7 +46,7 @@ impl Default for Feature {
 
 impl PartialEq<Feature> for Feature {
     fn eq(&self, other: &Feature) -> bool {
-        use Feature::{Arc, LineSegment, Point};
+        use Feature::{Arc, Circle, LineSegment, Point};
         match (self, other) {
             (Point(_, x1, y1), Point(_, x2, y2)) => x1 == x2 && y1 == y2,
             (LineSegment(_, p00, p01), LineSegment(_, p10, p11)) => {
@@ -53,6 +55,7 @@ impl PartialEq<Feature> for Feature {
             (Arc(_, p00, p01, p02), Arc(_, p10, p11, p12)) => {
                 p01 == p11 && ((p00 == p10 && p02 == p12) || (p00 == p12 && p02 == p10))
             }
+            (Circle(_, p0, r0, ..), Circle(_, p1, r1, ..)) => p0 == p1 && (r1 - r0).abs() < 0.005,
             _ => false,
         }
     }
@@ -67,6 +70,7 @@ impl Feature {
             Feature::Point(meta, ..) => meta.construction,
             Feature::LineSegment(meta, ..) => meta.construction,
             Feature::Arc(meta, ..) => meta.construction,
+            Feature::Circle(meta, ..) => meta.construction,
         }
     }
 
@@ -75,6 +79,7 @@ impl Feature {
             Feature::Point(_, _, _) => [None, None, None],
             Feature::LineSegment(_, p1, p2) => [Some(*p1), Some(*p2), None],
             Feature::Arc(_, p1, p2, p3) => [Some(*p1), Some(*p2), Some(*p3)],
+            Feature::Circle(_, p, ..) => [Some(*p), None, None],
         }
     }
 
@@ -101,6 +106,10 @@ impl Feature {
                 );
 
                 p1.bb(drawing).union(p2.bb(drawing).union(p3.bb(drawing)))
+            }
+            Feature::Circle(_, p, r, ..) => {
+                let p = drawing.features.get(*p).unwrap();
+                p.bb(drawing).expand(*r)
             }
         }
     }
@@ -147,6 +156,16 @@ impl Feature {
                 };
 
                 Arc { start, center, end }.distance_to_point_sq(&hp)
+            }
+
+            Feature::Circle(_, p, r, ..) => {
+                let p = vp.translate_point(match drawing.features.get(*p).unwrap() {
+                    Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                    _ => unreachable!(),
+                });
+                let (x_diff, y_diff) = (hp.x - p.x, hp.y - p.y);
+
+                ((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r / vp.zoom).powi(2)
             }
         }
     }
@@ -269,6 +288,33 @@ impl Feature {
                     })
                 }
             }
+
+            Feature::Circle(meta, p, r, ..) => {
+                let f = drawing.features.get(*p).unwrap();
+                let p = match f {
+                    Feature::Point(_, x1, y1) => {
+                        params.vp.translate_point(egui::Pos2 { x: *x1, y: *y1 })
+                    }
+                    _ => panic!("unexpected subkey type: {:?}", f),
+                };
+
+                painter.circle_stroke(
+                    p,
+                    *r / params.vp.zoom,
+                    egui::Stroke {
+                        width: 1.,
+                        color: if params.selected {
+                            params.colors.selected
+                        } else if params.hovered {
+                            params.colors.hover
+                        } else if meta.construction {
+                            params.colors.line.gamma_multiply(0.35)
+                        } else {
+                            params.colors.line
+                        },
+                    },
+                )
+            }
         }
     }
 
@@ -285,6 +331,7 @@ impl Feature {
                 using_idx: vec![],
                 x: *x,
                 y: *y,
+                ..SerializedFeature::default()
             }),
 
             Feature::LineSegment(meta, p1, p2) => {
@@ -294,8 +341,7 @@ impl Feature {
                     kind: "line".to_string(),
                     meta: meta.clone(),
                     using_idx: vec![*p1_idx, *p2_idx],
-                    x: 0.0,
-                    y: 0.0,
+                    ..SerializedFeature::default()
                 })
             }
 
@@ -310,8 +356,19 @@ impl Feature {
                     kind: "arc".to_string(),
                     meta: meta.clone(),
                     using_idx: vec![*start_idx, *center_idx, *end_idx],
-                    x: 0.0,
-                    y: 0.0,
+                    ..SerializedFeature::default()
+                })
+            }
+
+            Feature::Circle(meta, p, r) => {
+                let p_idx = fk_to_idx.get(p).ok_or(())?;
+
+                Ok(SerializedFeature {
+                    kind: "circle".to_string(),
+                    meta: meta.clone(),
+                    using_idx: vec![*p_idx],
+                    r: *r,
+                    ..SerializedFeature::default()
                 })
             }
         }
@@ -344,6 +401,16 @@ impl Feature {
                     *idx_to_fk.get(&sf.using_idx[2]).ok_or(())?,
                 ))
             }
+            "circle" => {
+                if sf.using_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::Circle(
+                    sf.meta,
+                    *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
+                    sf.r,
+                ))
+            }
             _ => Err(()),
         }
     }
@@ -364,6 +431,7 @@ mod tests {
                 using_idx: vec![],
                 x: 1.5,
                 y: 2.5,
+                ..SerializedFeature::default()
             }),
         );
 
@@ -376,8 +444,7 @@ mod tests {
                 kind: "line".to_string(),
                 meta: FeatureMeta::default(),
                 using_idx: vec![42, 42],
-                x: 0.0,
-                y: 0.0,
+                ..SerializedFeature::default()
             }),
         );
 
@@ -388,8 +455,7 @@ mod tests {
                 kind: "arc".to_string(),
                 meta: FeatureMeta::default(),
                 using_idx: vec![22, 22, 22],
-                x: 0.0,
-                y: 0.0,
+                ..SerializedFeature::default()
             }),
         );
 
@@ -398,6 +464,18 @@ mod tests {
             Feature::LineSegment(FeatureMeta::default(), point_key, point_key)
                 .serialize(&HashMap::new()),
             Err(()),
+        );
+
+        assert_eq!(
+            Feature::Circle(FeatureMeta::default(), point_key, 6.9)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedFeature {
+                kind: "circle".to_string(),
+                meta: FeatureMeta::default(),
+                using_idx: vec![42],
+                r: 6.9,
+                ..SerializedFeature::default()
+            }),
         );
     }
 
@@ -444,6 +522,22 @@ mod tests {
                 FeatureKey::null(),
                 FeatureKey::null(),
                 FeatureKey::null()
+            )),
+        );
+        assert_eq!(
+            Feature::deserialize(
+                SerializedFeature {
+                    kind: "circle".to_string(),
+                    using_idx: vec![1],
+                    r: 6.9,
+                    ..SerializedFeature::default()
+                },
+                &HashMap::from([(1, FeatureKey::null())]),
+            ),
+            Ok(Feature::Circle(
+                FeatureMeta::default(),
+                FeatureKey::null(),
+                6.9,
             )),
         );
     }

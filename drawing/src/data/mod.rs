@@ -603,6 +603,7 @@ mod tests {
                     using_idx: vec![],
                     x: 0.0,
                     y: 0.0,
+                    ..SerializedFeature::default()
                 },
                 SerializedFeature {
                     kind: "pt".to_string(),
@@ -610,6 +611,7 @@ mod tests {
                     using_idx: vec![],
                     x: 5.0,
                     y: 0.0,
+                    ..SerializedFeature::default()
                 },
                 SerializedFeature {
                     kind: "pt".to_string(),
@@ -617,20 +619,19 @@ mod tests {
                     using_idx: vec![],
                     x: 2.5,
                     y: 0.0,
+                    ..SerializedFeature::default()
                 },
                 SerializedFeature {
                     kind: "line".to_string(),
                     meta: FeatureMeta::default(),
                     using_idx: vec![0, 1],
-                    x: 0.0,
-                    y: 0.0,
+                    ..SerializedFeature::default()
                 },
                 SerializedFeature {
                     kind: "arc".to_string(),
                     meta: FeatureMeta::default(),
                     using_idx: vec![0, 2, 1],
-                    x: 0.0,
-                    y: 0.0,
+                    ..SerializedFeature::default()
                 },
             ],
         );
@@ -680,6 +681,7 @@ mod tests {
                         using_idx: vec![],
                         x: 0.0,
                         y: 0.0,
+                        ..SerializedFeature::default()
                     },
                     SerializedFeature {
                         kind: "pt".to_string(),
@@ -687,6 +689,7 @@ mod tests {
                         using_idx: vec![],
                         x: 5.0,
                         y: 0.0,
+                        ..SerializedFeature::default()
                     },
                     SerializedFeature {
                         kind: "pt".to_string(),
@@ -694,6 +697,7 @@ mod tests {
                         using_idx: vec![],
                         x: 5.0,
                         y: -5.0,
+                        ..SerializedFeature::default()
                     },
                     SerializedFeature {
                         kind: "line".to_string(),

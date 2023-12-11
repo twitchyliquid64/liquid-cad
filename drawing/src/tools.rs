@@ -323,7 +323,7 @@ impl Tool {
             Tool::Point => Some("P"),
             Tool::Line(_) => Some("L"),
             Tool::Arc(_) => Some("R"),
-            Tool::Circle(_) => None,
+            Tool::Circle(_) => Some("C"),
             Tool::Fixed => Some("S"),
             Tool::Dimension => Some("D"),
             Tool::Horizontal => Some("H"),
@@ -338,14 +338,14 @@ impl Tool {
             Tool::Point => Some("Creates points.\n\nClick anywhere in free space to create a point."),
             Tool::Line(_) => Some("Creates lines from existing points.\n\nClick on the first point and then the second to create a line."),
             Tool::Arc(_) => Some("Creates a circular arc between points.\n\nClick on the first point and then the second to create an arc. A center point will be automatically created."),
-            Tool::Circle(_) => Some("Not yet implemented."),
+            Tool::Circle(_) => Some("Creates a circle around some center point.\n\nClick on the center point, and then again in empty space to create the circle."),
             Tool::Fixed => Some("Constraints a point to be at specific co-ordinates.\n\nClick a point to constrain it to (0,0). Co-ordinates can be changed later in the selection UI."),
             Tool::Dimension => Some("Constrains a line to have a specific length.\n\nClick a line to constrain it to its current length. The length can be changed later in the selection UI."),
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
             Tool::Vertical => Some("Constrains a line to be vertical."),
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
             Tool::Equal(_) => Some("Constrains a line to be equal in length to another line."),
-            Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nClick on the first line, and then the second line to create this constraint."),
+            Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nWARNING: THIS TOOL IS EXPERIMENTAL and not working properly.\n\nClick on the first line, and then the second line to create this constraint."),
         }
     }
 
@@ -449,7 +449,7 @@ impl Tool {
                         *p1 = None;
                         Some(ToolResponse::Handled)
                     }
-                    // No first point, clicked empty space or line or arc
+                    // No first point, clicked empty space or line or arc or circle
                     (Hover::None, None, true)
                     | (
                         Hover::Feature {
@@ -462,6 +462,14 @@ impl Tool {
                     | (
                         Hover::Feature {
                             feature: crate::Feature::Arc(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    )
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::Circle(..),
                             ..
                         },
                         None,
@@ -515,6 +523,69 @@ impl Tool {
                         *p1 = None;
                         Some(ToolResponse::Handled)
                     }
+                    // No first point, clicked empty space or line or arc or circle
+                    (Hover::None, None, true)
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::LineSegment(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    )
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::Arc(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    )
+                    | (
+                        Hover::Feature {
+                            feature: crate::Feature::Circle(..),
+                            ..
+                        },
+                        None,
+                        true,
+                    ) => Some(ToolResponse::SwitchToPointer),
+
+                    _ => None,
+                };
+                if c.is_some() {
+                    return c;
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+
+                None
+            }
+
+            Tool::Circle(p1) => {
+                let c = match (hover, &p1, response.clicked()) {
+                    // No first point, clicked on a point
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Point(..),
+                        },
+                        None,
+                        true,
+                    ) => {
+                        *p1 = Some(*k);
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first point, clicked anywhere
+                    (_, Some(starting_point), true) => {
+                        let starting_point = starting_point.clone();
+                        Some(ToolResponse::NewCircle(starting_point, hp))
+                    }
+
                     // No first point, clicked empty space or line or arc
                     (Hover::None, None, true)
                     | (
@@ -548,14 +619,6 @@ impl Tool {
                 }
 
                 None
-            }
-
-            Tool::Circle(_) => {
-                if response.clicked() {
-                    Some(ToolResponse::SwitchToPointer)
-                } else {
-                    Some(ToolResponse::Handled)
-                }
             }
 
             Tool::Fixed => {
@@ -907,10 +970,31 @@ impl Tool {
                     .on_hover_text_at_pointer("new arc: click end point");
             }
 
-            Tool::Circle(_) => {
+            Tool::Circle(None) => {
                 response
                     .clone()
-                    .on_hover_text_at_pointer("new circle: not yet implemented");
+                    .on_hover_text_at_pointer("new circle: click center point");
+            }
+            Tool::Circle(Some(fk)) => {
+                let p = drawing.features.get(*fk).unwrap();
+                let (x, y) = match p {
+                    crate::Feature::Point(_, x1, y1) => (*x1, *y1),
+                    _ => unreachable!(),
+                };
+                let c: egui::Pos2 = (x, y).into();
+
+                painter.circle_stroke(
+                    params.vp.translate_point(c),
+                    c.distance(params.vp.screen_to_point(hp)) / params.vp.zoom,
+                    egui::Stroke {
+                        width: TOOL_ICON_STROKE,
+                        color: egui::Color32::WHITE,
+                    },
+                );
+
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("new circle: click to set radius");
             }
 
             Tool::Fixed => {
@@ -1043,7 +1127,7 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d, v, h, i2, e, r) = ui.input(|i| {
+            let (l, p, s, d, v, h, i2, e, r, c) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::L),
                     i.key_pressed(egui::Key::P),
@@ -1054,43 +1138,48 @@ impl Toolbar {
                     i.key_pressed(egui::Key::I),
                     i.key_pressed(egui::Key::E),
                     i.key_pressed(egui::Key::R),
+                    i.key_pressed(egui::Key::C),
                 )
             });
-            match (l, p, s, d, v, h, i2, e, r) {
-                (true, _, _, _, _, _, _, _, _) => {
+            match (l, p, s, d, v, h, i2, e, r, c) {
+                (true, _, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _, _, _, _, _, _, _) => {
+                (_, true, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true, _, _, _, _, _, _) => {
+                (_, _, true, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, true, _, _, _, _, _) => {
+                (_, _, _, true, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Dimension);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, true, _, _, _, _) => {
+                (_, _, _, _, true, _, _, _, _, _) => {
                     self.current = Some(Tool::Vertical);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, true, _, _, _) => {
+                (_, _, _, _, _, true, _, _, _, _) => {
                     self.current = Some(Tool::Horizontal);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, true, _, _) => {
+                (_, _, _, _, _, _, true, _, _, _) => {
                     self.current = Some(Tool::Lerp(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, _, true, _) => {
+                (_, _, _, _, _, _, _, true, _, _) => {
                     self.current = Some(Tool::Equal(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, _, _, true) => {
+                (_, _, _, _, _, _, _, _, true, _) => {
                     self.current = Some(Tool::Arc(None));
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, _, _, _, _, _, true) => {
+                    self.current = Some(Tool::Circle(None));
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}

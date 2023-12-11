@@ -9,6 +9,7 @@ pub enum ToolResponse {
     NewPoint(egui::Pos2),
     NewLineSegment(FeatureKey, FeatureKey),
     NewArc(FeatureKey, FeatureKey),
+    NewCircle(FeatureKey, egui::Pos2),
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
@@ -100,6 +101,21 @@ impl Handler {
                 let a = Feature::Arc(FeatureMeta::default(), fk1, mid_fk, fk2);
                 drawing.features.insert(a);
 
+                tools.clear();
+            }
+            ToolResponse::NewCircle(center, pos) => {
+                let pos = drawing.vp.screen_to_point(pos);
+                let center_pos = match drawing.features.get(center) {
+                    Some(Feature::Point(_, x, y, ..)) => egui::Pos2 { x: *x, y: *y },
+                    _ => unreachable!(),
+                };
+
+                let p = Feature::Circle(FeatureMeta::default(), center, center_pos.distance(pos));
+
+                if drawing.feature_exists(&p) {
+                    return;
+                }
+                drawing.features.insert(p);
                 tools.clear();
             }
 

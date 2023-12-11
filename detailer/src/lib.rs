@@ -119,6 +119,16 @@ impl<'a> Widget<'a> {
                             &k,
                             meta,
                         ),
+                        Some(Feature::Circle(meta, _p, radius)) => {
+                            Widget::show_selection_entry_circle(
+                                ui,
+                                &mut commands,
+                                &mut changed,
+                                &k,
+                                radius,
+                                meta,
+                            )
+                        }
                         None => {}
                     }
 
@@ -602,6 +612,54 @@ impl<'a> Widget<'a> {
                 ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
             }
 
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::Delete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_selection_entry_circle(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &FeatureKey,
+        radius: &mut f32,
+        meta: &mut FeatureMeta,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            use slotmap::Key;
+            ui.add_sized(
+                [80., text_height * 1.4],
+                egui::Label::new(format!("Circle {:?}", k.data()))
+                    .wrap(false)
+                    .truncate(true),
+            );
+
+            *changed |= ui
+                .add(egui::Checkbox::without_text(&mut meta.construction))
+                .changed();
+            ui.add(
+                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
+                    .rounding(5.0),
+            );
+
+            if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
+                ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
+            }
+
+            *changed |= ui
+                .add_sized(
+                    [50., text_height * 1.4],
+                    egui::DragValue::new(radius)
+                        .clamp_range(0.0..=5000.0)
+                        .speed(0.05),
+                )
+                .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::Delete(*k));

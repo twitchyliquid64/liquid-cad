@@ -60,15 +60,40 @@ impl DumbassSolverState {
         solve_for: Vec<Variable>,
         residuals: Vec<Expression>,
     ) -> Self {
-        let jacobians = residuals
+        let jacobians: Vec<Vec<_>> = residuals
             .iter()
             .map(|fx| {
                 solve_for
                     .iter()
                     .map(|var| fx.derivative_wrt(&var))
+                    // .map(|jfx| {
+                    //     let mut linear = true;
+                    //     jfx.walk(&mut |e| match e {
+                    //         Expression::Power(..) | Expression::Sqrt(..) => {
+                    //             linear = false;
+                    //             false
+                    //         }
+                    //         _ => true,
+                    //     });
+                    //     if linear {
+                    //         Expression::Quotient(
+                    //             Box::new(jfx),
+                    //             Box::new(Expression::Integer(5.into())),
+                    //         )
+                    //     } else {
+                    //         jfx
+                    //     }
+                    // })
                     .collect()
             })
             .collect();
+
+        // for (i, r) in residuals.iter().enumerate() {
+        //     println!("residual: {}", r);
+        //     for (j, v) in solve_for.iter().enumerate() {
+        //         println!(" {}: {}", v, jacobians[i][j]);
+        //     }
+        // }
 
         Self {
             resolved: concrete,
