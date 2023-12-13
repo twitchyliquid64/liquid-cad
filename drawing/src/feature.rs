@@ -227,26 +227,7 @@ impl Feature {
                 )
             }
 
-            Feature::Arc(meta, p1, p2, p3) => {
-                let (f1, f2, f3) = (
-                    drawing.features.get(*p1).unwrap(),
-                    drawing.features.get(*p2).unwrap(),
-                    drawing.features.get(*p3).unwrap(),
-                );
-                let (start, center, end) = match (f1, f2, f3) {
-                    (
-                        Feature::Point(_, x1, y1),
-                        Feature::Point(_, x2, y2),
-                        Feature::Point(_, x3, y3),
-                    ) => (
-                        params.vp.translate_point(egui::Pos2 { x: *x1, y: *y1 }),
-                        params.vp.translate_point(egui::Pos2 { x: *x2, y: *y2 }),
-                        params.vp.translate_point(egui::Pos2 { x: *x3, y: *y3 }),
-                    ),
-                    _ => panic!("unexpected subkey types: {:?} & {:?} & {:?}", p1, p2, p3),
-                };
-                let r = (start.distance(center) as f64, end.distance(center) as f64);
-
+            Feature::Arc(meta, p1, ..) => {
                 let color = if params.selected {
                     params.colors.selected
                 } else if params.hovered {
@@ -258,26 +239,17 @@ impl Feature {
                 };
                 let stroke = egui::Stroke::new(1.0, color);
 
-                if let Some(a) = kurbo::Arc::from_svg_arc(&kurbo::SvgArc {
-                    from: (start.x as f64, start.y as f64).into(),
-                    to: (end.x as f64, end.y as f64).into(),
-                    radii: r.into(),
-                    sweep: true,
-                    x_rotation: 0.0,
-                    large_arc: {
-                        let (d_start, d_end) = (start - center, end - center);
-                        let dcross = d_start.x * d_end.y - d_end.x * d_start.y;
-                        dcross < 0.0
-                    },
-                }) {
+                if let Some(a) = self.kurbo_arc(drawing) {
+                    let start = drawing.features.get(*p1).unwrap().start_point(drawing);
+
                     let mut last = (start.x, start.y);
                     a.to_cubic_beziers(0.1, |p1, p2, p| {
                         let shape = egui::epaint::CubicBezierShape::from_points_stroke(
                             [
-                                last.into(),
-                                (p1.x as f32, p1.y as f32).into(),
-                                (p2.x as f32, p2.y as f32).into(),
-                                (p.x as f32, p.y as f32).into(),
+                                params.vp.translate_point(last.into()),
+                                params.vp.translate_point((p1.x as f32, p1.y as f32).into()),
+                                params.vp.translate_point((p2.x as f32, p2.y as f32).into()),
+                                params.vp.translate_point((p.x as f32, p.y as f32).into()),
                             ],
                             false,
                             egui::Color32::TRANSPARENT,
@@ -412,6 +384,141 @@ impl Feature {
                 ))
             }
             _ => Err(()),
+        }
+    }
+
+    fn kurbo_arc(&self, drawing: &Data) -> Option<kurbo::Arc> {
+        match self {
+            Feature::Arc(_, p1, p2, p3, ..) => {
+                let (f1, f2, f3) = (
+                    drawing.features.get(*p1).unwrap(),
+                    drawing.features.get(*p2).unwrap(),
+                    drawing.features.get(*p3).unwrap(),
+                );
+                let (start, center, end) = match (f1, f2, f3) {
+                    (
+                        Feature::Point(_, x1, y1),
+                        Feature::Point(_, x2, y2),
+                        Feature::Point(_, x3, y3),
+                    ) => (
+                        egui::Pos2 { x: *x1, y: *y1 },
+                        egui::Pos2 { x: *x2, y: *y2 },
+                        egui::Pos2 { x: *x3, y: *y3 },
+                    ),
+                    _ => panic!("unexpected subkey types: {:?} & {:?} & {:?}", p1, p2, p3),
+                };
+                let r = (start.distance(center) as f64, end.distance(center) as f64);
+
+                kurbo::Arc::from_svg_arc(&kurbo::SvgArc {
+                    from: (start.x as f64, start.y as f64).into(),
+                    to: (end.x as f64, end.y as f64).into(),
+                    radii: r.into(),
+                    sweep: true,
+                    x_rotation: 0.0,
+                    large_arc: {
+                        let (d_start, d_end) = (start - center, end - center);
+                        let dcross = d_start.x * d_end.y - d_end.x * d_start.y;
+                        dcross < 0.0
+                    },
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn bezier_path(&self, drawing: &Data) -> kurbo::BezPath {
+        let mut out = kurbo::BezPath::default();
+
+        use kurbo::Shape;
+        match self {
+            Feature::Point(_, x, y, ..) => {
+                out.move_to(kurbo::Point {
+                    x: *x as f64,
+                    y: *y as f64,
+                });
+            }
+            Feature::LineSegment(_, p1, p2, ..) => {
+                let (f1, f2) = (
+                    drawing.features.get(*p1).unwrap(),
+                    drawing.features.get(*p2).unwrap(),
+                );
+                let (p1, p2) = match (f1, f2) {
+                    (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                        (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                    }
+                    _ => panic!("unexpected subkey types: {:?} & {:?}", p1, p2),
+                };
+                out.move_to(kurbo::Point {
+                    x: p1.x as f64,
+                    y: p1.y as f64,
+                });
+                out.line_to(kurbo::Point {
+                    x: p2.x as f64,
+                    y: p2.y as f64,
+                });
+            }
+            Feature::Arc(..) => {
+                if let Some(a) = self.kurbo_arc(drawing) {
+                    out = a.into_path(0.1);
+                }
+            }
+            Feature::Circle(_, p_center, radius, ..) => {
+                let p = drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing);
+
+                out = kurbo::Circle::new(
+                    kurbo::Point {
+                        x: p.x as f64,
+                        y: p.y as f64,
+                    },
+                    *radius as f64,
+                )
+                .into_path(0.1);
+            }
+        };
+        out
+    }
+
+    pub fn start_point(&self, drawing: &Data) -> egui::Pos2 {
+        match self {
+            Feature::Point(_, x, y, ..) => egui::Pos2 { x: *x, y: *y },
+            Feature::LineSegment(_, p1, ..) => {
+                drawing.features.get(*p1).unwrap().start_point(drawing)
+            }
+            Feature::Arc(_, p_start, ..) => {
+                drawing.features.get(*p_start).unwrap().start_point(drawing)
+            }
+            Feature::Circle(_, p_center, radius, ..) => {
+                drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing)
+                    + egui::Vec2 { x: *radius, y: 0.0 }
+            }
+        }
+    }
+
+    pub fn end_point(&self, drawing: &Data) -> egui::Pos2 {
+        match self {
+            Feature::Point(_, x, y, ..) => egui::Pos2 { x: *x, y: *y },
+            Feature::LineSegment(_, _, p2, ..) => {
+                drawing.features.get(*p2).unwrap().start_point(drawing)
+            }
+            Feature::Arc(_, _p_start, _p_middle, p_end, ..) => {
+                drawing.features.get(*p_end).unwrap().start_point(drawing)
+            }
+            Feature::Circle(_, p_center, radius, ..) => {
+                drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing)
+                    + egui::Vec2 { x: *radius, y: 0.0 }
+            }
         }
     }
 }

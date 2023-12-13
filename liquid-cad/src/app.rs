@@ -12,6 +12,8 @@ pub struct App {
     tools: drawing::tools::Toolbar,
     #[serde(skip)]
     detailer_state: detailer::State,
+    #[serde(skip)]
+    toasts: egui_toast::Toasts,
 }
 
 impl Default for App {
@@ -20,12 +22,16 @@ impl Default for App {
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();
         let detailer_state = detailer::State::default();
+        let toasts = egui_toast::Toasts::new()
+            .anchor(egui::Align2::RIGHT_BOTTOM, (-10.0, -10.0)) // 10 units from the bottom right corner
+            .direction(egui::Direction::BottomUp);
 
         Self {
             drawing,
             handler,
             tools,
             detailer_state,
+            toasts,
         }
     }
 }
@@ -44,6 +50,8 @@ impl App {
                 if app.drawing.load(saved).err().is_some() {
                     println!("Failed to load diagram from storage");
                 }
+            } else {
+                println!("nothing read from storage");
             }
         }
 
@@ -103,7 +111,10 @@ impl eframe::App for App {
             &mut self.drawing,
             &mut self.tools,
             &mut self.handler,
+            &mut self.toasts,
         )
         .show(ctx);
+
+        self.toasts.show(ctx);
     }
 }

@@ -333,7 +333,7 @@ impl Tool {
             Tool::Parallel(_) => None,
         }
     }
-    pub fn long_tooltop(&self) -> Option<&'static str> {
+    pub fn long_tooltip(&self) -> Option<&'static str> {
         match self {
             Tool::Point => Some("Creates points.\n\nClick anywhere in free space to create a point."),
             Tool::Line(_) => Some("Creates lines from existing points.\n\nClick on the first point and then the second to create a line."),
@@ -1297,8 +1297,8 @@ impl Toolbar {
                         }
 
                         ui.label(job);
-                        if let Some(long_tooltop) = tool.long_tooltop() {
-                            ui.label(long_tooltop);
+                        if let Some(long_tooltip) = tool.long_tooltip() {
+                            ui.label(long_tooltip);
                         }
                     });
                 }

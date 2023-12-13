@@ -7,8 +7,6 @@
  * Export to STL
  * New constraints:
   * Line angle
- * New tools:
-  * Circle
  * Fix instability with parallel tool
  * Save-as, Load-from
 

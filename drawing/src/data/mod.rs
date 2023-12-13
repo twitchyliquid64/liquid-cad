@@ -569,6 +569,144 @@ impl Data {
         self.solve_and_apply();
         Ok(())
     }
+
+    pub fn serialize_openscad(&self, flatten_tolerance: f64) -> Result<String, ()> {
+        let (points, idx_outer, idx_inner) = self.flatten_to_idxs(flatten_tolerance)?;
+        if idx_outer.len() > 1 {
+            return Err(());
+        }
+
+        let mut out: String = String::from("polygon(\n  points = [\n    ");
+        out.reserve(64 + points.len() * 10 + idx_outer.len() * 5 + idx_inner.len() * 5);
+
+        let points_len = points.len();
+        for (i, point) in points.into_iter().enumerate() {
+            if i % 8 == 0 && i > 0 {
+                out.push_str("\n    ");
+            }
+            out.push_str("[");
+            out.push_str(&format!("{}, {}", point.x, point.y).to_string());
+            out.push_str("]");
+            if i + 1 < points_len {
+                out.push_str(", ");
+            }
+        }
+        out.push_str("\n  ],\n");
+
+        out.push_str("  paths = [");
+
+        let outer_len = idx_outer.len();
+        for (i, path) in idx_outer.into_iter().enumerate() {
+            out.push_str("\n    [");
+            let path_len = path.len();
+            for (j, idx) in path.into_iter().enumerate() {
+                out.push_str(&format!("{}", idx).to_string());
+                if j + 1 < path_len {
+                    out.push_str(", ");
+                }
+            }
+            out.push_str("]");
+            if idx_inner.len() > 0 || i + 1 < outer_len {
+                out.push_str(",");
+            }
+        }
+        let inner_len = idx_inner.len();
+        for (i, path) in idx_inner.into_iter().enumerate() {
+            out.push_str("\n    [");
+            let path_len = path.len();
+            for (j, idx) in path.into_iter().enumerate() {
+                out.push_str(&format!("{}", idx).to_string());
+                if j + 1 < path_len {
+                    out.push_str(", ");
+                }
+            }
+            out.push_str("]");
+            if i + 1 < inner_len {
+                out.push_str(",");
+            }
+        }
+
+        out.push_str("\n  ],\n  ");
+        out.push_str("convexity = 10\n);");
+
+        Ok(out)
+    }
+
+    pub fn flatten_to_idxs(
+        &self,
+        flatten_tolerance: f64,
+    ) -> Result<(Vec<kurbo::Point>, Vec<Vec<usize>>, Vec<Vec<usize>>), ()> {
+        use crate::GroupType;
+        let mut points: Vec<kurbo::Point> = Vec::with_capacity(128);
+        let mut indices_outer: Vec<Vec<usize>> = Vec::with_capacity(2);
+        let mut indices_inner: Vec<Vec<usize>> = Vec::with_capacity(6);
+
+        let paths: Vec<(GroupType, Result<Vec<Vec<kurbo::Point>>, ()>)> = self
+            .groups
+            .iter()
+            .map(|g| {
+                let out = if let Ok(paths) = g.compute_path(self) {
+                    let mut out_paths: Vec<Vec<kurbo::Point>> = Vec::with_capacity(4);
+                    for path in paths.into_iter() {
+                        let mut points: Vec<kurbo::Point> = Vec::with_capacity(32);
+                        path.flatten(flatten_tolerance, |el| {
+                            use kurbo::PathEl;
+                            match el {
+                                PathEl::MoveTo(p) | PathEl::LineTo(p) => {
+                                    if points.len() == 0 || points[points.len() - 1] != p {
+                                        points.push(p);
+                                    }
+                                }
+                                PathEl::ClosePath => {}
+                                _ => panic!("unexpected element: {:?}", el),
+                            }
+                        });
+                        if points.len() > 0 {
+                            out_paths.push(points);
+                        }
+                    }
+                    Ok(out_paths)
+                } else {
+                    Err(())
+                };
+
+                (g.typ, out)
+            })
+            .collect();
+
+        // Do boundaries first
+        for path_points in paths
+            .iter()
+            .filter(|(gt, _)| gt == &GroupType::Boundary)
+            .map(|(_gt, paths)| paths.iter())
+            .flatten()
+            .flatten()
+        {
+            let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
+            for point in path_points.iter() {
+                points.push(*point);
+                idx.push(points.len() - 1);
+            }
+            indices_outer.push(idx);
+        }
+        // Now interior geometry
+        for path_points in paths
+            .iter()
+            .filter(|(gt, _)| gt == &GroupType::Interior)
+            .map(|(_gt, paths)| paths.iter())
+            .flatten()
+            .flatten()
+        {
+            let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
+            for point in path_points.iter() {
+                points.push(*point);
+                idx.push(points.len() - 1);
+            }
+            indices_inner.push(idx);
+        }
+
+        Ok((points, indices_outer, indices_inner))
+    }
 }
 
 #[cfg(test)]
@@ -1370,5 +1508,367 @@ mod tests {
             Constraint::LineLength(_, c_fk, amt, Some((Axis::LeftRight, true)), ..)
                 if c_fk == &line_fk && *amt == 5.0,
         ));
+    }
+
+    #[test]
+    fn compute_path_group_basic_lines() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 5.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![1, 3],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![3, 0],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 15.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 15.0,
+                    y: 15.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![6, 7],
+                    ..SerializedFeature::default()
+                },
+            ],
+            groups: vec![crate::SerializedGroup {
+                typ: crate::GroupType::Boundary,
+                name: "Ye".into(),
+                features_idx: vec![2, 4, 5, 8],
+                ..crate::SerializedGroup::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        assert_eq!(
+            data.groups[0].compute_path(&data),
+            Ok(vec![
+                kurbo::BezPath::from_vec(vec![
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 0.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 0.0 }),
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 0.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 5.0 }),
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 5.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 0.0, y: 0.0 }),
+                ]),
+                kurbo::BezPath::from_vec(vec![
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 15.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 15.0, y: 15.0 }),
+                ]),
+            ])
+        );
+    }
+
+    #[test]
+    fn compute_path_group_line_arc_circle() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 1.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 4.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "arc".to_string(),
+                    using_idx: vec![1, 4, 3],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 4.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![3, 6],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "circle".to_string(),
+                    using_idx: vec![1],
+                    r: 5.0,
+                    ..SerializedFeature::default()
+                },
+            ],
+            groups: vec![crate::SerializedGroup {
+                typ: crate::GroupType::Boundary,
+                name: "Ye".into(),
+                features_idx: vec![2, 5, 7, 8],
+                ..crate::SerializedGroup::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        let flattened = data.groups[0].compute_path(&data).unwrap();
+        //println!("{:?}", flattened);
+
+        assert_eq!(
+            &flattened[0].elements()[0..3],
+            &[
+                kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 0.0 }),
+                kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 0.0 }),
+                kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 0.0 }),
+            ],
+        );
+        assert!(matches!(
+            &flattened[0].elements()[3],
+            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: 1.0 },
+        ));
+        assert_eq!(
+            &flattened[0].elements()[4..],
+            &[
+                kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 1.0 }),
+                kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 4.0 }),
+            ],
+        );
+
+        // Circle
+        assert_eq!(
+            &flattened[1].elements()[..1],
+            &[kurbo::PathEl::MoveTo(kurbo::Point { x: 10.0, y: 0.0 }),],
+        );
+        assert!(matches!(
+            &flattened[1].elements()[1],
+            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: 5.0 },
+        ));
+        assert!(matches!(
+            &flattened[1].elements()[4],
+            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 10.0, y: 0.0 },
+        ));
+    }
+
+    #[test]
+    fn flatten_to_idxs() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 5.0,
+                    y: 5.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 1],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![1, 2],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![2, 0],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 4.0,
+                    y: 2.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 4.0,
+                    y: 3.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![0, 6],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![6, 7],
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "line".to_string(),
+                    using_idx: vec![7, 0],
+                    ..SerializedFeature::default()
+                },
+            ],
+            groups: vec![
+                crate::SerializedGroup {
+                    typ: crate::GroupType::Boundary,
+                    name: "Ye".into(),
+                    features_idx: vec![3, 4, 5],
+                    ..crate::SerializedGroup::default()
+                },
+                crate::SerializedGroup {
+                    typ: crate::GroupType::Interior,
+                    name: "Cutout".into(),
+                    features_idx: vec![8, 9, 10],
+                    ..crate::SerializedGroup::default()
+                },
+            ],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        let (points, idx_outer, idx_inner) = data.flatten_to_idxs(5.0).unwrap();
+        assert_eq!(
+            points,
+            vec![
+                kurbo::Point { x: 0.0, y: 0.0 },
+                kurbo::Point { x: 5.0, y: 0.0 },
+                kurbo::Point { x: 5.0, y: 5.0 },
+                kurbo::Point { x: 0.0, y: 0.0 },
+                kurbo::Point { x: 0.0, y: 0.0 },
+                kurbo::Point { x: 4.0, y: 2.0 },
+                kurbo::Point { x: 4.0, y: 3.0 },
+                kurbo::Point { x: 0.0, y: 0.0 },
+            ],
+        );
+
+        assert_eq!(idx_outer, vec![vec![0, 1, 2, 3]]);
+        assert_eq!(idx_inner, vec![vec![4, 5, 6, 7]]);
+        // println!("{}", data.serialize_openscad(5.0).unwrap());
+        assert_eq!(
+            data.serialize_openscad(5.0).unwrap().as_str(),
+            "polygon(
+  points = [
+    [0, 0], [5, 0], [5, 5], [0, 0], [0, 0], [4, 2], [4, 3], [0, 0]
+  ],
+  paths = [
+    [0, 1, 2, 3],
+    [4, 5, 6, 7]
+  ],
+  convexity = 10
+);"
+        );
+    }
+
+    #[test]
+    fn flatten_to_idxs_circle() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "circle".to_string(),
+                    using_idx: vec![0],
+                    r: 2.0,
+                    ..SerializedFeature::default()
+                },
+            ],
+            groups: vec![crate::SerializedGroup {
+                typ: crate::GroupType::Boundary,
+                name: "Ye".into(),
+                features_idx: vec![1],
+                ..crate::SerializedGroup::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        let (points, idx_outer, idx_inner) = data.flatten_to_idxs(1.0).unwrap();
+        assert_eq!(points.len(), 5);
+        assert_eq!(points[0], kurbo::Point { x: 2.0, y: 0.0 });
+        assert_eq!(points[1].y, 2.0);
+        assert_eq!(points[3].y, -2.0);
+        assert_eq!(points[4], kurbo::Point { x: 2.0, y: 0.0 });
+
+        assert_eq!(idx_outer, vec![vec![0, 1, 2, 3, 4]]);
+        assert_eq!(idx_inner, Vec::<Vec<usize>>::new());
     }
 }

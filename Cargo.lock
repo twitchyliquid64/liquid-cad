@@ -781,6 +781,7 @@ version = "0.1.0"
 dependencies = [
  "drawing",
  "egui",
+ "egui-toast",
  "egui_extras",
  "serde",
  "slotmap",
@@ -915,6 +916,15 @@ dependencies = [
  "nohash-hasher",
  "ron",
  "serde",
+]
+
+[[package]]
+name = "egui-toast"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f51fa2cc975dbb99034a60776f753558d7dcd572aafd4c7c276d3c6cff272fd"
+dependencies = [
+ "egui",
 ]
 
 [[package]]
@@ -1690,6 +1700,7 @@ dependencies = [
  "drawing",
  "eframe",
  "egui",
+ "egui-toast",
  "egui_extras",
  "env_logger",
  "image",

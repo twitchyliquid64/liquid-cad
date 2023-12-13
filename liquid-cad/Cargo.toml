@@ -20,6 +20,7 @@ eframe = { version = "0.24.1", default-features = false, features = [
 egui_extras = {version = "0.24.1", features = ["all_loaders"]}
 image = { version = "0.24", features = ["png"] }
 log = "0.4"
+egui-toast = "0.10"
 
 serde = { version = "1", features = ["derive"] }
 

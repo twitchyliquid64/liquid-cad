@@ -58,6 +58,89 @@ impl Group {
             self.features.remove(index);
         }
     }
+
+    pub fn compute_path(&self, data: &super::Data) -> Result<Vec<kurbo::BezPath>, ()> {
+        // geometry that has been emitted
+        let mut remaining = self.features.clone();
+        remaining.reverse();
+        // completed paths
+        let mut paths: Vec<kurbo::BezPath> = Vec::with_capacity(2 * self.features.len());
+
+        let mut current: Option<(kurbo::BezPath, egui::Pos2)> = None;
+        while remaining.len() > 0 {
+            match current.as_ref() {
+                Some((_, end_point)) => {
+                    // Theres a current path, we need to find a feature that continues it,
+                    // or terminate it and start a new one.
+                    //
+                    // Search first for a feature with a starting point of the last point,
+                    // before searching for a feature with the end point of the last point.
+                    let chaining_fk = remaining
+                        .iter()
+                        .find(|fk| {
+                            match data.features.get(**fk) {
+                                Some(f) => f,
+                                None => {
+                                    return false;
+                                }
+                            }
+                            .start_point(data)
+                                == *end_point
+                        })
+                        .map(|fk| (*fk, false))
+                        .or_else(|| {
+                            remaining
+                                .iter()
+                                .find(|fk| {
+                                    match data.features.get(**fk) {
+                                        Some(f) => f,
+                                        None => {
+                                            return false;
+                                        }
+                                    }
+                                    .end_point(data)
+                                        == *end_point
+                                })
+                                .map(|fk| (*fk, true))
+                        });
+
+                    let mut current_path = current.take().unwrap().0;
+                    match chaining_fk {
+                        Some((fk, is_reverse)) => {
+                            let f = data.features.get(fk).unwrap();
+                            if !is_reverse {
+                                for el in f.bezier_path(data).elements() {
+                                    current_path.push(*el);
+                                }
+                                current = Some((current_path, f.end_point(data)));
+                            } else {
+                                for el in f.bezier_path(data).reverse_subpaths().elements() {
+                                    current_path.push(*el);
+                                }
+                                current = Some((current_path, f.start_point(data)));
+                            }
+                            remaining.retain(|sfk| sfk != &fk);
+                        }
+                        None => {
+                            paths.push(current_path);
+                        }
+                    }
+                }
+                None => {
+                    let f = match data.features.get(remaining.pop().unwrap()) {
+                        Some(f) => f,
+                        None => continue,
+                    };
+                    current = Some((f.bezier_path(data), f.end_point(data)));
+                }
+            };
+        }
+        if let Some(current) = current {
+            paths.push(current.0);
+        }
+
+        Ok(paths)
+    }
 }
 
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, PartialEq)]
