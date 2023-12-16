@@ -22,7 +22,10 @@ image = { version = "0.24", features = ["png"] }
 log = "0.4"
 egui-toast = "0.10"
 
+rfd = {version = "0.12", default-features = false, features = ["xdg-portal"]}
+
 serde = { version = "1", features = ["derive"] }
+ron = { version = "0.8", features = ["integer128"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

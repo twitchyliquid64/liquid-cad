@@ -1,0 +1,253 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -17.5,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 15.0,
+			y: -17.5,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 22.5,
+			y: -17.5,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -35.0,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 45.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.0440629,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				1,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "arc",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				3,
+				2,
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				4,
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				3,
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+	],
+	constraints: [
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				7,
+			],
+			at: (0.0, 0.0),
+			amt: 15.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+			),
+		),
+		(
+			kind: "point_lerp",
+			meta: (),
+			feature_idx: [
+				10,
+				0,
+			],
+			at: (0.0, 0.0),
+			amt: 0.5,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+			),
+		),
+		(
+			kind: "point_lerp",
+			meta: (),
+			feature_idx: [
+				9,
+				2,
+			],
+			at: (0.0, 0.0),
+			amt: 0.5,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+			),
+		),
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				5,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				11,
+			],
+			at: (0.0, 0.0),
+			amt: 45.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				10,
+			],
+			at: (0.0, 0.0),
+			amt: 35.0,
+			cardinality: Some((TopBottom, false)),
+			ref_offset: (
+				x: -58.32632,
+				y: -49.809025,
+			),
+		),
+	],
+	groups: [
+		(
+			typ: Boundary,
+			name: "Boundary",
+			features_idx: [
+				10,
+				11,
+				8,
+			],
+		),
+		(
+			typ: Interior,
+			name: "Drill",
+			features_idx: [
+				6,
+			],
+		),
+	],
+	viewport: (
+		x: -59.59451,
+		y: -64.20366,
+		zoom: 0.085659325,
+	),
+)

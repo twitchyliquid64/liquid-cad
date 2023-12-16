@@ -768,14 +768,15 @@ impl<'a> Widget<'a> {
             ui.add_space(12.0);
             ui.label("Export 📋");
             ui.separator();
+            ui.add_space(2.0);
             if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("OpenSCAD polygon")).clicked() {
                 if let Ok(t) = self.drawing.serialize_openscad(0.05) {
                     ui.ctx().output_mut(|o| o.copied_text = t);
                     self.toasts.add(egui_toast::Toast {
-                        text: "Polygon code copied to clipboard!".into(),
+                        text: "OpenSCAD code copied to clipboard!".into(),
                         kind: egui_toast::ToastKind::Info,
                         options: egui_toast::ToastOptions::default()
-                            .duration_in_seconds(5.0)
+                            .duration_in_seconds(3.5)
                             .show_progress(true)
                     });
                 } else {
@@ -783,7 +784,7 @@ impl<'a> Widget<'a> {
                         text: "Export failed!".into(),
                         kind: egui_toast::ToastKind::Error,
                         options: egui_toast::ToastOptions::default()
-                            .duration_in_seconds(3.5)
+                            .duration_in_seconds(4.0)
                             .show_progress(true)
                     });
                 }
