@@ -340,7 +340,7 @@ impl Tool {
             Tool::Arc(_) => Some("Creates a circular arc between points.\n\nClick on the first point and then the second to create an arc. A center point will be automatically created."),
             Tool::Circle(_) => Some("Creates a circle around some center point.\n\nClick on the center point, and then again in empty space to create the circle."),
             Tool::Fixed => Some("Constraints a point to be at specific co-ordinates.\n\nClick a point to constrain it to (0,0). Co-ordinates can be changed later in the selection UI."),
-            Tool::Dimension => Some("Constrains a line to have a specific length.\n\nClick a line to constrain it to its current length. The length can be changed later in the selection UI."),
+            Tool::Dimension => Some("Sets the dimensions of a line or circle.\n\nClick a line/circle to constrain it to its current length/radius respectively. The constrained value can be changed later in the selection UI."),
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
             Tool::Vertical => Some("Constrains a line to be vertical."),
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
@@ -648,6 +648,10 @@ impl Tool {
                             k,
                             feature: crate::Feature::LineSegment(..),
                         } => Some(ToolResponse::NewLineLengthConstraint(k.clone())),
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Circle(..),
+                        } => Some(ToolResponse::NewCircleRadiusConstraint(k.clone())),
                         _ => Some(ToolResponse::SwitchToPointer),
                     };
                 }
@@ -1002,7 +1006,9 @@ impl Tool {
             }
 
             Tool::Dimension => {
-                response.clone().on_hover_text_at_pointer("constrain d");
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain dimension: click line or circle");
             }
             Tool::Horizontal => {
                 response

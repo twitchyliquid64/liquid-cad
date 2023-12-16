@@ -165,6 +165,20 @@ impl<'a> Widget<'a> {
                     ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
                     Some(state)
                 }
+                // Dragging a CircleRadius constraint reference
+                (
+                    Hover::Constraint {
+                        k,
+                        constraint: Constraint::CircleRadius(_, _, _, dd),
+                    },
+                    true,
+                    false,
+                ) => {
+                    let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
+                    let state = DragState::Constraint(*k, offset);
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
+                }
                 // Double-clicking a LineLength constraint reference
                 (
                     Hover::Constraint {

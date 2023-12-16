@@ -65,12 +65,15 @@ pub enum Constraint {
     PointLerpLine(ConstraintMeta, FeatureKey, FeatureKey, f32),
     LineLengthsEqual(ConstraintMeta, FeatureKey, FeatureKey, Option<f32>),
     LinesParallel(ConstraintMeta, FeatureKey, FeatureKey),
+
+    CircleRadius(ConstraintMeta, FeatureKey, f32, DimensionDisplay),
 }
 
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match self {
             Fixed(_, fk, ..) => vec![fk.clone()],
@@ -79,12 +82,14 @@ impl Constraint {
             PointLerpLine(_, l_fk, p_fk, _) => vec![l_fk.clone(), p_fk.clone()],
             LineLengthsEqual(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
             LinesParallel(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
+            CircleRadius(_, fk, ..) => vec![fk.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
@@ -93,12 +98,14 @@ impl Constraint {
             PointLerpLine(..) => matches!(ft, &Feature::LineSegment(..)),
             LineLengthsEqual(..) => matches!(ft, &Feature::LineSegment(..)),
             LinesParallel(..) => matches!(ft, &Feature::LineSegment(..)),
+            CircleRadius(..) => matches!(ft, &Feature::Circle(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
@@ -115,6 +122,7 @@ impl Constraint {
             (LinesParallel(_, l11, l12, ..), LinesParallel(_, l21, l22, ..)) => {
                 (l11 == l21 && l12 == l22) || (l11 == l22 && l12 == l21)
             }
+            (CircleRadius(_, f1, ..), CircleRadius(_, f2, ..)) => f1 == f2,
             _ => false,
         }
     }
@@ -126,7 +134,8 @@ impl Constraint {
         vp: &crate::Viewport,
     ) -> Option<f32> {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match self {
             Fixed(..) => None,
@@ -172,6 +181,21 @@ impl Constraint {
                     unreachable!();
                 }
             }
+            CircleRadius(_, fk, _, dd) => {
+                if let Some(Feature::Circle(_, f1, _r)) = drawing.features.get(*fk) {
+                    let center = match drawing.features.get(*f1).unwrap() {
+                        Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                        _ => panic!("unexpected subkey type: {:?}", f1),
+                    };
+
+                    let reference = egui::Vec2::new(dd.x, dd.y);
+                    let text_center = vp.translate_point(center) + reference;
+                    let bounds = egui::Rect::from_center_size(text_center, (60., 15.).into());
+                    Some(bounds.distance_sq_to_pos(hp))
+                } else {
+                    unreachable!();
+                }
+            }
             PointLerpLine(..) => None,
             LineLengthsEqual(..) => None,
             LinesParallel(..) => None,
@@ -186,7 +210,8 @@ impl Constraint {
         painter: &egui::Painter,
     ) {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match self {
             Fixed(_, k, _, _) => {
@@ -259,12 +284,32 @@ impl Constraint {
             PointLerpLine(..) => {}
             LineLengthsEqual(..) => {}
             LinesParallel(..) => {}
+
+            CircleRadius(_meta, fk, radius, dd) => {
+                if let Some(Feature::Circle(_, center_fk, ..)) = drawing.features.get(*fk) {
+                    let center = match drawing.features.get(*center_fk).unwrap() {
+                        Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                        _ => panic!("unexpected subkey type: {:?}", center_fk),
+                    };
+
+                    crate::l::draw::DimensionRadiusOverlay {
+                        center: center,
+                        radius: radius,
+                        val: &format!("R {:.3}", radius),
+                        reference: egui::Vec2::new(dd.x, dd.y),
+                        hovered: params.hovered,
+                        selected: params.selected,
+                    }
+                    .draw(painter, params);
+                }
+            }
         }
     }
 
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
         use Constraint::{
-            Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel, PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
+            PointLerpLine,
         };
         match self {
             Fixed(_, k, x, y) => {
@@ -288,6 +333,16 @@ impl Constraint {
                         )),
                     ),
                 ]
+            }
+            CircleRadius(_, k, r, _) => {
+                let cr = &drawing.terms.get_feature_term(*k, TermType::ScalarRadius);
+                vec![Expression::Equal(
+                    Box::new(Expression::Variable(cr.into())),
+                    Box::new(Expression::Rational(
+                        Rational::from_float(*r).unwrap(),
+                        true,
+                    )),
+                )]
             }
             LineLength(_, k, d, aa_info, _) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
@@ -626,6 +681,15 @@ impl Constraint {
                     ..SerializedConstraint::default()
                 })
             }
+
+            Constraint::CircleRadius(meta, fk, r, ref_offset) => Ok(SerializedConstraint {
+                kind: "radius".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                amt: *r,
+                ref_offset: ref_offset.clone(),
+                ..SerializedConstraint::default()
+            }),
         }
     }
 
@@ -709,6 +773,18 @@ impl Constraint {
                     sc.meta,
                     *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
                     *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                ))
+            }
+
+            "radius" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::CircleRadius(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    sc.amt,
+                    sc.ref_offset,
                 ))
             }
             _ => Err(()),
@@ -928,6 +1004,6 @@ mod tests {
             Constraint::LineLengthsEqual(ConstraintMeta::default(), k, k, Some(0.5),),
         );
 
-        // TODO: PointLerpLine, LinesParallel
+        // TODO: PointLerpLine, LinesParallel, CircleRadius
     }
 }

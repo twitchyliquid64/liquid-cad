@@ -206,6 +206,16 @@ impl<'a> Widget<'a> {
                                                 &ck,
                                             )
                                         }
+                                        Some(Constraint::CircleRadius(meta, _center, amt, ..)) => {
+                                            Widget::show_constraint_circle_radius(
+                                                ui,
+                                                &mut commands,
+                                                &mut changed,
+                                                &ck,
+                                                amt,
+                                                meta,
+                                            )
+                                        }
                                         None => {}
                                     });
                                 }
@@ -489,6 +499,37 @@ impl<'a> Widget<'a> {
 
             let text_rect = ui.add(egui::Label::new("Parallel").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_circle_radius(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &ConstraintKey,
+        amt: &mut f32,
+        _meta: &mut ConstraintMeta,
+    ) {
+        let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+
+            let text_rect = ui.add(egui::Label::new("Radius").wrap(false)).rect;
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
+
+            let dv = ui.add_sized(
+                [50., text_height * 1.4],
+                egui::DragValue::new(amt)
+                    .clamp_range(0.0..=200.0)
+                    .speed(0.05),
+            );
+            *changed |= dv.changed();
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {

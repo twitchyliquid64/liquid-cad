@@ -14,6 +14,7 @@ pub enum ToolResponse {
 
     NewFixedConstraint(FeatureKey),
     NewLineLengthConstraint(FeatureKey),
+    NewCircleRadiusConstraint(FeatureKey),
     NewLineCardinalConstraint(FeatureKey, bool), // true = horizontal
     NewPointLerp(FeatureKey, FeatureKey),        // point, line
     NewEqual(FeatureKey, FeatureKey),
@@ -291,6 +292,18 @@ impl Handler {
                     }
                 }
             }
+            ToolResponse::NewCircleRadiusConstraint(k) => match drawing.features.get(k) {
+                Some(Feature::Circle(_, _, radius)) => {
+                    drawing.add_constraint(Constraint::CircleRadius(
+                        ConstraintMeta::default(),
+                        k,
+                        *radius,
+                        DimensionDisplay { x: 35.0, y: 35.0 },
+                    ));
+                    tools.clear();
+                }
+                _ => {}
+            },
 
             ToolResponse::NewParallelLine(l1, l2) => {
                 match (drawing.features.get(l1), drawing.features.get(l2)) {

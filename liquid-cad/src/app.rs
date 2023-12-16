@@ -127,12 +127,13 @@ impl App {
             execute(async move {
                 let file = task.await;
                 if let Some(file) = file {
-                    let _ = file.write(
-                        ron::ser::to_string_pretty(&sd, ser_config)
-                            .unwrap()
-                            .as_bytes(),
-                    )
-                    .await;
+                    let _ = file
+                        .write(
+                            ron::ser::to_string_pretty(&sd, ser_config)
+                                .unwrap()
+                                .as_bytes(),
+                        )
+                        .await;
                 }
             });
         }

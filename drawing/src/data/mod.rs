@@ -150,7 +150,8 @@ impl Data {
                 Some(Feature::Point(_, x, y)) => match term.t {
                     TermType::PositionX => Some(*x),
                     TermType::PositionY => Some(*y),
-                    TermType::ScalarDistance => None,
+                    TermType::ScalarDistance => unreachable!(),
+                    TermType::ScalarRadius => unreachable!(),
                 },
                 Some(Feature::LineSegment(_, f1, f2)) => match term.t {
                     TermType::ScalarDistance => {
@@ -168,6 +169,13 @@ impl Data {
                     }
                     TermType::PositionX => unreachable!(),
                     TermType::PositionY => unreachable!(),
+                    TermType::ScalarRadius => unreachable!(),
+                },
+                Some(Feature::Circle(_, _center, radius)) => match term.t {
+                    TermType::ScalarRadius => Some(*radius),
+                    TermType::PositionX => unreachable!(),
+                    TermType::PositionY => unreachable!(),
+                    TermType::ScalarDistance => unreachable!(),
                 },
                 _ => None,
             }
@@ -188,6 +196,7 @@ impl Data {
                         TermType::PositionX => *x = v as f32,
                         TermType::PositionY => *y = v as f32,
                         TermType::ScalarDistance => unreachable!(),
+                        TermType::ScalarRadius => unreachable!(),
                     }
                     true
                 }
@@ -196,8 +205,18 @@ impl Data {
                         TermType::PositionX => unreachable!(),
                         TermType::PositionY => unreachable!(),
                         TermType::ScalarDistance => {}
+                        TermType::ScalarRadius => unreachable!(),
                     }
                     false
+                }
+                Some(Feature::Circle(_, _, radius)) => {
+                    match term.t {
+                        TermType::ScalarRadius => *radius = v as f32,
+                        TermType::PositionX => unreachable!(),
+                        TermType::PositionY => unreachable!(),
+                        TermType::ScalarDistance => unreachable!(),
+                    }
+                    true
                 }
                 _ => false,
             }
@@ -266,33 +285,62 @@ impl Data {
 
     /// NOTE: Only supports LineLength constraints atm, and consumes a SCREEN coordinate.
     pub fn move_constraint(&mut self, k: ConstraintKey, pos: egui::Pos2) {
-        if let Some(Constraint::LineLength(_, fk, ..)) = self.constraints.get(k) {
-            let (a, b) = match self.features.get(*fk) {
-                Some(Feature::LineSegment(_, f1, f2)) => {
-                    let (a, b) = match (
-                        self.features.get(*f1).unwrap(),
-                        self.features.get(*f2).unwrap(),
-                    ) {
-                        (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
-                            (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
-                        }
-                        _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
-                    };
+        match self.constraints.get(k) {
+            Some(Constraint::LineLength(_, fk, ..)) => {
+                let (a, b) = match self.features.get(*fk) {
+                    Some(Feature::LineSegment(_, f1, f2)) => {
+                        let (a, b) = match (
+                            self.features.get(*f1).unwrap(),
+                            self.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
 
-                    (self.vp.translate_point(a), self.vp.translate_point(b))
-                }
-                _ => {
-                    panic!("feature referenced in LineLength constraint was missing or not a line")
-                }
-            };
+                        (self.vp.translate_point(a), self.vp.translate_point(b))
+                    }
+                    _ => {
+                        panic!(
+                            "feature referenced in LineLength constraint was missing or not a line"
+                        )
+                    }
+                };
 
-            if let Some(Constraint::LineLength(_, _fk, _, _, dd)) = self.constraint_mut(k) {
-                let c = a.lerp(b, 0.5);
-                let v = c.to_vec2() - pos.to_vec2();
-                let reference = egui::Vec2::angled((a - b).angle() - v.angle()) * v.length();
-                dd.x = -reference.x;
-                dd.y = reference.y;
-            };
+                if let Some(Constraint::LineLength(_, _fk, _, _, dd)) = self.constraint_mut(k) {
+                    let c = a.lerp(b, 0.5);
+                    let v = c.to_vec2() - pos.to_vec2();
+                    let reference = egui::Vec2::angled((a - b).angle() - v.angle()) * v.length();
+                    dd.x = -reference.x;
+                    dd.y = reference.y;
+                };
+            }
+
+            Some(Constraint::CircleRadius(_, fk, ..)) => {
+                let center = match self.features.get(*fk) {
+                    Some(Feature::Circle(_, f1, ..)) => {
+                        let c = match self.features.get(*f1).unwrap() {
+                            Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                            _ => panic!("unexpected subkey type: {:?}", f1),
+                        };
+
+                        self.vp.translate_point(c)
+                    }
+                    _ => {
+                        panic!(
+                            "feature referenced in CircleRadius constraint was missing or not a circle"
+                        )
+                    }
+                };
+
+                if let Some(Constraint::CircleRadius(_, _fk, _, dd)) = self.constraint_mut(k) {
+                    let v = center.to_vec2() - pos.to_vec2();
+                    dd.x = -v.x;
+                    dd.y = -v.y;
+                };
+            }
+            _ => {}
         }
     }
 
@@ -1507,6 +1555,41 @@ mod tests {
             data.constraints.iter().next().unwrap().1,
             Constraint::LineLength(_, c_fk, amt, Some((Axis::LeftRight, true)), ..)
                 if c_fk == &line_fk && *amt == 5.0,
+        ));
+    }
+
+    #[test]
+    fn applying_circle_radius() {
+        let mut data = Data::default();
+        data.load(SerializedDrawing {
+            features: vec![
+                SerializedFeature {
+                    kind: "pt".to_string(),
+                    using_idx: vec![],
+                    x: 0.0,
+                    y: 0.0,
+                    ..SerializedFeature::default()
+                },
+                SerializedFeature {
+                    kind: "circle".to_string(),
+                    using_idx: vec![0],
+                    ..SerializedFeature::default()
+                },
+            ],
+            constraints: vec![SerializedConstraint {
+                kind: "radius".to_string(),
+                feature_idx: vec![1],
+                amt: 2.5,
+                ..SerializedConstraint::default()
+            }],
+            ..SerializedDrawing::default()
+        })
+        .unwrap();
+
+        assert!(matches!(
+            data.features.iter().nth(1).unwrap().1,
+            Feature::Circle(_, _, r)
+                if *r == 2.5,
         ));
     }
 
