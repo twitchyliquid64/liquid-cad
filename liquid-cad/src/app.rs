@@ -1,5 +1,11 @@
 use detailer;
 use drawing;
+use std::sync::mpsc::{channel, Receiver, Sender};
+
+#[cfg(target_arch = "wasm32")]
+fn execute<F: std::future::Future<Output = ()> + 'static>(f: F) {
+    wasm_bindgen_futures::spawn_local(f);
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -17,6 +23,8 @@ pub struct App {
 
     #[serde(skip)]
     last_path: Option<std::path::PathBuf>,
+    #[serde(skip)]
+    wasm_open_channel: (Sender<(String, String)>, Receiver<(String, String)>),
 }
 
 impl Default for App {
@@ -30,6 +38,7 @@ impl Default for App {
             .direction(egui::Direction::BottomUp);
 
         let last_path = None;
+        let wasm_open_channel = channel();
 
         Self {
             drawing,
@@ -38,6 +47,7 @@ impl Default for App {
             detailer_state,
             toasts,
             last_path,
+            wasm_open_channel,
         }
     }
 }
@@ -107,6 +117,25 @@ impl App {
                 }
             }
         }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let sd = (&self.drawing.serialize()).clone();
+            let task = rfd::AsyncFileDialog::new()
+                .set_file_name(file_name)
+                .save_file();
+            execute(async move {
+                let file = task.await;
+                if let Some(file) = file {
+                    let _ = file.write(
+                        ron::ser::to_string_pretty(&sd, ser_config)
+                            .unwrap()
+                            .as_bytes(),
+                    )
+                    .await;
+                }
+            });
+        }
     }
 
     pub fn open_from(&mut self) {
@@ -158,6 +187,20 @@ impl App {
                 }
             }
         }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let sender = self.wasm_open_channel.0.clone();
+            let task = rfd::AsyncFileDialog::new().pick_file();
+            execute(async move {
+                let file = task.await;
+                if let Some(file) = file {
+                    let text = file.read().await;
+                    let _ =
+                        sender.send((file.file_name(), String::from_utf8_lossy(&text).to_string()));
+                }
+            });
+        }
     }
 }
 
@@ -169,6 +212,35 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        #[cfg(target_arch = "wasm32")]
+        if let Ok((fname, contents)) = self.wasm_open_channel.1.try_recv() {
+            match ron::de::from_str(&contents) {
+                Ok(d) => {
+                    if let Some(e) = self.drawing.load(d).err() {
+                        self.toasts.add(egui_toast::Toast {
+                            text: format!("Load failed: {:?}", e).into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(5.0)
+                                .show_progress(true),
+                        });
+                    } else {
+                        self.last_path = Some(fname.into());
+                    }
+                }
+
+                Err(e) => {
+                    self.toasts.add(egui_toast::Toast {
+                        text: format!("Deserialize failed: {:?}", e).into(),
+                        kind: egui_toast::ToastKind::Error,
+                        options: egui_toast::ToastOptions::default()
+                            .duration_in_seconds(5.0)
+                            .show_progress(true),
+                    });
+                }
+            }
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
@@ -201,7 +273,13 @@ impl eframe::App for App {
                         if ui.button("New").clicked() {
                             *self = App::default();
                         }
-                        if ui.button("Save").clicked() {
+                        if ui.button("Open").clicked() {
+                            self.open_from();
+                        }
+                        if ui.button("Save as").clicked() {
+                            self.save_as();
+                        }
+                        if ui.button("Quick save").clicked() {
                             self.save(frame.storage_mut().unwrap());
                         }
                     });
