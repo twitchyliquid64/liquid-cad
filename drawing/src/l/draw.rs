@@ -1,3 +1,27 @@
+fn arrow(
+    from: egui::Pos2,
+    to: egui::Pos2,
+    width: f32,
+    stroke: egui::Stroke,
+    painter: &egui::Painter,
+) {
+    painter.line_segment([from, to], stroke);
+
+    let t = (from - to).angle();
+    let arrow_base = to + (egui::Vec2::angled(t) * width * 3.0);
+
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            to + egui::Vec2::angled(t),
+            arrow_base + (egui::Vec2::angled(t - std::f32::consts::PI / 2.0) * width),
+            arrow_base + (egui::Vec2::angled(t + std::f32::consts::PI / 2.0) * width),
+        ],
+        stroke.color,
+        stroke,
+    ));
+    painter.line_segment([to, arrow_base], stroke);
+}
+
 // reference dimensions are in drawing-space.
 pub struct DimensionLengthOverlay<'a> {
     pub val: &'a str,
@@ -169,8 +193,13 @@ impl<'a> DimensionRadiusOverlay<'a> {
                         .to_pos2(),
                 ),
             ) {
-                painter.line_segment([intercept, end], egui::Stroke { width: 1., color });
-                // TODO: Arrow?
+                arrow(
+                    end,
+                    intercept,
+                    2.0,
+                    egui::Stroke { width: 1., color },
+                    painter,
+                );
             }
         }
 
