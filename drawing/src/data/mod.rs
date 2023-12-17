@@ -305,8 +305,26 @@ impl Data {
     pub fn move_constraint(&mut self, k: ConstraintKey, pos: egui::Pos2) {
         match self.constraints.get(k) {
             Some(Constraint::LineLength(_, fk, ..)) => {
-                let (a, b) = self.get_line_points(*fk).unwrap();
+                let (a, b) = match self.features.get(*fk) {
+                    Some(Feature::LineSegment(_, f1, f2)) => {
+                        let (a, b) = match (
+                            self.features.get(*f1).unwrap(),
+                            self.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
 
+                        (self.vp.translate_point(a), self.vp.translate_point(b))
+                    }
+                    _ => {
+                        panic!(
+                            "feature referenced in LineLength constraint was missing or not a line"
+                        )
+                    }
+                };
                 if let Some(Constraint::LineLength(_, _fk, _, _, dd)) = self.constraint_mut(k) {
                     let c = a.lerp(b, 0.5);
                     let v = c.to_vec2() - pos.to_vec2();
