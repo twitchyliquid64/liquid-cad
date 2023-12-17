@@ -213,3 +213,34 @@ impl<'a> DimensionRadiusOverlay<'a> {
         );
     }
 }
+
+const TICK_SIZE: f32 = 4.0;
+const TICK_SPACING: f32 = 5.0;
+
+pub fn length_tick(
+    a: egui::Pos2,
+    b: egui::Pos2,
+    ticks: usize,
+    painter: &egui::Painter,
+    params: &crate::PaintParams,
+) {
+    let (a, b) = (params.vp.translate_point(a), params.vp.translate_point(b));
+    let t = (a - b).angle();
+    let start = b.lerp(a, 0.3)
+        + ((ticks as f32 - 1.0) * egui::Vec2::angled((b - a).angle()) * TICK_SPACING) / 2.0;
+
+    for i in 0..=ticks {
+        let along = i as f32 * egui::Vec2::angled(t) * TICK_SPACING;
+
+        painter.line_segment(
+            [
+                start + along + egui::Vec2::angled(t - std::f32::consts::PI / 2.0) * TICK_SIZE,
+                start + along + egui::Vec2::angled(t + std::f32::consts::PI / 2.0) * TICK_SIZE,
+            ],
+            egui::Stroke {
+                width: 1.,
+                color: egui::Color32::LIGHT_BLUE,
+            },
+        );
+    }
+}

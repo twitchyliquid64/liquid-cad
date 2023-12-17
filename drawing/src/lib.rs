@@ -58,6 +58,8 @@ pub struct Widget<'a> {
     pub drawing: &'a mut Data,
     pub tools: &'a mut tools::Toolbar,
     pub handler: &'a mut Handler,
+
+    length_ticks: Vec<f32>,
 }
 
 impl<'a> Widget<'a> {
@@ -66,10 +68,13 @@ impl<'a> Widget<'a> {
         handler: &'a mut Handler,
         tools: &'a mut tools::Toolbar,
     ) -> Self {
+        let length_ticks = Vec::with_capacity(8);
+
         Self {
             drawing,
             tools,
             handler,
+            length_ticks,
         }
     }
 
@@ -332,6 +337,18 @@ impl<'a> Widget<'a> {
         });
     }
 
+    fn length_tick_for_amt(length_ticks: &mut Vec<f32>, amt: f32) -> usize {
+        for (i, val) in length_ticks.iter().enumerate() {
+            if (val - amt).abs() < 0.00001 {
+                return i;
+            }
+        }
+
+        let i = length_ticks.len();
+        length_ticks.push(amt);
+        i
+    }
+
     fn draw(
         &mut self,
         ui: &egui::Ui,
@@ -342,6 +359,8 @@ impl<'a> Widget<'a> {
         current_input: Option<Input>,
         base_params: &PaintParams,
     ) {
+        self.length_ticks.clear();
+
         // Draw features, points first
         for point_pass in [true, false] {
             for (k, v) in self.drawing.features_iter() {
@@ -388,6 +407,22 @@ impl<'a> Widget<'a> {
                 ..base_params.clone()
             };
             v.paint(self.drawing, k, &pp, painter);
+        }
+
+        // Draw equal ticks
+        for (_k, v) in self.drawing.constraints_iter() {
+            match v {
+                Constraint::LineLengthsEqual(_, l1, l2, None) => {
+                    let (a, b) = self.drawing.get_line_points(*l1).unwrap();
+                    let tick = Widget::length_tick_for_amt(&mut self.length_ticks, a.distance(b));
+
+                    crate::l::draw::length_tick(a, b, tick, painter, &base_params);
+
+                    let (a, b) = self.drawing.get_line_points(*l2).unwrap();
+                    crate::l::draw::length_tick(a, b, tick, painter, &base_params);
+                }
+                _ => {}
+            }
         }
 
         match current_input {
