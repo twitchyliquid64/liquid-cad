@@ -79,7 +79,7 @@ impl DumbassSolverState {
                         if has_trig {
                             Expression::Quotient(
                                 Box::new(jfx),
-                                Box::new(Expression::Integer(18.into())),
+                                Box::new(Expression::Integer(12.into())),
                             )
                         } else {
                             jfx

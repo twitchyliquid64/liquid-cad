@@ -1013,6 +1013,16 @@ impl Expression {
                             )),
                         );
                     }
+                } else if let Expression::Quotient(ba, bb) = b.as_ref() {
+                    // a * (_ / a) => _
+                    if a == bb {
+                        *self = *ba.clone();
+                    }
+                } else if let Expression::Quotient(aa, ab) = a.as_ref() {
+                    // (_ / a) * a => _
+                    if b == ab {
+                        *self = *aa.clone();
+                    }
                 }
             }
             Expression::Quotient(a, b) => {
@@ -1035,6 +1045,28 @@ impl Expression {
                         let mut new = Expression::Quotient(ab.clone(), ba.clone());
                         new.simplify();
                         *self = new;
+                    }
+                } else if let Expression::Product(aa, ab) = a.as_ref() {
+                    if ab == b {
+                        // (_ * a) / a => _
+                        *self = *aa.clone();
+                    } else if aa == b {
+                        // (a * _) / a => _
+                        *self = *ab.clone();
+                    }
+                } else if let Expression::Product(ba, bb) = b.as_ref() {
+                    if a == ba {
+                        // a / (a * _) => 1 / _
+                        *self = Expression::Quotient(
+                            Box::new(Expression::Integer(1.into())),
+                            bb.clone(),
+                        );
+                    } else if a == bb {
+                        // a / (_ * a) => 1 / _
+                        *self = Expression::Quotient(
+                            Box::new(Expression::Integer(1.into())),
+                            ba.clone(),
+                        );
                     }
                 }
             }
@@ -1315,6 +1347,7 @@ impl Expression {
     /// given variable.
     pub fn derivative_wrt(&self, v: &Variable) -> Expression {
         let mut d = self.d_wrt(v);
+        d.simplify();
         d.simplify();
         d
     }
@@ -1879,6 +1912,26 @@ mod tests {
                     Box::new(Expression::Variable("b".into())),
                     Box::new(Expression::Variable("c".into())),
                 )),
+            ))
+        );
+
+        assert_eq!(
+            Expression::parse("a * (5 / a)", true),
+            Ok(Expression::Integer(5.into()))
+        );
+        assert_eq!(
+            Expression::parse("(5 / a) * a", true),
+            Ok(Expression::Integer(5.into()))
+        );
+        assert_eq!(
+            Expression::parse("(5 * a) / a", true),
+            Ok(Expression::Integer(5.into()))
+        );
+        assert_eq!(
+            Expression::parse("a / (5a)", true),
+            Ok(Expression::Rational(
+                Rational::new(1.into(), 5.into()),
+                true,
             ))
         );
 
