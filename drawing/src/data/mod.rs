@@ -152,6 +152,7 @@ impl Data {
                     TermType::PositionY => Some(*y),
                     TermType::ScalarDistance => unreachable!(),
                     TermType::ScalarRadius => unreachable!(),
+                    TermType::ScalarGlobalAngle => unreachable!(),
                 },
                 Some(Feature::LineSegment(_, f1, f2)) => match term.t {
                     TermType::ScalarDistance => {
@@ -167,6 +168,18 @@ impl Data {
 
                         Some(a.distance(b))
                     }
+                    TermType::ScalarGlobalAngle => {
+                        let (a, b) = match (
+                            self.features.get(*f1).unwrap(),
+                            self.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
+                        Some((a - b).angle())
+                    }
                     TermType::PositionX => unreachable!(),
                     TermType::PositionY => unreachable!(),
                     TermType::ScalarRadius => unreachable!(),
@@ -176,6 +189,7 @@ impl Data {
                     TermType::PositionX => unreachable!(),
                     TermType::PositionY => unreachable!(),
                     TermType::ScalarDistance => unreachable!(),
+                    TermType::ScalarGlobalAngle => unreachable!(),
                 },
                 _ => None,
             }
@@ -197,6 +211,7 @@ impl Data {
                         TermType::PositionY => *y = v as f32,
                         TermType::ScalarDistance => unreachable!(),
                         TermType::ScalarRadius => unreachable!(),
+                        TermType::ScalarGlobalAngle => unreachable!(),
                     }
                     true
                 }
@@ -206,6 +221,7 @@ impl Data {
                         TermType::PositionY => unreachable!(),
                         TermType::ScalarDistance => {}
                         TermType::ScalarRadius => unreachable!(),
+                        TermType::ScalarGlobalAngle => {}
                     }
                     false
                 }
@@ -215,6 +231,7 @@ impl Data {
                         TermType::PositionX => unreachable!(),
                         TermType::PositionY => unreachable!(),
                         TermType::ScalarDistance => unreachable!(),
+                        TermType::ScalarGlobalAngle => unreachable!(),
                     }
                     true
                 }
@@ -301,7 +318,7 @@ impl Data {
         self.solve_and_apply();
     }
 
-    /// NOTE: Only supports LineLength constraints atm, and consumes a SCREEN coordinate.
+    /// NOTE: Only supports LineLength & CircleRadius constraints atm, and consumes a SCREEN coordinate.
     pub fn move_constraint(&mut self, k: ConstraintKey, pos: egui::Pos2) {
         match self.constraints.get(k) {
             Some(Constraint::LineLength(_, fk, ..)) => {

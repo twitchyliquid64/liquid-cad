@@ -63,27 +63,28 @@ impl DumbassSolverState {
         let jacobians: Vec<Vec<_>> = residuals
             .iter()
             .map(|fx| {
+                let mut has_trig = false;
+                fx.walk(&mut |e| match e {
+                    Expression::Trig(..) => {
+                        has_trig = true;
+                        false
+                    }
+                    _ => true,
+                });
+
                 solve_for
                     .iter()
                     .map(|var| fx.derivative_wrt(&var))
-                    // .map(|jfx| {
-                    //     let mut linear = true;
-                    //     jfx.walk(&mut |e| match e {
-                    //         Expression::Power(..) | Expression::Sqrt(..) => {
-                    //             linear = false;
-                    //             false
-                    //         }
-                    //         _ => true,
-                    //     });
-                    //     if linear {
-                    //         Expression::Quotient(
-                    //             Box::new(jfx),
-                    //             Box::new(Expression::Integer(5.into())),
-                    //         )
-                    //     } else {
-                    //         jfx
-                    //     }
-                    // })
+                    .map(|jfx| {
+                        if has_trig {
+                            Expression::Quotient(
+                                Box::new(jfx),
+                                Box::new(Expression::Integer(18.into())),
+                            )
+                        } else {
+                            jfx
+                        }
+                    })
                     .collect()
             })
             .collect();
@@ -91,7 +92,7 @@ impl DumbassSolverState {
         // for (i, r) in residuals.iter().enumerate() {
         //     println!("residual: {}", r);
         //     for (j, v) in solve_for.iter().enumerate() {
-        //         println!(" {}: {}", v, jacobians[i][j]);
+        //         println!(" {}: {:?}\n   {}", v, jacobians[i][j], jacobians[i][j]);
         //     }
         // }
 
@@ -363,12 +364,12 @@ mod tests {
             state.jacobians,
             vec![vec![
                 Expression::parse(
-                    "-((2 * (x1 - x0)) / (2 * sqrt((((x1 - x0))^2 + ((y1 - y0))^2))))",
+                    "-((x1 - x0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
                     false
                 )
                 .unwrap(),
                 Expression::parse(
-                    "-((2 * (y1 - y0)) / (2 * sqrt((((x1 - x0))^2 + ((y1 - y0))^2))))",
+                    "-((y1 - y0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
                     false
                 )
                 .unwrap(),

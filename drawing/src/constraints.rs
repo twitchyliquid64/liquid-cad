@@ -1,6 +1,6 @@
 use crate::system::{TermRef, TermType};
 use crate::{Feature, FeatureKey};
-use eq::{Expression, Rational};
+use eq::{Expression, Rational, TrigOp};
 use std::collections::HashMap;
 
 slotmap::new_key_type! {
@@ -65,6 +65,7 @@ pub enum Constraint {
     PointLerpLine(ConstraintMeta, FeatureKey, FeatureKey, f32),
     LineLengthsEqual(ConstraintMeta, FeatureKey, FeatureKey, Option<f32>),
     LinesParallel(ConstraintMeta, FeatureKey, FeatureKey),
+    LineAngle(ConstraintMeta, FeatureKey, f32),
 
     CircleRadius(ConstraintMeta, FeatureKey, f32, DimensionDisplay),
 }
@@ -72,8 +73,8 @@ pub enum Constraint {
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, fk, ..) => vec![fk.clone()],
@@ -82,14 +83,15 @@ impl Constraint {
             PointLerpLine(_, l_fk, p_fk, _) => vec![l_fk.clone(), p_fk.clone()],
             LineLengthsEqual(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
             LinesParallel(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
+            LineAngle(_, fk, ..) => vec![fk.clone()],
             CircleRadius(_, fk, ..) => vec![fk.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
@@ -98,14 +100,15 @@ impl Constraint {
             PointLerpLine(..) => matches!(ft, &Feature::LineSegment(..)),
             LineLengthsEqual(..) => matches!(ft, &Feature::LineSegment(..)),
             LinesParallel(..) => matches!(ft, &Feature::LineSegment(..)),
+            LineAngle(..) => matches!(ft, &Feature::LineSegment(..)),
             CircleRadius(..) => matches!(ft, &Feature::Circle(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
@@ -122,6 +125,7 @@ impl Constraint {
             (LinesParallel(_, l11, l12, ..), LinesParallel(_, l21, l22, ..)) => {
                 (l11 == l21 && l12 == l22) || (l11 == l22 && l12 == l21)
             }
+            (LineAngle(_, f1, ..), LineAngle(_, f2, ..)) => f1 == f2,
             (CircleRadius(_, f1, ..), CircleRadius(_, f2, ..)) => f1 == f2,
             _ => false,
         }
@@ -134,8 +138,8 @@ impl Constraint {
         vp: &crate::Viewport,
     ) -> Option<f32> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(..) => None,
@@ -199,6 +203,7 @@ impl Constraint {
             PointLerpLine(..) => None,
             LineLengthsEqual(..) => None,
             LinesParallel(..) => None,
+            LineAngle(..) => None,
         }
     }
 
@@ -210,8 +215,8 @@ impl Constraint {
         painter: &egui::Painter,
     ) {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, k, _, _) => {
@@ -284,6 +289,7 @@ impl Constraint {
             PointLerpLine(..) => {}
             LineLengthsEqual(..) => {}
             LinesParallel(..) => {}
+            LineAngle(..) => {}
 
             CircleRadius(_meta, fk, radius, dd) => {
                 if let Some(Feature::Circle(_, center_fk, ..)) = drawing.features.get(*fk) {
@@ -308,8 +314,8 @@ impl Constraint {
 
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineLength, LineLengthsEqual, LinesParallel,
-            PointLerpLine,
+            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
+            LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, k, x, y) => {
@@ -557,6 +563,61 @@ impl Constraint {
                 }
             }
 
+            LineAngle(_, l1, angle, ..) => {
+                if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*l1) {
+                    let td = &drawing
+                        .terms
+                        .get_feature_term(*l1, TermType::ScalarDistance);
+                    let ta = &drawing
+                        .terms
+                        .get_feature_term(*l1, TermType::ScalarGlobalAngle);
+                    let (x1, y1, x2, y2) = (
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f1, TermType::PositionY),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionX),
+                        &drawing.terms.get_feature_term(*f2, TermType::PositionY),
+                    );
+
+                    vec![
+                        Expression::Equal(
+                            Box::new(Expression::Variable(ta.into())),
+                            Box::new(Expression::Rational(
+                                Rational::from_float(*angle).unwrap(),
+                                true,
+                            )),
+                        ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(x2.into())),
+                            Box::new(Expression::Sum(
+                                Box::new(Expression::Variable(x1.into())),
+                                Box::new(Expression::Product(
+                                    Box::new(distance_eq(td, x1, y1, x2, y2)),
+                                    Box::new(Expression::Trig(
+                                        TrigOp::Cos,
+                                        Box::new(Expression::Variable(ta.into())),
+                                    )),
+                                )),
+                            )),
+                        ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(y2.into())),
+                            Box::new(Expression::Sum(
+                                Box::new(Expression::Variable(y1.into())),
+                                Box::new(Expression::Product(
+                                    Box::new(distance_eq(td, x1, y1, x2, y2)),
+                                    Box::new(Expression::Trig(
+                                        TrigOp::Sin,
+                                        Box::new(Expression::Variable(ta.into())),
+                                    )),
+                                )),
+                            )),
+                        ),
+                    ]
+                } else {
+                    unreachable!();
+                }
+            }
+
             LinesParallel(_, l1, l2, ..) => {
                 if let (
                     Some(Feature::LineSegment(_, p11, p12)),
@@ -629,6 +690,13 @@ impl Constraint {
                 amt: *d,
                 cardinality: axis.clone(),
                 ref_offset: ref_offset.clone(),
+                ..SerializedConstraint::default()
+            }),
+            Constraint::LineAngle(meta, fk, amt) => Ok(SerializedConstraint {
+                kind: "line_angle".to_string(),
+                meta: meta.clone(),
+                feature_idx: vec![*fk_to_idx.get(fk).ok_or(())?],
+                amt: *amt,
                 ..SerializedConstraint::default()
             }),
 
@@ -719,6 +787,16 @@ impl Constraint {
                     sc.amt,
                     sc.cardinality,
                     sc.ref_offset,
+                ))
+            }
+            "line_angle" => {
+                if sc.feature_idx.len() < 1 {
+                    return Err(());
+                }
+                Ok(Self::LineAngle(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    sc.amt,
                 ))
             }
 

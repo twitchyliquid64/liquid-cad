@@ -216,6 +216,19 @@ impl<'a> Widget<'a> {
                                                 meta,
                                             )
                                         }
+                                        Some(Constraint::LineAngle(
+                                            meta,
+                                            _line,
+                                            angle_radians,
+                                            ..,
+                                        )) => Widget::show_constraint_line_angle(
+                                            ui,
+                                            &mut commands,
+                                            &mut changed,
+                                            &ck,
+                                            angle_radians,
+                                            meta,
+                                        ),
                                         None => {}
                                     });
                                 }
@@ -530,6 +543,44 @@ impl<'a> Widget<'a> {
                     .speed(0.05),
             );
             *changed |= dv.changed();
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+            });
+        });
+    }
+
+    fn show_constraint_line_angle(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &ConstraintKey,
+        amt: &mut f32,
+        _meta: &mut ConstraintMeta,
+    ) {
+        let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+
+            let text_rect = ui.add(egui::Label::new("Line angle").wrap(false)).rect;
+            ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
+
+            let mut degrees = amt.to_degrees();
+
+            let dv = ui.add_sized(
+                [50., text_height * 1.4],
+                egui::DragValue::new(&mut degrees)
+                    .clamp_range(0.0..=360.0)
+                    .speed(0.1)
+                    .suffix("°"),
+            );
+
+            if dv.changed() {
+                *amt = degrees.to_radians() % std::f32::consts::TAU;
+                *changed |= true;
+            }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {

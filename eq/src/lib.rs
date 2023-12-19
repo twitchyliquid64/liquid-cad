@@ -452,7 +452,7 @@ impl Expression {
             }
         }
 
-        // Negation of a product with a coefficient
+        // Negation of a product/quotient with a coefficient
         if let Expression::Neg(a) = self {
             if let Expression::Product(a, b) = a.as_ref() {
                 match a.as_ref() {
@@ -462,6 +462,23 @@ impl Expression {
                     }
                     Expression::Rational(a, as_fraction) => {
                         *self = Expression::Product(
+                            Box::new(Expression::Rational(
+                                a * Rational::from_integer(Integer::from(-1)),
+                                *as_fraction,
+                            )),
+                            b.clone(),
+                        );
+                    }
+                    _ => {}
+                }
+            } else if let Expression::Quotient(a, b) = a.as_ref() {
+                match a.as_ref() {
+                    Expression::Integer(a) => {
+                        *self =
+                            Expression::Quotient(Box::new(Expression::Integer(a * -1)), b.clone());
+                    }
+                    Expression::Rational(a, as_fraction) => {
+                        *self = Expression::Quotient(
                             Box::new(Expression::Rational(
                                 a * Rational::from_integer(Integer::from(-1)),
                                 *as_fraction,
@@ -488,10 +505,6 @@ impl Expression {
                 *self = aa.as_ref().clone();
             }
         }
-    }
-
-    fn normalize(&mut self) {
-        self.normalize_2x();
 
         // Product with a rational where numerator is 1 => Quotient(term / denom)
         if let Expression::Product(a, b) = self {
@@ -516,6 +529,159 @@ impl Expression {
             }
         }
 
+        // Quotient with double-negative
+        if let Expression::Quotient(a, b) = self {
+            if let (Expression::Neg(a), Expression::Neg(b)) = (a.as_ref(), b.as_ref()) {
+                *self = Expression::Quotient(a.clone(), b.clone());
+            }
+        }
+        // Quotient with negative denominator & coefficient numerator
+        if let Expression::Quotient(a, b) = self {
+            if let (Expression::Integer(x), Expression::Neg(ba)) = (a.as_mut(), b.as_ref()) {
+                *x *= -1;
+                *b = ba.clone();
+            } else if let (Expression::Rational(x, _), Expression::Neg(ba)) =
+                (a.as_mut(), b.as_ref())
+            {
+                *x *= Rational::from_integer((-1).into());
+                *b = ba.clone();
+            }
+        }
+        // Quotient with negative denominator - promote
+        if let Expression::Quotient(a, b) = self {
+            if let Expression::Neg(b) = b.as_ref() {
+                *self = Expression::Neg(Box::new(Expression::Quotient(a.clone(), b.clone())));
+            }
+        }
+        // Quotient with negative numerator - promote
+        if let Expression::Quotient(a, b) = self {
+            if let Expression::Neg(a) = a.as_ref() {
+                *self = Expression::Neg(Box::new(Expression::Quotient(a.clone(), b.clone())));
+            }
+        }
+
+        if let Expression::Product(a, b) = self {
+            if let (Expression::Neg(aa), Expression::Neg(bb)) = (a.as_mut(), b.as_ref()) {
+                // Product of two negatives
+                *self = Expression::Product(aa.clone(), bb.clone());
+            } else if let (Expression::Integer(x), Expression::Neg(bb)) = (a.as_mut(), b.as_ref()) {
+                // Product with coefficient and negative term
+                *x *= -1;
+                *b = bb.clone();
+            } else if let Expression::Neg(bb) = b.as_ref() {
+                // Product with negative term
+                *self = Expression::Neg(Box::new(Expression::Product(a.clone(), bb.clone())));
+            }
+        }
+
+        // Sum with a negative: converted to outer neg or subtraction.
+        if let Expression::Sum(a, b) = self {
+            if let Expression::Neg(a) = a.as_ref() {
+                if let Expression::Neg(b) = b.as_ref() {
+                    *self = Expression::Neg(Box::new(Expression::Sum(a.clone(), b.clone())));
+                } else {
+                    *self = Expression::Difference(b.clone(), a.clone());
+                }
+            } else if let Expression::Neg(b) = b.as_ref() {
+                // a + -b => a - b
+                *self = Expression::Difference(a.clone(), b.clone());
+            }
+        }
+    }
+
+    fn normalize(&mut self) {
+        self.normalize_2x();
+
+        // Quotient constant folding
+        if let Expression::Quotient(a, b) = self {
+            match (a.as_ref(), b.as_ref()) {
+                // Division of two integers means a rational, possibly folding
+                // into constant integer
+                (Expression::Integer(a), Expression::Integer(b)) => {
+                    if a == b {
+                        *self = Expression::Integer(1.into());
+                    } else {
+                        let r = Rational::new(a.clone(), b.clone());
+                        if r.is_integer() {
+                            *self = Expression::Integer(r.numer().clone());
+                        } else {
+                            *self = Expression::Rational(r, true);
+                        }
+                    }
+                }
+                // Constant folding: Division of two rationals
+                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
+                    if a == b {
+                        *self = Expression::Integer(1.into());
+                    } else {
+                        *self = Expression::Rational(a / b, *as_fraction);
+                    }
+                }
+                // Constant folding: Division of rational by integer
+                (Expression::Rational(a, as_fraction), Expression::Integer(b)) => {
+                    *self = Expression::Rational(a / b, *as_fraction);
+                }
+                // Constant folding: Division of integer by rational
+                (Expression::Integer(a), Expression::Rational(b, as_fraction)) => {
+                    *self =
+                        Expression::Rational(Rational::from_integer(a.clone()) / b, *as_fraction);
+                }
+                // (aa * ab) / (ba * bb) where aa & ba are integers
+                (Expression::Product(aa, ab), Expression::Product(ba, bb)) => {
+                    if let (Expression::Integer(aa), Expression::Integer(ba)) =
+                        (aa.as_ref(), ba.as_ref())
+                    {
+                        let r = Rational::new(aa.clone(), ba.clone());
+                        let mut terms = Expression::Quotient(ab.clone(), bb.clone());
+                        terms.simplify();
+
+                        *self = Expression::Product(
+                            Box::new(if r.is_integer() {
+                                Expression::Integer(r.numer().clone())
+                            } else {
+                                Expression::Rational(r, true)
+                            }),
+                            Box::new(terms),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Sum constant folding
+        if let Expression::Sum(a, b) = self {
+            match (a.as_ref(), b.as_ref()) {
+                // Constant folding: integer addition
+                (Expression::Integer(a), Expression::Integer(b)) => {
+                    *self = Expression::Integer(a + b);
+                }
+                // Constant folding: rational addition
+                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
+                    *self = Expression::Rational(a + b, *as_fraction);
+                }
+                // Constant folding: mixed rational/integer addition
+                (Expression::Rational(a, as_fraction), Expression::Integer(b))
+                | (Expression::Integer(b), Expression::Rational(a, as_fraction)) => {
+                    *self = Expression::Rational(a + b, *as_fraction);
+                }
+                // ax + bx = (a+b)x
+                (Expression::Product(a, x1), Expression::Product(b, x2)) => {
+                    if let (Expression::Integer(a), Expression::Integer(b)) =
+                        (a.as_ref(), b.as_ref())
+                    {
+                        if x1 == x2 {
+                            *self = Expression::Product(
+                                Box::new(Expression::Integer(a + b)),
+                                x1.clone(),
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Sum with an operand of 0.
         if let Expression::Sum(a, b) = self {
             match (a.as_ref(), b.as_ref()) {
@@ -532,17 +698,43 @@ impl Expression {
                 _ => {}
             }
         }
-        // Sum with a negative: converted to outer neg or subtraction.
-        if let Expression::Sum(a, b) = self {
-            if let Expression::Neg(a) = a.as_ref() {
-                if let Expression::Neg(b) = b.as_ref() {
-                    *self = Expression::Neg(Box::new(Expression::Sum(a.clone(), b.clone())));
-                } else {
-                    *self = Expression::Difference(b.clone(), a.clone());
+
+        // Difference constant folding
+        if let Expression::Difference(a, b) = self {
+            match (a.as_ref(), b.as_ref()) {
+                // Constant folding: integer subtraction
+                (Expression::Integer(a), Expression::Integer(b)) => {
+                    *self = Expression::Integer(a - b);
                 }
+                // Constant folding: rational subtraction
+                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
+                    *self = Expression::Rational(a - b, *as_fraction);
+                }
+                // Constant folding: Difference of rational with integer
+                (Expression::Rational(a, as_fraction), Expression::Integer(b)) => {
+                    *self = Expression::Rational(a - b, *as_fraction);
+                }
+                // Constant folding: Difference of integer with rational
+                (Expression::Integer(a), Expression::Rational(b, as_fraction)) => {
+                    *self =
+                        Expression::Rational(Rational::from_integer(a.clone()) - b, *as_fraction);
+                }
+                // ax - bx = (a-b)x
+                (Expression::Product(a, x1), Expression::Product(b, x2)) => {
+                    if let (Expression::Integer(a), Expression::Integer(b)) =
+                        (a.as_ref(), b.as_ref())
+                    {
+                        if x1 == x2 {
+                            *self = Expression::Product(
+                                Box::new(Expression::Integer(a - b)),
+                                x1.clone(),
+                            );
+                        }
+                    }
+                }
+                _ => {}
             }
         }
-
         // Difference with an operand of 0.
         if let Expression::Difference(a, b) = self {
             match (a.as_ref(), b.as_ref()) {
@@ -571,6 +763,7 @@ impl Expression {
 
         // Multiply with an operand of 0 or 1 or -1.
         // Multiplication with -1 is transformed to a Neg.
+        // Multiplication of two Neg's eliminates the Negs.
         if let Expression::Product(a, b) = self {
             match (a.as_ref(), b.as_ref()) {
                 (Expression::Integer(a), _) => {
@@ -589,6 +782,49 @@ impl Expression {
                         *self = *a.clone();
                     } else if *b == (-1).into() {
                         *self = Expression::Neg(a.clone());
+                    }
+                }
+                (Expression::Neg(a), Expression::Neg(b)) => {
+                    *self = Expression::Product(a.clone(), b.clone());
+                }
+                _ => {}
+            }
+        }
+        // Multiply constant folding
+        if let Expression::Product(a, b) = self {
+            match (a.as_ref(), b.as_ref()) {
+                // Constant folding: integer multiplication
+                (Expression::Integer(a), Expression::Integer(b)) => {
+                    *self = Expression::Integer(a * b);
+                }
+                // Constant folding: rational multiplication
+                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
+                    *self = Expression::Rational(a * b, *as_fraction);
+                }
+                // Constant folding: mixed rational/integer multiplication
+                (Expression::Rational(a, as_fraction), Expression::Integer(b))
+                | (Expression::Integer(b), Expression::Rational(a, as_fraction)) => {
+                    *self = Expression::Rational(a * b, *as_fraction);
+                }
+                // a * (bx) = (ab)x (integer coefficient simplification)
+                (Expression::Integer(x1), Expression::Product(ba, bb)) => {
+                    if let Expression::Integer(x2) = ba.as_ref() {
+                        *self =
+                            Expression::Product(Box::new(Expression::Integer(x1 * x2)), bb.clone());
+                    }
+                }
+                // (aa * ab) * (ba * bb) where aa & ba are integers
+                (Expression::Product(aa, ab), Expression::Product(ba, bb)) => {
+                    if let (Expression::Integer(aa), Expression::Integer(ba)) =
+                        (aa.as_ref(), ba.as_ref())
+                    {
+                        let mut terms = Expression::Product(ab.clone(), bb.clone());
+                        terms.simplify();
+
+                        *self = Expression::Product(
+                            Box::new(Expression::Integer(aa * ba)),
+                            Box::new(terms),
+                        );
                     }
                 }
                 _ => {}
@@ -668,159 +904,38 @@ impl Expression {
         self.normalize();
 
         match self {
-            Expression::Quotient(a, b) => match (a.as_ref(), b.as_ref()) {
-                // Division of two integers means a rational, possibly folding
-                // into constant integer
-                (Expression::Integer(a), Expression::Integer(b)) => {
-                    if a == b {
-                        *self = Expression::Integer(1.into());
-                    } else {
-                        let r = Rational::new(a.clone(), b.clone());
-                        if r.is_integer() {
-                            *self = Expression::Integer(r.numer().clone());
-                        } else {
-                            *self = Expression::Rational(r, true);
-                        }
-                    }
+            Expression::Quotient(a, b) => {
+                // Divison by two identical terms is a 1.
+                if a == b {
+                    *self = Expression::Integer(1.into());
                 }
-                // Constant folding: Division of two rationals
-                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
-                    if a == b {
-                        *self = Expression::Integer(1.into());
-                    } else {
-                        *self = Expression::Rational(a / b, *as_fraction);
-                    }
+            }
+
+            Expression::Sum(a, b) => {
+                // Sum of two identical terms is 2*term.
+                if a == b {
+                    *self = Expression::Product(Box::new(Expression::Integer(2.into())), a.clone());
                 }
-                // Constant folding: Division of rational by integer
-                (Expression::Rational(a, as_fraction), Expression::Integer(b)) => {
-                    *self = Expression::Rational(a / b, *as_fraction);
-                }
-                // Constant folding: Division of integer by rational
-                (Expression::Integer(a), Expression::Rational(b, as_fraction)) => {
+            }
+
+            Expression::Difference(a, b) => {
+                // Difference of two identical terms is zero.
+                if a == b {
+                    *self = Expression::Integer(0.into());
+                } else
+                // a--a = 2a
+                if &Expression::Neg(a.clone()) == b.as_ref() {
                     *self =
-                        Expression::Rational(Rational::from_integer(a.clone()) / b, *as_fraction);
+                        Expression::Product(Box::new(Expression::Integer(2.into())), a.to_owned());
                 }
-                _ => {
-                    // Divison by two identical terms is a 1.
-                    if a == b {
-                        *self = Expression::Integer(1.into());
-                    }
-                }
-            },
+            }
 
-            Expression::Sum(a, b) => match (a.as_ref(), b.as_ref()) {
-                // Constant folding: integer addition
-                (Expression::Integer(a), Expression::Integer(b)) => {
-                    *self = Expression::Integer(a + b);
+            Expression::Product(a, b) => {
+                // Multiplication of identical terms is pow(a, 2)
+                if a == b {
+                    *self = Expression::Power(a.clone(), Box::new(Expression::Integer(2.into())));
                 }
-                // Constant folding: rational addition
-                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
-                    *self = Expression::Rational(a + b, *as_fraction);
-                }
-                // Constant folding: mixed rational/integer addition
-                (Expression::Rational(a, as_fraction), Expression::Integer(b))
-                | (Expression::Integer(b), Expression::Rational(a, as_fraction)) => {
-                    *self = Expression::Rational(a + b, *as_fraction);
-                }
-                // ax + bx = (a+b)x
-                (Expression::Product(a, x1), Expression::Product(b, x2)) => {
-                    if let (Expression::Integer(a), Expression::Integer(b)) =
-                        (a.as_ref(), b.as_ref())
-                    {
-                        if x1 == x2 {
-                            *self = Expression::Product(
-                                Box::new(Expression::Integer(a + b)),
-                                x1.clone(),
-                            );
-                        }
-                    }
-                }
-
-                _ => {
-                    // Sum of two identical terms is 2*term.
-                    if a == b {
-                        *self =
-                            Expression::Product(Box::new(Expression::Integer(2.into())), a.clone());
-                    }
-                }
-            },
-
-            Expression::Difference(a, b) => match (a.as_ref(), b.as_ref()) {
-                // Constant folding: integer subtraction
-                (Expression::Integer(a), Expression::Integer(b)) => {
-                    *self = Expression::Integer(a - b);
-                }
-                // Constant folding: rational subtraction
-                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
-                    *self = Expression::Rational(a - b, *as_fraction);
-                }
-                // Constant folding: Difference of rational with integer
-                (Expression::Rational(a, as_fraction), Expression::Integer(b)) => {
-                    *self = Expression::Rational(a - b, *as_fraction);
-                }
-                // Constant folding: Difference of integer with rational
-                (Expression::Integer(a), Expression::Rational(b, as_fraction)) => {
-                    *self =
-                        Expression::Rational(Rational::from_integer(a.clone()) - b, *as_fraction);
-                }
-                // ax - bx = (a-b)x
-                (Expression::Product(a, x1), Expression::Product(b, x2)) => {
-                    if let (Expression::Integer(a), Expression::Integer(b)) =
-                        (a.as_ref(), b.as_ref())
-                    {
-                        if x1 == x2 {
-                            *self = Expression::Product(
-                                Box::new(Expression::Integer(a - b)),
-                                x1.clone(),
-                            );
-                        }
-                    }
-                }
-
-                _ => {
-                    // Difference of two identical terms is zero.
-                    if a == b {
-                        *self = Expression::Integer(0.into());
-                    } else
-                    // a--a = 2a
-                    if &Expression::Neg(a.clone()) == b.as_ref() {
-                        *self = Expression::Product(
-                            Box::new(Expression::Integer(2.into())),
-                            a.to_owned(),
-                        );
-                    }
-                }
-            },
-
-            Expression::Product(a, b) => match (a.as_ref(), b.as_ref()) {
-                // Constant folding: integer multiplication
-                (Expression::Integer(a), Expression::Integer(b)) => {
-                    *self = Expression::Integer(a * b);
-                }
-                // Constant folding: rational multiplication
-                (Expression::Rational(a, as_fraction), Expression::Rational(b, _)) => {
-                    *self = Expression::Rational(a * b, *as_fraction);
-                }
-                // Constant folding: mixed rational/integer multiplication
-                (Expression::Rational(a, as_fraction), Expression::Integer(b))
-                | (Expression::Integer(b), Expression::Rational(a, as_fraction)) => {
-                    *self = Expression::Rational(a * b, *as_fraction);
-                }
-                // a * (bx) = (ab)x
-                (Expression::Integer(x1), Expression::Product(ba, bb)) => {
-                    if let Expression::Integer(x2) = ba.as_ref() {
-                        *self =
-                            Expression::Product(Box::new(Expression::Integer(x1 * x2)), bb.clone());
-                    }
-                }
-                _ => {
-                    // Multiplication of identical terms is pow(a, 2)
-                    if a == b {
-                        *self =
-                            Expression::Power(a.clone(), Box::new(Expression::Integer(2.into())));
-                    }
-                }
-            },
+            }
 
             Expression::Sqrt(a, _) => match a.as_ref() {
                 // Constant folding: integer sqrt
@@ -854,6 +969,75 @@ impl Expression {
                 }
                 _ => {}
             },
+            _ => {}
+        }
+
+        // Eliminate common factor rules
+        match self {
+            Expression::Product(a, b) => {
+                // Common terms in nested product
+                if let (Expression::Product(aa, ab), Expression::Product(ba, bb)) =
+                    (a.as_ref(), b.as_ref())
+                {
+                    if ab == bb {
+                        // (_ * a) * (_ * a) = (_1 * _2) * powi(a, 2)
+                        let mut coeffs = Expression::Product(aa.clone(), ba.clone());
+                        coeffs.simplify();
+                        *self = Expression::Product(
+                            Box::new(coeffs),
+                            Box::new(Expression::Power(
+                                ab.clone(),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
+                        );
+                    } else if ab == ba {
+                        // (_ * a) * (a * _) = (_1 * _2) * powi(a, 2)
+                        let mut coeffs = Expression::Product(aa.clone(), bb.clone());
+                        coeffs.simplify();
+                        *self = Expression::Product(
+                            Box::new(coeffs),
+                            Box::new(Expression::Power(
+                                ab.clone(),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
+                        );
+                    } else if aa == bb {
+                        // (a * _) * (_ * a) = (_1 * _2) * powi(a, 2)
+                        let mut coeffs = Expression::Product(ab.clone(), ba.clone());
+                        coeffs.simplify();
+                        *self = Expression::Product(
+                            Box::new(coeffs),
+                            Box::new(Expression::Power(
+                                aa.clone(),
+                                Box::new(Expression::Integer(2.into())),
+                            )),
+                        );
+                    }
+                }
+            }
+            Expression::Quotient(a, b) => {
+                // Eliminate common term in numerator + denominator
+                if let (Expression::Product(aa, ab), Expression::Product(ba, bb)) =
+                    (a.as_ref(), b.as_ref())
+                {
+                    if ab == bb {
+                        // (_ * a) / (_ * a) = _1 / _2
+                        let mut new = Expression::Quotient(aa.clone(), ba.clone());
+                        new.simplify();
+                        *self = new;
+                    } else if ab == ba {
+                        // (_ * a) / (a * _) = _1 / _2
+                        let mut new = Expression::Quotient(aa.clone(), bb.clone());
+                        new.simplify();
+                        *self = new;
+                    } else if aa == bb {
+                        // (a * _) / (_ * a) = _1 / _2
+                        let mut new = Expression::Quotient(ab.clone(), ba.clone());
+                        new.simplify();
+                        *self = new;
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -1345,6 +1529,42 @@ mod tests {
             Ok(Expression::Integer(1.into()))
         );
         assert_eq!(
+            Expression::parse("(-a)/(-b)", true),
+            Ok(Expression::Quotient(
+                Box::new(Expression::Variable("a".into())),
+                Box::new(Expression::Variable("b".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(-a)*(-b)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Variable("a".into())),
+                Box::new(Expression::Variable("b".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("-(1/a)", true),
+            Ok(Expression::Quotient(
+                Box::new(Expression::Integer((-1).into())),
+                Box::new(Expression::Variable("a".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("1/(-a)", true),
+            Ok(Expression::Quotient(
+                Box::new(Expression::Integer((-1).into())),
+                Box::new(Expression::Variable("a".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(-a)/2", true),
+            Ok(Expression::Neg(Box::new(Expression::Quotient(
+                Box::new(Expression::Variable("a".into())),
+                Box::new(Expression::Integer(2.into())),
+            ))))
+        );
+
+        assert_eq!(
             Expression::parse("a-a", true),
             Ok(Expression::Integer(0.into()))
         );
@@ -1353,6 +1573,13 @@ mod tests {
             Ok(Expression::Product(
                 Box::new(Expression::Integer(2.into())),
                 Box::new(Expression::Variable("a".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("2 + (-b)", true),
+            Ok(Expression::Difference(
+                Box::new(Expression::Integer(2.into())),
+                Box::new(Expression::Variable("b".into())),
             ))
         );
 
@@ -1427,6 +1654,28 @@ mod tests {
                 Box::new(Expression::Variable("x".into())),
             ))
         );
+        assert_eq!(
+            Expression::parse("a * (-b)", true),
+            Ok(Expression::Neg(Box::new(Expression::Product(
+                Box::new(Expression::Variable("a".into())),
+                Box::new(Expression::Variable("b".into())),
+            ))))
+        );
+        assert_eq!(
+            Expression::parse("2 * (-x)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Integer((-2).into())),
+                Box::new(Expression::Variable("x".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(-2) * (-x)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Integer(2.into())),
+                Box::new(Expression::Variable("x".into())),
+            ))
+        );
+
         assert_eq!(
             Expression::parse("cos(2-2)", true),
             Ok(Expression::Integer(1.into()))
@@ -1551,6 +1800,85 @@ mod tests {
             Ok(Expression::Product(
                 Box::new(Expression::Integer(7.into())),
                 Box::new(Expression::Variable("x".into())),
+            ))
+        );
+
+        assert_eq!(
+            Expression::parse("5a * 2a", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Integer(10.into())),
+                Box::new(Expression::Power(
+                    Box::new(Expression::Variable("a".into())),
+                    Box::new(Expression::Integer(2.into())),
+                )),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(a * b) * (b * c)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Product(
+                    Box::new(Expression::Variable("a".into())),
+                    Box::new(Expression::Variable("c".into())),
+                )),
+                Box::new(Expression::Power(
+                    Box::new(Expression::Variable("b".into())),
+                    Box::new(Expression::Integer(2.into())),
+                )),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(a * b) * (c * a)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Product(
+                    Box::new(Expression::Variable("b".into())),
+                    Box::new(Expression::Variable("c".into())),
+                )),
+                Box::new(Expression::Power(
+                    Box::new(Expression::Variable("a".into())),
+                    Box::new(Expression::Integer(2.into())),
+                )),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("5a * 2b", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Integer(10.into())),
+                Box::new(Expression::Product(
+                    Box::new(Expression::Variable("a".into())),
+                    Box::new(Expression::Variable("b".into())),
+                )),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("4a / 2a", true),
+            Ok(Expression::Integer(2.into()))
+        );
+        assert_eq!(
+            Expression::parse("(a*b) / (a*b)", true),
+            Ok(Expression::Integer(1.into()))
+        );
+        assert_eq!(
+            Expression::parse("(a*b) / (b*a)", true),
+            Ok(Expression::Integer(1.into()))
+        );
+        assert_eq!(
+            Expression::parse("(a*b) / (c*a)", true),
+            Ok(Expression::Quotient(
+                Box::new(Expression::Variable("b".into())),
+                Box::new(Expression::Variable("c".into())),
+            ))
+        );
+        assert_eq!(
+            Expression::parse("(-5 * b) / (4 * c)", true),
+            Ok(Expression::Product(
+                Box::new(Expression::Rational(
+                    Rational::new((-5).into(), 4.into()),
+                    true,
+                )),
+                Box::new(Expression::Quotient(
+                    Box::new(Expression::Variable("b".into())),
+                    Box::new(Expression::Variable("c".into())),
+                )),
             ))
         );
 

@@ -480,10 +480,11 @@ impl SubSolver {
                 //     Box::new(ei.expr.clone()),
                 // )
                 // .as_residual().unwrap();
-                let eq = Expression::Difference(
+                let mut eq = Expression::Difference(
                     Box::new(Expression::Variable(for_var.clone())),
                     Box::new(ei.expr.clone()),
                 );
+                eq.simplify();
 
                 let h: ExprHash = (&eq).into();
                 if done_exprs.contains(&h) {
