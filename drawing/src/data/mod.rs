@@ -34,11 +34,31 @@ pub struct SerializedDrawing {
     pub constraints: Vec<SerializedConstraint>,
     pub groups: Vec<group::SerializedGroup>,
     pub viewport: Viewport,
+    pub properties: Option<DrawingProperties>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct DrawingProperties {
+    pub name: String,
+
+    pub flatten_tolerance: f64,
+    pub solver_stop_err: f64,
+}
+
+impl Default for DrawingProperties {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            flatten_tolerance: 0.05,
+            solver_stop_err: 0.0005,
+        }
+    }
 }
 
 /// Data stores live state about the drawing and what it is composed of.
 #[derive(Clone, Debug)]
 pub struct Data {
+    pub props: DrawingProperties,
     pub features: HopSlotMap<FeatureKey, Feature>,
     pub constraints: ConstraintData,
     pub vp: Viewport,
@@ -53,6 +73,7 @@ pub struct Data {
 impl Default for Data {
     fn default() -> Self {
         Self {
+            props: DrawingProperties::default(),
             features: HopSlotMap::default(),
             constraints: ConstraintData::default(),
             vp: Viewport::default(),
@@ -121,9 +142,12 @@ impl Data {
                 }
             })
             .collect();
+        let mut params = eq::solve::DumbassSolverParams::default();
+        params.terminate_at_avg_fx = self.props.solver_stop_err;
         let mut solver_state = eq::solve::DumbassSolverState::new(known, unresolved, residuals);
         // println!("solver input: {:?}", solver_state);
-        let mut solver = eq::solve::DumbassSolver::new_with_initials(&solver_state, initials);
+        let mut solver =
+            eq::solve::DumbassSolver::new_with_initials(params, &solver_state, initials);
         let results = match solver.solve(&mut solver_state) {
             Ok(results) => Some(results),
             Err((avg_err, results)) => {
@@ -608,6 +632,11 @@ impl Data {
         }
 
         SerializedDrawing {
+            properties: if self.props != DrawingProperties::default() {
+                Some(self.props.clone())
+            } else {
+                None
+            },
             features,
             constraints: self
                 .constraints
@@ -624,6 +653,7 @@ impl Data {
     }
 
     pub fn load(&mut self, drawing: SerializedDrawing) -> Result<(), ()> {
+        self.props = drawing.properties.unwrap_or(DrawingProperties::default());
         self.features = HopSlotMap::default();
         self.constraints = ConstraintData::default();
         self.vp = drawing.viewport;

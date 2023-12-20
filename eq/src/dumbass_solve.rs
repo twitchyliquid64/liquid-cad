@@ -211,8 +211,11 @@ impl DumbassSolver {
         }
     }
 
-    pub fn new_with_initials(st: &DumbassSolverState, initials: Vec<f64>) -> Self {
-        let params = DumbassSolverParams::default();
+    pub fn new_with_initials(
+        params: DumbassSolverParams,
+        st: &DumbassSolverState,
+        initials: Vec<f64>,
+    ) -> Self {
         let iteration = 0;
 
         assert!(st.vars.len() == initials.len());

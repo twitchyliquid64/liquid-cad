@@ -8,6 +8,7 @@ pub enum Tab {
     #[default]
     Selection,
     Groups,
+    General,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -50,6 +51,27 @@ impl<'a> Widget<'a> {
             .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-4., 4.));
 
         window.show(ctx, |ui| {
+            let (ctrl, one, two, three) = ui.input(|i| {
+                (
+                    i.modifiers.ctrl,
+                    i.key_pressed(egui::Key::Num1),
+                    i.key_pressed(egui::Key::Num2),
+                    i.key_pressed(egui::Key::Num3),
+                )
+            });
+            match (ctrl, one, two, three) {
+                (true, true, _, _) => {
+                    self.state.tab = Tab::Selection;
+                }
+                (true, _, true, _) => {
+                    self.state.tab = Tab::Groups;
+                }
+                (true, _, _, true) => {
+                    self.state.tab = Tab::General;
+                }
+                _ => {}
+            }
+
             ui.horizontal_top(|ui| {
                 if ui
                     .selectable_label(self.state.tab == Tab::Selection, "Selection")
@@ -63,6 +85,12 @@ impl<'a> Widget<'a> {
                 {
                     self.state.tab = Tab::Groups
                 };
+                if ui
+                    .selectable_label(self.state.tab == Tab::General, "General")
+                    .clicked()
+                {
+                    self.state.tab = Tab::General
+                };
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     ui.add_space(2.);
@@ -74,6 +102,7 @@ impl<'a> Widget<'a> {
             match self.state.tab {
                 Tab::Selection => self.show_selection_tab(ui),
                 Tab::Groups => self.show_groups_tab(ui),
+                Tab::General => self.show_general_tab(ui),
             }
         });
     }
@@ -861,8 +890,10 @@ impl<'a> Widget<'a> {
             ui.label("Export 📋");
             ui.separator();
             ui.add_space(2.0);
+            ui.add(egui::Slider::new(&mut self.drawing.props.flatten_tolerance, 0.0001..=5.0)
+                    .text("Flatten tolerance").suffix("mm").logarithmic(true));
             if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("OpenSCAD polygon")).clicked() {
-                if let Ok(t) = self.drawing.serialize_openscad(0.05) {
+                if let Ok(t) = self.drawing.serialize_openscad(self.drawing.props.flatten_tolerance) {
                     ui.ctx().output_mut(|o| o.copied_text = t);
                     self.toasts.add(egui_toast::Toast {
                         text: "OpenSCAD code copied to clipboard!".into(),
@@ -893,5 +924,31 @@ impl<'a> Widget<'a> {
         for c in commands.drain(..) {
             self.handler.handle(self.drawing, self.tools, c);
         }
+    }
+
+    fn show_general_tab(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(2.0);
+        ui.add(
+            egui::TextEdit::singleline(&mut self.drawing.props.name)
+                .hint_text("Untitled drawing")
+                .desired_width(f32::INFINITY),
+        );
+
+        ui.add_space(10.0);
+        ui.label("General settings");
+        ui.add(
+            egui::Slider::new(&mut self.drawing.props.solver_stop_err, 0.1..=0.00001)
+                .text("Solver desired accuracy")
+                .suffix("mm")
+                .min_decimals(7)
+                .logarithmic(true),
+        );
+        ui.add(
+            egui::Slider::new(&mut self.drawing.props.flatten_tolerance, 0.0001..=5.0)
+                .text("Flatten tolerance")
+                .suffix("mm")
+                .min_decimals(7)
+                .logarithmic(true),
+        );
     }
 }
