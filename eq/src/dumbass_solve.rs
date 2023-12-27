@@ -1,5 +1,6 @@
 extern crate nalgebra as na;
 use super::*;
+use crate::solve::VarResolver;
 use na::{DMatrix, DVector, Dyn, OMatrix, OVector};
 use num::ToPrimitive;
 use std::collections::HashMap;
@@ -102,32 +103,6 @@ impl DumbassSolverState {
             residuals,
             jacobians,
         }
-    }
-}
-
-struct VarResolver<'a> {
-    resolved: &'a HashMap<Variable, Concrete>,
-    vars: &'a Vec<Variable>,
-
-    x: &'a OVector<f64, Dyn>,
-}
-
-impl<'a> Resolver for VarResolver<'a> {
-    fn resolve_variable(&mut self, v: &Variable) -> Result<Concrete, ResolveErr> {
-        match self.resolved.get(v) {
-            Some(c) => {
-                return Ok(c.clone());
-            }
-            None => {}
-        };
-
-        for (i, v2) in self.vars.iter().enumerate() {
-            if v == v2 {
-                return Ok(Concrete::Float(self.x[i]));
-            }
-        }
-
-        Err(ResolveErr::UnknownVar(v.clone()))
     }
 }
 

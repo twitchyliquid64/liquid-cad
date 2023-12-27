@@ -2,10 +2,43 @@
 mod parser;
 
 mod dumbass_solve;
+mod search_solve;
 mod sub_solve;
 
 pub mod solve {
+    use super::*;
+    extern crate nalgebra as na;
+    use na::{Dyn, OVector};
+    use std::collections::HashMap;
+
+    pub(crate) struct VarResolver<'a> {
+        pub resolved: &'a HashMap<Variable, Concrete>,
+        pub vars: &'a Vec<Variable>,
+
+        pub x: &'a OVector<f64, Dyn>,
+    }
+
+    impl<'a> Resolver for VarResolver<'a> {
+        fn resolve_variable(&mut self, v: &Variable) -> Result<Concrete, ResolveErr> {
+            match self.resolved.get(v) {
+                Some(c) => {
+                    return Ok(c.clone());
+                }
+                None => {}
+            };
+
+            for (i, v2) in self.vars.iter().enumerate() {
+                if v == v2 {
+                    return Ok(Concrete::Float(self.x[i]));
+                }
+            }
+
+            Err(ResolveErr::UnknownVar(v.clone()))
+        }
+    }
+
     pub use crate::dumbass_solve::*;
+    pub use crate::search_solve::*;
     pub use crate::sub_solve::*;
 }
 

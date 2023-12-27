@@ -92,19 +92,28 @@ impl Data {
         self.solve_and_apply();
     }
 
-    fn solve_and_apply(&mut self) {
-        let equations: Vec<eq::Expression> = self
-            .constraints
+    fn equations(&mut self) -> Vec<eq::Expression> {
+        self.constraints
             .iter()
             .map(|(_ck, c)| c.clone())
             .collect::<Vec<Constraint>>()
             .iter()
             .map(|c| c.equations(self))
             .flatten()
-            .collect();
+            .collect()
+    }
 
+    fn subsolve(
+        &mut self,
+    ) -> Option<(
+        HashMap<eq::Variable, eq::Concrete>,
+        Vec<eq::Variable>,
+        Vec<eq::Expression>,
+        Vec<f64>,
+    )> {
+        let equations = self.equations();
         if equations.len() == 0 {
-            return;
+            return None;
         }
 
         // println!("Inputs:");
@@ -117,7 +126,7 @@ impl Data {
             Ok(st) => st,
             Err(e) => {
                 println!("failed to build substitution solver: {:?}", e);
-                return;
+                return None;
             }
         };
         // Solve as many as possible using substitution.
@@ -130,7 +139,7 @@ impl Data {
         // Solve the rest using an iterative solver.
         let residuals = solver.all_residuals(&mut sub_solver_state);
         if residuals.len() == 0 {
-            return;
+            return None;
         }
         let initials = unresolved
             .iter()
@@ -142,6 +151,18 @@ impl Data {
                 }
             })
             .collect();
+
+        Some((known, unresolved, residuals, initials))
+    }
+
+    fn solve_and_apply(&mut self) {
+        let (known, unresolved, residuals, initials) = match self.subsolve() {
+            Some((k, u, r, i)) => (k, u, r, i),
+            None => {
+                return;
+            }
+        };
+
         let mut params = eq::solve::DumbassSolverParams::default();
         params.terminate_at_avg_fx = self.props.solver_stop_err;
         let mut solver_state = eq::solve::DumbassSolverState::new(known, unresolved, residuals);
@@ -164,6 +185,49 @@ impl Data {
             for (v, f) in results {
                 let term = self.terms.get_var_ref(&v).expect("no such var");
                 self.apply_solved(&term, f);
+            }
+        }
+    }
+
+    pub fn bruteforce_solve(&mut self) {
+        let (known, unresolved, residuals, mut initials) = match self.subsolve() {
+            Some((k, u, r, i)) => (k, u, r, i),
+            None => {
+                return;
+            }
+        };
+
+        let mut params = eq::solve::ExpSearchParams::default();
+        let mut last_best: Option<f64> = None;
+        for _ in 0..3 {
+            // TODO: Make SearchSolver take references to eliminate clones?
+            let ss = eq::solve::SearchSolver::new(
+                params.clone(),
+                known.clone(),
+                unresolved.clone(),
+                residuals.clone(),
+                initials.clone(),
+            );
+
+            let (residual_sq, guesses) = ss.bruteforce(3);
+            // println!("{}: {:?}", residual_sq, guesses);
+
+            if last_best.is_none() || last_best.unwrap() > residual_sq {
+                last_best = Some(residual_sq);
+                for (i, (_var, guess)) in guesses.into_iter().enumerate() {
+                    initials[i] = guess;
+                }
+            }
+
+            params.reduce();
+        }
+
+        if let Some(last_best_sq) = last_best {
+            if last_best_sq.sqrt() < 24.0 {
+                for (v, f) in unresolved.into_iter().zip(initials.into_iter()) {
+                    let term = self.terms.get_var_ref(&v).expect("no such var");
+                    self.apply_solved(&term, f);
+                }
             }
         }
     }

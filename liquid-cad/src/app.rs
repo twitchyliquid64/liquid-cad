@@ -297,6 +297,9 @@ impl eframe::App for App {
                     if ui.button("Solve step").clicked() {
                         self.drawing.changed_in_ui();
                     }
+                    if ui.button("Bruteforce solve").clicked() {
+                        self.drawing.bruteforce_solve();
+                    }
                 });
                 ui.add_space(8.0);
             });
