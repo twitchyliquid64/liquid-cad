@@ -301,6 +301,82 @@ impl Expression {
         }
     }
 
+    /// evaluates the first result of the expression with the given resolver. Faster
+    /// than `evaluate(r, 0)`.
+    pub fn evaluate_1<R: Resolver>(&self, r: &mut R) -> Result<Concrete, ResolveErr> {
+        match self {
+            Expression::Sum(a, b) => match (a.evaluate_1(r)?, b.evaluate_1(r)?) {
+                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a + b)),
+                (a, b) => Ok(Concrete::Float(a.as_f64() + b.as_f64())),
+            },
+            Expression::Difference(a, b) => match (a.evaluate_1(r)?, b.evaluate_1(r)?) {
+                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a - b)),
+                (a, b) => Ok(Concrete::Float(a.as_f64() - b.as_f64())),
+            },
+            Expression::Product(a, b) => match (a.evaluate_1(r)?, b.evaluate_1(r)?) {
+                (Concrete::Rational(a), Concrete::Rational(b)) => Ok(Concrete::Rational(a * b)),
+                (a, b) => Ok(Concrete::Float(a.as_f64() * b.as_f64())),
+            },
+            Expression::Quotient(a, b) => match (a.evaluate_1(r)?, b.evaluate_1(r)?) {
+                (Concrete::Rational(a), Concrete::Rational(b)) => {
+                    if b == Rational::from_integer(0.into()) {
+                        Err(ResolveErr::DivByZero)
+                    } else {
+                        Ok(Concrete::Rational(a / b))
+                    }
+                }
+                (a, b) => Ok(Concrete::Float(a.as_f64() / b.as_f64())),
+            },
+            Expression::Power(a, b) => match (a.evaluate_1(r)?, b.evaluate_1(r)?) {
+                (Concrete::Rational(a), Concrete::Rational(b)) => {
+                    use num::ToPrimitive;
+                    match b.to_i32() {
+                        Some(b) => Ok(Concrete::Rational(a.pow(b))),
+                        None => Err(ResolveErr::PowUnable(b)),
+                    }
+                }
+                (Concrete::Float(a), Concrete::Rational(b)) => {
+                    use num::ToPrimitive;
+                    match b.to_i32() {
+                        Some(b) => Ok(Concrete::Float(a.powi(b))),
+                        None => Ok(Concrete::Float(a.powf(b.to_f64().unwrap()))),
+                    }
+                }
+                (a, b) => Ok(Concrete::Float(a.as_f64().powf(b.as_f64()))),
+            },
+
+            Expression::Trig(op, a) => {
+                let v = a.evaluate_1(r)?.as_f64();
+                Ok(Concrete::Float(match op {
+                    TrigOp::Sin => v.sin(),
+                    TrigOp::Cos => v.cos(),
+                }))
+            }
+            Expression::Neg(a) => match a.evaluate_1(r)? {
+                Concrete::Rational(a) => Ok(Concrete::Rational(-a)),
+                Concrete::Float(a) => Ok(Concrete::Float(-a)),
+            },
+            Expression::Subtitution(v, a, _) => match r.resolve_variable(v) {
+                Ok(c) => Ok(c),
+                Err(_) => a.evaluate_1(r),
+            },
+            Expression::Abs(a) => match a.evaluate_1(r)? {
+                Concrete::Rational(a) => {
+                    use num::Signed;
+                    Ok(Concrete::Rational(a.abs()))
+                }
+                a => Ok(Concrete::Float(a.as_f64().abs())),
+            },
+            Expression::Sqrt(a, _is_pm) => Ok(Concrete::Float(a.evaluate_1(r)?.as_f64().sqrt())),
+
+            Expression::Integer(i) => Ok(Concrete::Rational(Rational::from_integer(i.clone()))),
+            Expression::Rational(r, _) => Ok(Concrete::Rational(r.clone())),
+            Expression::Variable(v) => Ok(r.resolve_variable(v)?),
+
+            Expression::Equal(a, b) => panic!("evaluate_1() called on {:?} = {:?}", a, b),
+        }
+    }
+
     /// evaluates the expression with the given resolver and for the solution
     /// specified by the zero-indexed which parameter.
     ///
@@ -2365,7 +2441,7 @@ mod tests {
         assert_eq!(
             Expression::parse("1 + (5 * 3) / 2", false)
                 .unwrap()
-                .evaluate(&mut StaticResolver::new([]), 0)
+                .evaluate_1(&mut StaticResolver::new([]))
                 .unwrap()
                 .as_f64(),
             8.5,
@@ -2399,6 +2475,18 @@ mod tests {
             2.0,
         );
         assert_eq!(
+            Expression::parse("1 / v", false)
+                .unwrap()
+                .evaluate_1(&mut StaticResolver::new([(
+                    "v".into(),
+                    Concrete::Float(0.5)
+                )]))
+                .unwrap()
+                .as_f64(),
+            2.0,
+        );
+
+        assert_eq!(
             Expression::parse("cos(0)", false)
                 .unwrap()
                 .evaluate(&mut StaticResolver::new([]), 0)
@@ -2417,7 +2505,7 @@ mod tests {
         assert!(
             (0.5 - Expression::parse("sin(1/2 + 1/50 + 1/97)", false)
                 .unwrap()
-                .evaluate(&mut StaticResolver::new([]), 0)
+                .evaluate_1(&mut StaticResolver::new([]))
                 .unwrap()
                 .as_f64())
             .abs()

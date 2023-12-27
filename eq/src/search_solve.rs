@@ -138,7 +138,7 @@ impl SearchSolver {
         // Compute residuals
         let mut sum_sq: f64 = 0.0;
         for exp in residuals.iter() {
-            let res = match exp.evaluate(&mut resolver, 0).unwrap() {
+            let res = match exp.evaluate_1(&mut resolver).unwrap() {
                 Concrete::Float(f) => f as f64,
                 Concrete::Rational(r) => r.to_f64().unwrap(),
             };

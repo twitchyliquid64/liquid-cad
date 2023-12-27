@@ -52,7 +52,7 @@ pub struct DumbassSolverState {
 
     vars: Vec<Variable>,
     residuals: Vec<Expression>,
-    jacobians: Vec<Vec<Expression>>,
+    jacobians: Vec<Expression>,
 }
 
 impl DumbassSolverState {
@@ -61,33 +61,32 @@ impl DumbassSolverState {
         solve_for: Vec<Variable>,
         residuals: Vec<Expression>,
     ) -> Self {
-        let jacobians: Vec<Vec<_>> = residuals
+        let jacobians: Vec<Expression> = solve_for
             .iter()
-            .map(|fx| {
-                let mut has_trig = false;
-                fx.walk(&mut |e| match e {
-                    Expression::Trig(..) => {
-                        has_trig = true;
-                        false
-                    }
-                    _ => true,
-                });
-
-                solve_for
-                    .iter()
-                    .map(|var| fx.derivative_wrt(&var))
-                    .map(|jfx| {
-                        if has_trig {
-                            Expression::Quotient(
-                                Box::new(jfx),
-                                Box::new(Expression::Integer(12.into())),
-                            )
-                        } else {
-                            jfx
+            .map(|var| {
+                residuals.iter().map(move |fx| {
+                    let mut has_trig = false;
+                    fx.walk(&mut |e| match e {
+                        Expression::Trig(..) => {
+                            has_trig = true;
+                            false
                         }
-                    })
-                    .collect()
+                        _ => true,
+                    });
+
+                    let jfx = fx.derivative_wrt(&var);
+
+                    if has_trig {
+                        Expression::Quotient(
+                            Box::new(jfx),
+                            Box::new(Expression::Integer(12.into())),
+                        )
+                    } else {
+                        jfx
+                    }
+                })
             })
+            .flatten()
             .collect();
 
         // for (i, r) in residuals.iter().enumerate() {
@@ -158,7 +157,7 @@ pub struct DumbassSolver {
     x: OVector<f64, Dyn>,
     // residual calculation result
     fx: OVector<f64, Dyn>,
-    // jacobian by [residual, variable]
+    // jacobian by [variable, residual]
     j: OMatrix<f64, Dyn, Dyn>,
 
     // sign bitfield of adjustment at last iteration
@@ -216,20 +215,22 @@ impl DumbassSolver {
         };
 
         // Compute jacobian
-        for (row, jacs) in st.jacobians.iter().enumerate() {
-            for (col, j_fn) in jacs.iter().enumerate() {
-                let mut v = match j_fn.evaluate(&mut resolver, 0).unwrap() {
-                    Concrete::Float(f) => f as f64,
-                    Concrete::Rational(r) => r.to_f64().unwrap(),
-                };
-                // TODO: These conditionals are not quite right
-                if v.is_nan() {
-                    v = 0.;
-                } else if v.is_infinite() {
-                    v = v.signum();
-                }
-                j[(row, col)] = v;
+        for (i, j) in j.iter_mut().enumerate() {
+            // SAFETY: st.jacobians constructed such to have
+            // correct length, see DumbassSolverState::new
+            let j_fn = unsafe { st.jacobians.get_unchecked(i) };
+
+            let mut v = match j_fn.evaluate_1(&mut resolver).unwrap() {
+                Concrete::Float(f) => f as f64,
+                Concrete::Rational(r) => r.to_f64().unwrap(),
+            };
+            // TODO: These conditionals are not quite right
+            if v.is_nan() {
+                v = 0.;
+            } else if v.is_infinite() {
+                v = v.signum();
             }
+            *j = v;
         }
 
         // Softmax the jacobian for each variable, multiplied by
@@ -248,7 +249,7 @@ impl DumbassSolver {
 
         // Compute residuals
         for (row, exp) in st.residuals.iter().enumerate() {
-            let mut res = match exp.evaluate(&mut resolver, 0).unwrap() {
+            let mut res = match exp.evaluate_1(&mut resolver).unwrap() {
                 Concrete::Float(f) => f as f64,
                 Concrete::Rational(r) => r.to_f64().unwrap(),
             };
@@ -340,7 +341,7 @@ mod tests {
         // I know this looks wonky but wolframalpha computed the same
         assert_eq!(
             state.jacobians,
-            vec![vec![
+            vec![
                 Expression::parse(
                     "-((x1 - x0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
                     false
@@ -351,7 +352,7 @@ mod tests {
                     false
                 )
                 .unwrap(),
-            ],],
+            ],
         );
 
         let _ = DumbassSolver::new(&state);
