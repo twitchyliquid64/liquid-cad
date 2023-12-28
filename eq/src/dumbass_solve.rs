@@ -91,9 +91,6 @@ impl DumbassSolverState {
 
         // for (i, r) in residuals.iter().enumerate() {
         //     println!("residual: {}", r);
-        //     for (j, v) in solve_for.iter().enumerate() {
-        //         println!(" {}: {:?}\n   {}", v, jacobians[i][j], jacobians[i][j]);
-        //     }
         // }
 
         Self {
@@ -159,6 +156,8 @@ pub struct DumbassSolver {
     fx: OVector<f64, Dyn>,
     // jacobian by [variable, residual]
     j: OMatrix<f64, Dyn, Dyn>,
+    // scaling of adjustment based on residual
+    scale: OVector<f64, Dyn>,
 
     // sign bitfield of adjustment at last iteration
     adj_sign_hash: Option<usize>,
@@ -182,6 +181,7 @@ impl DumbassSolver {
             momentum: params.momentum_windup,
             momentum_div: params.momentum_div,
             params,
+            scale: DVector::from_element(st.residuals.len(), 1.0),
         }
     }
 
@@ -190,23 +190,16 @@ impl DumbassSolver {
         st: &DumbassSolverState,
         initials: Vec<f64>,
     ) -> Self {
-        let iteration = 0;
-
-        assert!(st.vars.len() == initials.len());
-        Self {
-            iteration,
-            x: DVector::from(initials),
-            fx: DVector::from_element(st.residuals.len(), 0.0),
-            j: DMatrix::from_element(st.residuals.len(), st.vars.len(), 0.0),
-            adj_sign_hash: None,
-            momentum: params.momentum_windup,
-            momentum_div: params.momentum_div,
-            params,
-        }
+        let mut out = Self::new(st);
+        out.x = DVector::from(initials);
+        out.params = params;
+        out
     }
 
-    fn solve_step(&mut self, st: &mut DumbassSolverState) {
-        let DumbassSolver { x, fx, j, .. } = self;
+    fn solve_step(&mut self, st: &mut DumbassSolverState) -> f64 {
+        let DumbassSolver {
+            x, fx, j, scale, ..
+        } = self;
 
         let mut resolver = VarResolver {
             x: &x,
@@ -259,12 +252,18 @@ impl DumbassSolver {
             fx[row] = res.clamp(-999999.0, 999999.0);
         }
 
+        // Compute total error
+        let total_fx = fx.iter().fold(0.0, |acc, x| acc + x.abs());
+
         // println!(
         //     "x:{}j:{}fx:{}",
         //     x,
         //     j,
         //     fx
         // );
+
+        // Scale residuals
+        fx.component_mul_assign(scale);
 
         // Compute adjustment
         let adjustment = (fx.transpose() * &*j).transpose() * self.params.step_mul;
@@ -291,6 +290,8 @@ impl DumbassSolver {
 
         // Update guesses
         *x += adjustment * (1.0 + self.momentum);
+
+        total_fx
     }
 
     pub fn solve(
@@ -299,9 +300,8 @@ impl DumbassSolver {
     ) -> Result<Vec<(Variable, f64)>, (f64, Vec<(Variable, f64)>)> {
         let mut total_fx = f64::MAX;
         while self.iteration < self.params.max_iter {
-            self.solve_step(st);
+            total_fx = self.solve_step(st);
 
-            total_fx = self.fx.iter().fold(0.0, |acc, x| acc + x.abs());
             if (total_fx.abs() / st.vars.len() as f64) < self.params.terminate_at_avg_fx {
                 break;
             }
@@ -461,5 +461,22 @@ mod tests {
         assert!(solver.iteration < 70);
         let dist_leg_1 = (ret[0].1.powi(2) + ret[1].1.powi(2)).sqrt();
         assert!(dist_leg_1 > 87.9 && dist_leg_1 < 88.1);
+    }
+
+    #[test]
+    fn simple() {
+        let mut state = DumbassSolverState::new(
+            HashMap::from([("y0".into(), Concrete::Float(0.0))]),
+            vec!["y1".into()],
+            vec![Expression::parse("5 - (0.5 * sqrt((y0 - y1)^2))", false).unwrap()],
+        );
+        let mut solver = DumbassSolver::new(&state);
+
+        // Set some initial conditions.
+        solver.x[0] = 0.001;
+        let ret = solver.solve(&mut state).unwrap();
+
+        assert!(solver.iteration <= 80);
+        assert!((10.0 - ret[0].1).abs() < 0.001);
     }
 }

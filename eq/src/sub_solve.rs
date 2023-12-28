@@ -226,7 +226,7 @@ impl SubSolver {
             // As a special case, if the equation only has one solution
             // then we store the numeric result rather than the equation.
             if out.expr.num_solutions() == 1 {
-                if let Ok(cc) = out.expr.evaluate(st, 0) {
+                if let Ok(cc) = out.expr.evaluate_1(st) {
                     match cc {
                         Concrete::Float(ref f) if !f.is_nan() && !f.is_infinite() => {
                             st.resolved

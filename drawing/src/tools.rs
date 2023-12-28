@@ -286,6 +286,23 @@ fn parallel_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn angle_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "SIN".into(),
+        egui::FontId::monospace(8.),
+        egui::Color32::LIGHT_BLUE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -300,6 +317,7 @@ enum Tool {
     Lerp(Option<FeatureKey>),
     Equal(Option<FeatureKey>),
     Parallel(Option<FeatureKey>),
+    Angle,
 }
 
 impl Tool {
@@ -316,6 +334,7 @@ impl Tool {
             Tool::Lerp(_) => "Constrain point along line",
             Tool::Equal(_) => "Constrain lengths as equal",
             Tool::Parallel(_) => "Constrain lines as parallel",
+            Tool::Angle => "Constain line angle",
         }
     }
     pub fn key(&self) -> Option<&'static str> {
@@ -331,6 +350,7 @@ impl Tool {
             Tool::Lerp(_) => Some("I"),
             Tool::Equal(_) => Some("E"),
             Tool::Parallel(_) => None,
+            Tool::Angle => None,
         }
     }
     pub fn long_tooltip(&self) -> Option<&'static str> {
@@ -346,6 +366,7 @@ impl Tool {
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
             Tool::Equal(_) => Some("Constrains a line to be equal in length to another line."),
             Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nWARNING: THIS TOOL IS EXPERIMENTAL and not working properly.\n\nClick on the first line, and then the second line to create this constraint."),
+            Tool::Angle => Some("Constrains a line to have some angle clockwise from the vertical axis.\n\nWARNING: THIS TOOL IS EXPERIMENTAL."),
         }
     }
 
@@ -362,6 +383,7 @@ impl Tool {
             (Tool::Lerp(_), Tool::Lerp(_)) => true,
             (Tool::Equal(_), Tool::Equal(_)) => true,
             (Tool::Parallel(_), Tool::Parallel(_)) => true,
+            (Tool::Angle, Tool::Angle) => true,
             _ => false,
         }
     }
@@ -379,6 +401,7 @@ impl Tool {
             Tool::Lerp(None),
             Tool::Equal(None),
             Tool::Parallel(None),
+            Tool::Angle,
         ]
     }
 
@@ -877,6 +900,26 @@ impl Tool {
 
                 None
             }
+
+            Tool::Angle => {
+                if response.clicked() {
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::LineSegment(..),
+                        } => Some(ToolResponse::NewGlobalAngleConstraint(k.clone())),
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
         }
     }
 
@@ -1053,6 +1096,12 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("constrain parallel: click 2nd line");
             }
+
+            Tool::Angle => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("constrain angle: click line");
+            }
         }
     }
 
@@ -1069,6 +1118,7 @@ impl Tool {
             Tool::Lerp(_) => lerp_tool_icon,
             Tool::Equal(_) => equal_tool_icon,
             Tool::Parallel(_) => parallel_tool_icon,
+            Tool::Angle => angle_tool_icon,
         }
     }
 

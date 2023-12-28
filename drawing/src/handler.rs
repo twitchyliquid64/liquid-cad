@@ -19,6 +19,7 @@ pub enum ToolResponse {
     NewPointLerp(FeatureKey, FeatureKey),        // point, line
     NewEqual(FeatureKey, FeatureKey),
     NewParallelLine(FeatureKey, FeatureKey),
+    NewGlobalAngleConstraint(FeatureKey),
 
     ConstraintDelete(ConstraintKey),
     ConstraintLinesEqualRemoveMultiplier(ConstraintKey),
@@ -321,6 +322,18 @@ impl Handler {
                     _ => {}
                 }
             }
+
+            ToolResponse::NewGlobalAngleConstraint(k) => match drawing.features.get(k) {
+                Some(Feature::LineSegment(..)) => {
+                    drawing.add_constraint(Constraint::LineAngle(
+                        ConstraintMeta::default(),
+                        k,
+                        0.539,
+                    ));
+                    tools.clear();
+                }
+                _ => {}
+            },
         }
     }
 }
