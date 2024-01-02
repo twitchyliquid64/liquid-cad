@@ -216,23 +216,34 @@ impl<'a> Widget<'a> {
             let released = response.drag_released_by(egui::PointerButton::Primary);
             match (drag_state, released) {
                 (Some(DragState::SelectBox(drag_start)), true) => {
-                    let s =
-                        egui::Rect::from_two_pos(drag_start, self.drawing.vp.screen_to_point(hp));
-                    if s.area() > 200. {
+                    if egui::Rect::from_two_pos(self.drawing.vp.translate_point(drag_start), hp)
+                        .area()
+                        > 200.
+                    {
                         let shift_held = ui.input(|i| i.modifiers.shift);
                         if !shift_held {
                             self.drawing.selection_clear();
                         }
-                        self.drawing.select_features_in_rect(s, true);
+                        self.drawing.select_features_in_rect(
+                            egui::Rect::from_two_pos(
+                                drag_start,
+                                self.drawing.vp.screen_to_point(hp),
+                            ),
+                            true,
+                        );
                     }
                     ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
                     None
                 }
                 (Some(DragState::SelectBox(drag_start)), false) => {
-                    let s =
-                        egui::Rect::from_two_pos(drag_start, self.drawing.vp.screen_to_point(hp));
-                    if s.area() > 200. {
-                        Some(Input::Selection(s))
+                    if egui::Rect::from_two_pos(self.drawing.vp.translate_point(drag_start), hp)
+                        .area()
+                        > 200.
+                    {
+                        Some(Input::Selection(egui::Rect::from_two_pos(
+                            drag_start,
+                            self.drawing.vp.screen_to_point(hp),
+                        )))
                     } else {
                         None
                     }
