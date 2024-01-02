@@ -39,7 +39,9 @@ pub struct PaintParams {
 #[derive(Clone, Debug, Copy)]
 enum DragState {
     SelectBox(egui::Pos2),
-    Feature(FeatureKey, egui::Vec2),
+    Point(FeatureKey, egui::Vec2),
+    Line(FeatureKey, egui::Vec2, egui::Vec2, egui::Vec2), // p1, p2, offset
+    Circle(FeatureKey, egui::Vec2, egui::Vec2),           // center, offset
     Constraint(ConstraintKey, egui::Vec2),
     EditingLineLength(ConstraintKey),
 }
@@ -146,19 +148,48 @@ impl<'a> Widget<'a> {
                     false,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
-                    let state = DragState::Feature(*k, offset);
+                    let state = DragState::Point(*k, offset);
                     ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
                     Some(state)
                 }
-                // TODO: dragging a line
+                // Dragging a line
                 (
                     Hover::Feature {
-                        k: _,
+                        k,
                         feature: Feature::LineSegment(..),
                     },
                     true,
                     false,
-                ) => None,
+                ) => {
+                    let (a, b) = self.drawing.get_line_points(*k).unwrap();
+
+                    let offset = self.drawing.vp.screen_to_point(hp).to_vec2();
+                    let state = DragState::Line(*k, a.to_vec2(), b.to_vec2(), offset);
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
+                }
+                // Dragging a circle
+                (
+                    Hover::Feature {
+                        k,
+                        feature: Feature::Circle(_, center, ..),
+                    },
+                    true,
+                    false,
+                ) => {
+                    let center_pt = if let Some(Feature::Point(_, x, y, ..)) =
+                        self.drawing.features.get(*center)
+                    {
+                        egui::Vec2::new(*x, *y)
+                    } else {
+                        unreachable!()
+                    };
+
+                    let offset = self.drawing.vp.screen_to_point(hp).to_vec2();
+                    let state = DragState::Circle(*k, center_pt, offset);
+                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    Some(state)
+                }
                 // Dragging a LineLength constraint reference
                 (
                     Hover::Constraint {
@@ -249,14 +280,53 @@ impl<'a> Widget<'a> {
                     }
                 }
 
-                (Some(DragState::Feature(fk, offset)), _) => {
+                (Some(DragState::Point(fk, offset)), _) => {
                     if released {
                         ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
                     }
                     let new_pos = self.drawing.vp.screen_to_point(hp) - offset;
-                    self.drawing.move_feature(fk, new_pos);
+                    self.drawing.move_point(fk, new_pos);
                     response.mark_changed();
                     Some(Input::FeatureDrag(fk, new_pos))
+                }
+                (Some(DragState::Line(fk, p1, p2, offset)), _) => {
+                    if released {
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    }
+
+                    let (fk1, fk2) = if let Some(Feature::LineSegment(_, fk1, fk2)) =
+                        self.drawing.features.get(fk)
+                    {
+                        (fk1.clone(), fk2.clone())
+                    } else {
+                        unreachable!();
+                    };
+
+                    let p1_pos = self.drawing.vp.screen_to_point(hp) - offset + p1;
+                    self.drawing.move_point(fk1, p1_pos);
+                    let p2_pos = self.drawing.vp.screen_to_point(hp) - offset + p2;
+                    self.drawing.move_point(fk2, p2_pos);
+
+                    response.mark_changed();
+                    Some(Input::FeatureDrag(fk, p1_pos))
+                }
+                (Some(DragState::Circle(fk, center, offset)), _) => {
+                    if released {
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    }
+
+                    let c_fk =
+                        if let Some(Feature::Circle(_, c_fk, ..)) = self.drawing.features.get(fk) {
+                            c_fk.clone()
+                        } else {
+                            unreachable!();
+                        };
+
+                    let np = self.drawing.vp.screen_to_point(hp) - offset + center;
+                    self.drawing.move_point(c_fk, np);
+
+                    response.mark_changed();
+                    Some(Input::FeatureDrag(fk, np))
                 }
 
                 (Some(DragState::Constraint(ck, _offset)), _) => {

@@ -548,9 +548,9 @@ impl Data {
         }
     }
 
-    /// Moves the given feature to the given coordinates, and solving to update based on
+    /// Moves the given point to the given coordinates, and solving to update based on
     /// any side-effects of the move.
-    pub fn move_feature(&mut self, k: FeatureKey, pos: egui::Pos2) {
+    pub fn move_point(&mut self, k: FeatureKey, pos: egui::Pos2) {
         let did_move_something = match self.feature_mut(k) {
             Some(Feature::Point(_, x, y)) => {
                 *x = pos.x;
