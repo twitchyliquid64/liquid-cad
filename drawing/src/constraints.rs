@@ -1,6 +1,6 @@
 use crate::system::{TermRef, TermType};
 use crate::{Feature, FeatureKey};
-use eq::{Expression, Rational, TrigOp};
+use eq::{Expression, Rational};
 use std::collections::HashMap;
 
 slotmap::new_key_type! {

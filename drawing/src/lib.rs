@@ -60,6 +60,7 @@ pub struct Widget<'a> {
     pub handler: &'a mut Handler,
 
     length_ticks: Vec<f32>,
+    center_next_frame: bool,
 }
 
 impl<'a> Widget<'a> {
@@ -69,12 +70,14 @@ impl<'a> Widget<'a> {
         tools: &'a mut tools::Toolbar,
     ) -> Self {
         let length_ticks = Vec::with_capacity(8);
+        let center_next_frame = false;
 
         Self {
             drawing,
             tools,
             handler,
             length_ticks,
+            center_next_frame,
         }
     }
 
@@ -528,6 +531,10 @@ impl<'a> Widget<'a> {
         ));
     }
 
+    pub fn center(&mut self) {
+        self.center_next_frame = true;
+    }
+
     pub fn show(mut self, ui: &mut egui::Ui) -> DrawResponse {
         use egui::Sense;
         let (rect, mut response) = ui.allocate_exact_size(
@@ -554,6 +561,11 @@ impl<'a> Widget<'a> {
                 mem.data.insert_temp(state_id, true);
                 mem.request_focus(response.id); // request focus initially
             });
+        }
+
+        if self.center_next_frame {
+            self.drawing.vp.x = -rect.width() / 2. * self.drawing.vp.zoom;
+            self.drawing.vp.y = -rect.height() / 2. * self.drawing.vp.zoom;
         }
 
         // Find hover feature, if any

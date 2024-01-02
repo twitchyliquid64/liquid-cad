@@ -116,10 +116,10 @@ impl Data {
             return None;
         }
 
-        println!("Inputs:");
-        for eq in equations.iter() {
-            println!(" - {}", eq);
-        }
+        // println!("Inputs:");
+        // for eq in equations.iter() {
+        //     println!(" - {}", eq);
+        // }
 
         let mut solver = eq::solve::SubSolver::default();
         let mut sub_solver_state = match eq::solve::SubSolverState::new(HashMap::new(), equations) {

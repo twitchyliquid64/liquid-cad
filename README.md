@@ -2,14 +2,17 @@
 
 A 2D constraint-solving CAD program for rapid prototyping. Heavily inspired by SolveSpace.
 
-### Backlog
+### Backlog for Beta
 
+ * Export to DXF
  * Export to STL
- * New constraints:
+ * Broken constraint tools / solver stability (need help!):
   * Line angle
- * Fix instability with parallel tool
+  * Lines parallel
 
-### Testing locally
+### Building locally
+
+#### Desktop
 
 Make sure you are using the latest version of stable rust by running `rustup update`.
 
@@ -27,21 +30,19 @@ On NixOS:
 
 `nix-shell` to get into a working environment.
 
-### Web
+#### Web
 
-Deps:
-
-On NixOS: `cd liquid-cad && nix-shell`
+On NixOS: `cd liquid-cad && nix-shell` then `trunk serve` or `trunk build --release`
 
 Legacy OS'es:
 
 1. Install the required target with `rustup target add wasm32-unknown-unknown`.
 2. Install Trunk with `cargo install --locked trunk`.
 
-Locally: Run `trunk serve` to build and serve on `http://127.0.0.1:8080`. Trunk will rebuild automatically if you edit the project.
+Locally: Within the `liquid-cad` directory, run `trunk serve` to build and serve on `http://127.0.0.1:8080`. Trunk will rebuild automatically if you edit the project.
 
 Deploying: Run `trunk build --release` and copy the `dist` directory.
 
-## License
+### License
 
 Under MIT / Apache 2.0. Some icons from Noto emoji font under Apache 2.0.

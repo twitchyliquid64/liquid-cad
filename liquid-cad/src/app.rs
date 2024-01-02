@@ -74,6 +74,46 @@ impl App {
         app
     }
 
+    fn export_str_as(&mut self, type_name: &'static str, ext_name: &'static str, data: String) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use rfd::FileDialog;
+            let file = FileDialog::new()
+                .add_filter(type_name, &[ext_name])
+                .add_filter("text", &["txt"])
+                .set_file_name(format!("export.{}", ext_name))
+                .save_file();
+
+            if let Some(path) = file {
+                match std::fs::write(path.clone(), data.as_bytes()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        self.toasts.add(egui_toast::Toast {
+                            text: format!("Save failed!\n{:?}", e).into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(5.0)
+                                .show_progress(true),
+                        });
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let task = rfd::AsyncFileDialog::new()
+                .set_file_name(format!("export.{}", ext_name))
+                .save_file();
+            execute(async move {
+                let file = task.await;
+                if let Some(file) = file {
+                    let _ = file.write(data.as_bytes()).await;
+                }
+            });
+        }
+    }
+
     pub fn save_as(&mut self) {
         let ser_config = ron::ser::PrettyConfig::new()
             .depth_limit(4)
@@ -213,6 +253,10 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut center = false;
+        // type name, extension, data
+        let mut pending_export: Option<(&'static str, &'static str, String)> = None;
+
         #[cfg(target_arch = "wasm32")]
         if let Ok((fname, contents)) = self.wasm_open_channel.1.try_recv() {
             match ron::de::from_str(&contents) {
@@ -288,25 +332,34 @@ impl eframe::App for App {
                 ui.add_space(8.0);
 
                 ui.menu_button("Drawing", |ui| {
+                    if ui.button("Center").clicked() {
+                        center = true;
+                    }
                     if ui.button("Clear selection   (Esc)").clicked() {
                         self.drawing.selection_clear();
                     }
                     if ui.button("Select all   (Ctrl-A)").clicked() {
                         self.drawing.select_all();
                     }
+                    ui.separator();
                     if ui.button("Solve step").clicked() {
                         self.drawing.changed_in_ui();
                     }
-                    if ui.button("Bruteforce solve").clicked() {
-                        self.drawing.bruteforce_solve();
-                    }
+                    // if ui.button("Bruteforce solve").clicked() {
+                    //     self.drawing.bruteforce_solve();
+                    // }
                 });
                 ui.add_space(8.0);
             });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            drawing::Widget::new(&mut self.drawing, &mut self.handler, &mut self.tools).show(ui);
+            let mut main_widget =
+                drawing::Widget::new(&mut self.drawing, &mut self.handler, &mut self.tools);
+            if center {
+                main_widget.center();
+            }
+            main_widget.show(ui);
         });
 
         detailer::Widget::new(
@@ -316,8 +369,14 @@ impl eframe::App for App {
             &mut self.handler,
             &mut self.toasts,
         )
-        .show(ctx);
+        .show(ctx, |type_name, ext, data| {
+            pending_export = Some((type_name, ext, data));
+        });
 
         self.toasts.show(ctx);
+
+        if let Some((type_name, ext, data)) = pending_export {
+            self.export_str_as(type_name, ext, data);
+        }
     }
 }
