@@ -253,7 +253,7 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let mut center = false;
+        let (mut center, mut zoom) = (false, false);
         // type name, extension, data
         let mut pending_export: Option<(&'static str, &'static str, String)> = None;
 
@@ -335,6 +335,11 @@ impl eframe::App for App {
                     if ui.button("Center").clicked() {
                         center = true;
                     }
+                    if ui.button("Center & zoom").clicked() {
+                        center = true;
+                        zoom = true;
+                    }
+                    ui.separator();
                     if ui.button("Clear selection   (Esc)").clicked() {
                         self.drawing.selection_clear();
                     }
@@ -358,6 +363,9 @@ impl eframe::App for App {
                 drawing::Widget::new(&mut self.drawing, &mut self.handler, &mut self.tools);
             if center {
                 main_widget.center();
+            }
+            if zoom {
+                main_widget.autozoom();
             }
             main_widget.show(ui);
         });

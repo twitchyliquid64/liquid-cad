@@ -621,6 +621,19 @@ impl Data {
         }
     }
 
+    /// Returns the bounds of all geometry in the drawing.
+    pub fn bounds(&self) -> egui::Rect {
+        self.features
+            .values()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .fold(None, |acc, x| match acc {
+                None => Some(x.bb(self)),
+                Some(e) => Some(e.union(x.bb(self))),
+            })
+            .unwrap_or(egui::Rect::ZERO)
+    }
+
     /// Deletes the currently-selected features.
     pub fn selection_delete(&mut self) {
         let elements: Vec<_> = self.selected_map.drain().map(|(k, _)| k).collect();

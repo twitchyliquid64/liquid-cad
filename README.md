@@ -4,6 +4,7 @@ A 2D constraint-solving CAD program for rapid prototyping. Heavily inspired by S
 
 ### Backlog for Beta
 
+ * Help page
  * Export to STL
  * Arc dragging
  * Warn if solver tolerance if off in export UI

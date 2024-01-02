@@ -63,6 +63,7 @@ pub struct Widget<'a> {
 
     length_ticks: Vec<f32>,
     center_next_frame: bool,
+    autozoom_next_frame: bool,
 }
 
 impl<'a> Widget<'a> {
@@ -73,6 +74,7 @@ impl<'a> Widget<'a> {
     ) -> Self {
         let length_ticks = Vec::with_capacity(8);
         let center_next_frame = false;
+        let autozoom_next_frame = false;
 
         Self {
             drawing,
@@ -80,6 +82,7 @@ impl<'a> Widget<'a> {
             handler,
             length_ticks,
             center_next_frame,
+            autozoom_next_frame,
         }
     }
 
@@ -616,6 +619,10 @@ impl<'a> Widget<'a> {
         self.center_next_frame = true;
     }
 
+    pub fn autozoom(&mut self) {
+        self.autozoom_next_frame = true;
+    }
+
     pub fn show(mut self, ui: &mut egui::Ui) -> DrawResponse {
         use egui::Sense;
         let (rect, mut response) = ui.allocate_exact_size(
@@ -635,8 +642,7 @@ impl<'a> Widget<'a> {
             .unwrap_or(false);
         if !has_init {
             if self.drawing.vp.eq(&Viewport::default()) {
-                self.drawing.vp.x = -rect.width() / 2.;
-                self.drawing.vp.y = -rect.height() / 2.;
+                self.center_next_frame = true;
             }
             ui.memory_mut(|mem| {
                 mem.data.insert_temp(state_id, true);
@@ -644,9 +650,18 @@ impl<'a> Widget<'a> {
             });
         }
 
+        if self.autozoom_next_frame {
+            let bb = self.drawing.bounds();
+            let (x_r, y_r) = (
+                1.35 / (rect.width() / bb.width()),
+                1.25 / (rect.height() / bb.height()),
+            );
+            self.drawing.vp.zoom = x_r.max(y_r);
+        }
         if self.center_next_frame {
-            self.drawing.vp.x = -rect.width() / 2. * self.drawing.vp.zoom;
-            self.drawing.vp.y = -rect.height() / 2. * self.drawing.vp.zoom;
+            let bounds = self.drawing.bounds();
+            self.drawing.vp.x = -rect.width() / 2. * self.drawing.vp.zoom + bounds.center().x;
+            self.drawing.vp.y = -rect.height() / 2. * self.drawing.vp.zoom + bounds.center().y;
         }
 
         // Find hover feature, if any
