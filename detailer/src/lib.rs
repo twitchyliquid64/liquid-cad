@@ -900,6 +900,10 @@ impl<'a> Widget<'a> {
                     .text("Flatten tolerance").suffix("mm").logarithmic(true));
             ui.add_space(5.0);
 
+            use std::cell::OnceCell;
+            let mut export_fn = OnceCell::new();
+            export_fn.set(export_save).ok();
+
             ui.horizontal(|ui| {
                 let r = ui.available_size();
                 let text_rect = ui.add(egui::Label::new("OpenSCAD Polygon")).rect;
@@ -929,7 +933,49 @@ impl<'a> Widget<'a> {
                 }
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("File 📥")).clicked() {
                     if let Ok(t) = self.drawing.serialize_openscad(self.drawing.props.flatten_tolerance) {
-                        export_save("OpenSCAD", "scad", t);
+                        export_fn.take().map(|f| f("OpenSCAD", "scad", t));
+                    } else {
+                        self.toasts.add(egui_toast::Toast {
+                            text: "Export failed!".into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(4.0)
+                                .show_progress(true)
+                        });
+                    }
+                }
+            });
+
+            ui.horizontal(|ui| {
+                let r = ui.available_size();
+                let text_rect = ui.add(egui::Label::new("DXF")).rect;
+                if text_rect.width() < r.x / 2. {
+                    ui.add_space(r.x / 2. - text_rect.width());
+                }
+
+                if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("Clipboard 📋")).clicked() {
+                    if let Ok(t) = self.drawing.serialize_dxf(self.drawing.props.flatten_tolerance) {
+                        ui.ctx().output_mut(|o| o.copied_text = t);
+                        self.toasts.add(egui_toast::Toast {
+                            text: "DXF code copied to clipboard!".into(),
+                            kind: egui_toast::ToastKind::Info,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(3.5)
+                                .show_progress(true)
+                        });
+                    } else {
+                        self.toasts.add(egui_toast::Toast {
+                            text: "Export failed!".into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(4.0)
+                                .show_progress(true)
+                        });
+                    }
+                }
+                if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("File 📥")).clicked() {
+                    if let Ok(t) = self.drawing.serialize_dxf(self.drawing.props.flatten_tolerance) {
+                        export_fn.take().map(|f| f("AutoCAD DXF", "dxf", t));
                     } else {
                         self.toasts.add(egui_toast::Toast {
                             text: "Export failed!".into(),

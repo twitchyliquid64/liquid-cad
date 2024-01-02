@@ -746,6 +746,64 @@ impl Data {
         Ok(())
     }
 
+    pub fn serialize_dxf(&self, flatten_tolerance: f64) -> Result<String, ()> {
+        let (points, idx_outer, idx_inner) = self.flatten_to_idxs(flatten_tolerance)?;
+        if idx_outer.len() > 1 {
+            return Err(());
+        }
+
+        let mut out: String = String::from("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n");
+        out.reserve(64 + idx_outer.len() * 16 + idx_inner.len() * 16);
+
+        //lmn-laser utility seems to do this:
+        out.push_str("9\n");
+        out.push_str("$MEASUREMENT\n");
+        out.push_str("70\n");
+        out.push_str("1\n");
+
+        out.push_str("0\n");
+        out.push_str("ENDSEC\n");
+
+        // Output lines
+        out.push_str("0\n");
+        out.push_str("SECTION\n");
+        out.push_str("2\n");
+        out.push_str("ENTITIES\n");
+        for line_points in idx_outer
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .windows(2)
+            .chain(
+                idx_inner
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .windows(2),
+            )
+        {
+            out.push_str("0\n");
+            out.push_str("LINE\n");
+            out.push_str("8\n");
+            out.push_str("0\n");
+
+            out.push_str("10\n");
+            out.extend(format!("{}\n", points[line_points[0]].x).chars());
+            out.push_str("20\n");
+            out.extend(format!("{}\n", points[line_points[0]].y).chars());
+            out.push_str("11\n");
+            out.extend(format!("{}\n", points[line_points[1]].x).chars());
+            out.push_str("21\n");
+            out.extend(format!("{}\n", points[line_points[1]].y).chars());
+        }
+        out.push_str("0\n");
+        out.push_str("ENDSEC\n");
+
+        out.push_str("0\n");
+        out.push_str("EOF");
+        Ok(out)
+    }
+
     pub fn serialize_openscad(&self, flatten_tolerance: f64) -> Result<String, ()> {
         let (points, idx_outer, idx_inner) = self.flatten_to_idxs(flatten_tolerance)?;
         if idx_outer.len() > 1 {
