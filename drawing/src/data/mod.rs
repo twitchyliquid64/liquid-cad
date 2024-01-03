@@ -782,32 +782,27 @@ impl Data {
         out.push_str("SECTION\n");
         out.push_str("2\n");
         out.push_str("ENTITIES\n");
-        for line_points in idx_outer
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .windows(2)
-            .chain(
-                idx_inner
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .windows(2),
-            )
         {
-            out.push_str("0\n");
-            out.push_str("LINE\n");
-            out.push_str("8\n");
-            out.push_str("0\n");
+            let emit_line = |out: &mut String, start: kurbo::Point, end: kurbo::Point| {
+                out.push_str("0\n");
+                out.push_str("LINE\n");
+                out.push_str("8\n");
+                out.push_str("0\n");
 
-            out.push_str("10\n");
-            out.extend(format!("{}\n", points[line_points[0]].x).chars());
-            out.push_str("20\n");
-            out.extend(format!("{}\n", points[line_points[0]].y).chars());
-            out.push_str("11\n");
-            out.extend(format!("{}\n", points[line_points[1]].x).chars());
-            out.push_str("21\n");
-            out.extend(format!("{}\n", points[line_points[1]].y).chars());
+                out.push_str("10\n");
+                out.extend(format!("{}\n", start.x).chars());
+                out.push_str("20\n");
+                out.extend(format!("{}\n", start.y).chars());
+                out.push_str("11\n");
+                out.extend(format!("{}\n", end.x).chars());
+                out.push_str("21\n");
+                out.extend(format!("{}\n", end.y).chars());
+            };
+            for path in idx_outer.into_iter().chain(idx_inner.into_iter()) {
+                for inds in path.windows(2) {
+                    emit_line(&mut out, points[inds[0]], points[inds[1]]);
+                }
+            }
         }
         out.push_str("0\n");
         out.push_str("ENDSEC\n");
