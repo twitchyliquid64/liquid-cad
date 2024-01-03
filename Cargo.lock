@@ -1555,6 +1555,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "helper"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui-toast",
+ "egui_extras",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1804,6 +1813,7 @@ dependencies = [
  "egui-toast",
  "egui_extras",
  "env_logger",
+ "helper",
  "image",
  "log",
  "rfd",

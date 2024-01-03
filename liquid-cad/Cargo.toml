@@ -9,6 +9,7 @@ rust-version = "1.71"
 [dependencies]
 drawing = {version = "0.1.0", path = "../drawing"}
 detailer = {version = "0.1.0", path = "../detailer"}
+helper = {version = "0.1.0", path = "../helper"}
 
 egui = "0.24.1"
 eframe = { version = "0.24.1", default-features = false, features = [

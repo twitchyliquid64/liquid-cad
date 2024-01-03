@@ -1,5 +1,6 @@
 use detailer;
 use drawing;
+use helper;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 #[cfg(target_arch = "wasm32")]
@@ -19,7 +20,11 @@ pub struct App {
     #[serde(skip)]
     detailer_state: detailer::State,
     #[serde(skip)]
+    helper_state: helper::State,
+    #[serde(skip)]
     toasts: egui_toast::Toasts,
+
+    show_help: bool,
 
     #[serde(skip)]
     last_path: Option<std::path::PathBuf>,
@@ -33,19 +38,23 @@ impl Default for App {
         let tools = drawing::tools::Toolbar::default();
         let handler = drawing::Handler::default();
         let detailer_state = detailer::State::default();
+        let helper_state = helper::State::default();
         let toasts = egui_toast::Toasts::new()
             .anchor(egui::Align2::RIGHT_BOTTOM, (-10.0, -10.0)) // 10 units from the bottom right corner
             .direction(egui::Direction::BottomUp);
 
         let last_path = None;
         let wasm_open_channel = channel();
+        let show_help = true;
 
         Self {
             drawing,
             handler,
             tools,
             detailer_state,
+            helper_state,
             toasts,
+            show_help,
             last_path,
             wasm_open_channel,
         }
@@ -65,6 +74,8 @@ impl App {
             {
                 if app.drawing.load(saved).err().is_some() {
                     println!("Failed to load diagram from storage");
+                } else {
+                    app.show_help = false;
                 }
             } else {
                 println!("nothing read from storage");
@@ -354,6 +365,12 @@ impl eframe::App for App {
                     //     self.drawing.bruteforce_solve();
                     // }
                 });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                ui.checkbox(&mut self.show_help, "Show help");
                 ui.add_space(8.0);
             });
         });
@@ -380,6 +397,13 @@ impl eframe::App for App {
         .show(ctx, |type_name, ext, data| {
             pending_export = Some((type_name, ext, data));
         });
+
+        helper::Widget::new(
+            &mut self.helper_state,
+            &mut self.show_help,
+            &mut self.toasts,
+        )
+        .show(ctx);
 
         self.toasts.show(ctx);
 

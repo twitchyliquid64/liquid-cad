@@ -1,0 +1,12 @@
+[package]
+name = "helper"
+version = "0.1.0"
+authors = ["Tom <tom@ciphersink.net>"]
+edition = "2021"
+rust-version = "1.71"
+
+
+[dependencies]
+egui = "0.24.1"
+egui_extras = {version = "0.24.1", features = ["all_loaders"]}
+egui-toast = "0.10"
