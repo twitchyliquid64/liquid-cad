@@ -883,6 +883,19 @@ impl Data {
         let mut indices_outer: Vec<Vec<usize>> = Vec::with_capacity(2);
         let mut indices_inner: Vec<Vec<usize>> = Vec::with_capacity(6);
 
+        let mut existing_points: HashMap<(u64, u64), usize> = HashMap::with_capacity(128);
+        let mut point_idx = |p: kurbo::Point| {
+            let k = (p.x.to_bits(), p.y.to_bits());
+            if let Some(idx) = existing_points.get(&k) {
+                *idx
+            } else {
+                points.push(p);
+                let idx = points.len() - 1;
+                existing_points.insert(k, idx);
+                idx
+            }
+        };
+
         let paths: Vec<(GroupType, Result<Vec<Vec<kurbo::Point>>, ()>)> = self
             .groups
             .iter()
@@ -926,8 +939,7 @@ impl Data {
         {
             let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
             for point in path_points.iter() {
-                points.push(*point);
-                idx.push(points.len() - 1);
+                idx.push(point_idx(*point));
             }
             indices_outer.push(idx);
         }
@@ -941,8 +953,7 @@ impl Data {
         {
             let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
             for point in path_points.iter() {
-                points.push(*point);
-                idx.push(points.len() - 1);
+                idx.push(point_idx(*point));
             }
             indices_inner.push(idx);
         }
@@ -2083,26 +2094,23 @@ mod tests {
                 kurbo::Point { x: 0.0, y: 0.0 },
                 kurbo::Point { x: 5.0, y: 0.0 },
                 kurbo::Point { x: 5.0, y: 5.0 },
-                kurbo::Point { x: 0.0, y: 0.0 },
-                kurbo::Point { x: 0.0, y: 0.0 },
                 kurbo::Point { x: 4.0, y: 2.0 },
                 kurbo::Point { x: 4.0, y: 3.0 },
-                kurbo::Point { x: 0.0, y: 0.0 },
             ],
         );
 
-        assert_eq!(idx_outer, vec![vec![0, 1, 2, 3]]);
-        assert_eq!(idx_inner, vec![vec![4, 5, 6, 7]]);
+        assert_eq!(idx_outer, vec![vec![0, 1, 2, 0]]);
+        assert_eq!(idx_inner, vec![vec![0, 3, 4, 0]]);
         // println!("{}", data.serialize_openscad(5.0).unwrap());
         assert_eq!(
             data.serialize_openscad(5.0).unwrap().as_str(),
             "polygon(
   points = [
-    [0, 0], [5, 0], [5, 5], [0, 0], [0, 0], [4, 2], [4, 3], [0, 0]
+    [0, 0], [5, 0], [5, 5], [4, 2], [4, 3]
   ],
   paths = [
-    [0, 1, 2, 3],
-    [4, 5, 6, 7]
+    [0, 1, 2, 0],
+    [0, 3, 4, 0]
   ],
   convexity = 10
 );"
@@ -2139,13 +2147,12 @@ mod tests {
         .unwrap();
 
         let (points, idx_outer, idx_inner) = data.flatten_to_idxs(1.0).unwrap();
-        assert_eq!(points.len(), 5);
+        assert_eq!(points.len(), 4);
         assert_eq!(points[0], kurbo::Point { x: 2.0, y: 0.0 });
         assert_eq!(points[1].y, 2.0);
         assert_eq!(points[3].y, -2.0);
-        assert_eq!(points[4], kurbo::Point { x: 2.0, y: 0.0 });
 
-        assert_eq!(idx_outer, vec![vec![0, 1, 2, 3, 4]]);
+        assert_eq!(idx_outer, vec![vec![0, 1, 2, 3, 0]]);
         assert_eq!(idx_inner, Vec::<Vec<usize>>::new());
     }
 }
