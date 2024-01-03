@@ -2,6 +2,12 @@
 
 A 2D constraint-solving CAD program for rapid prototyping. Heavily inspired by SolveSpace.
 
+Online demo: https://liquid-cad.twitchyliquid.net/
+
+Slightly out-of-date video:
+
+https://github.com/twitchyliquid64/liquid-cad/assets/6328589/70ce6e84-25ff-4af1-a537-c9af4214e162
+
 ### Backlog for Beta
 
  * Help page
