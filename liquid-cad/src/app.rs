@@ -85,7 +85,7 @@ impl App {
         app
     }
 
-    fn export_str_as(&mut self, type_name: &'static str, ext_name: &'static str, data: String) {
+    fn export_str_as(&mut self, type_name: &'static str, ext_name: &'static str, data: Vec<u8>) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use rfd::FileDialog;
@@ -96,7 +96,7 @@ impl App {
                 .save_file();
 
             if let Some(path) = file {
-                match std::fs::write(path.clone(), data.as_bytes()) {
+                match std::fs::write(path.clone(), data) {
                     Ok(_) => {}
                     Err(e) => {
                         self.toasts.add(egui_toast::Toast {
@@ -119,7 +119,7 @@ impl App {
             execute(async move {
                 let file = task.await;
                 if let Some(file) = file {
-                    let _ = file.write(data.as_bytes()).await;
+                    let _ = file.write(data.as_slice()).await;
                 }
             });
         }
@@ -266,7 +266,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let (mut center, mut zoom) = (false, false);
         // type name, extension, data
-        let mut pending_export: Option<(&'static str, &'static str, String)> = None;
+        let mut pending_export: Option<(&'static str, &'static str, Vec<u8>)> = None;
 
         #[cfg(target_arch = "wasm32")]
         if let Ok((fname, contents)) = self.wasm_open_channel.1.try_recv() {

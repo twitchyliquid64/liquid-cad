@@ -17,3 +17,8 @@ num = "0.4"
 
 # For arcs
 kurbo = "0.10"
+
+# For 3d
+truck-modeling = "0.5.*"
+truck-polymesh = "0.5.*"
+truck-meshalgo = "*"

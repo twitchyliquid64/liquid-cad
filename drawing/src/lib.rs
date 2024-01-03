@@ -1,6 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-pub(crate) mod l;
+pub mod l;
 
 mod data;
 pub use data::{group::*, Data, Hover, SerializedDrawing, Viewport};

@@ -1,6 +1,7 @@
 use egui::Pos2;
 
 pub mod draw;
+pub mod three_d;
 
 #[derive(Debug)]
 pub struct LineSegment {

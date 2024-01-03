@@ -11,9 +11,18 @@ pub enum Tab {
     General,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct State {
     tab: Tab,
+    extrusion_amt: f64,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        let tab = Tab::default();
+        let extrusion_amt = 3.0;
+        Self { tab, extrusion_amt }
+    }
 }
 
 pub struct Widget<'a> {
@@ -43,7 +52,7 @@ impl<'a> Widget<'a> {
 
     pub fn show<F>(mut self, ctx: &egui::Context, export_save: F)
     where
-        F: FnOnce(&'static str, &'static str, String),
+        F: FnOnce(&'static str, &'static str, Vec<u8>),
     {
         let window = egui::Window::new("Liquid CAD")
             .id(egui::Id::new("detailer_window"))
@@ -797,7 +806,7 @@ impl<'a> Widget<'a> {
 
     fn show_groups_tab<F>(&mut self, ui: &mut egui::Ui, export_save: F)
     where
-        F: FnOnce(&'static str, &'static str, String),
+        F: FnOnce(&'static str, &'static str, Vec<u8>),
     {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
         let mut boundary_group_set: Option<usize> = None;
@@ -933,7 +942,7 @@ impl<'a> Widget<'a> {
                 }
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("File 📥")).clicked() {
                     if let Ok(t) = self.drawing.serialize_openscad(self.drawing.props.flatten_tolerance) {
-                        export_fn.take().map(|f| f("OpenSCAD", "scad", t));
+                        export_fn.take().map(|f| f("OpenSCAD", "scad", t.into()));
                     } else {
                         self.toasts.add(egui_toast::Toast {
                             text: "Export failed!".into(),
@@ -975,7 +984,36 @@ impl<'a> Widget<'a> {
                 }
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("File 📥")).clicked() {
                     if let Ok(t) = self.drawing.serialize_dxf(self.drawing.props.flatten_tolerance) {
-                        export_fn.take().map(|f| f("AutoCAD DXF", "dxf", t));
+                        export_fn.take().map(|f| f("AutoCAD DXF", "dxf", t.into()));
+                    } else {
+                        self.toasts.add(egui_toast::Toast {
+                            text: "Export failed!".into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(4.0)
+                                .show_progress(true)
+                        });
+                    }
+                }
+            });
+
+            ui.add_space(12.0);
+
+            ui.horizontal(|ui| {
+                let r = ui.available_size();
+                let text_rect = ui.add(egui::Label::new("3D extrusion")).rect;
+                if text_rect.width() < r.x / 2. {
+                    ui.add_space(r.x / 2. - text_rect.width());
+                }
+
+                ui.add(egui::DragValue::new(&mut self.state.extrusion_amt)
+                        .speed(0.1).suffix("mm"));
+
+                if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("STL 📥")).clicked() {
+                    if let Ok((p, e, i)) = self.drawing.flatten_to_idxs(self.drawing.props.flatten_tolerance) {
+                        use drawing::l::three_d::*;
+
+                        export_fn.take().map(|f| f("STL", "stl", solid_to_stl(extrude_from_points(p, e, i, self.state.extrusion_amt))));
                     } else {
                         self.toasts.add(egui_toast::Toast {
                             text: "Export failed!".into(),
