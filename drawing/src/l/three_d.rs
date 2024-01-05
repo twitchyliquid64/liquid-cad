@@ -1,9 +1,85 @@
+use std::collections::HashMap;
 use truck_modeling::*;
 
 fn kurbo_to_truck_vtx(kp: Vec<kurbo::Point>) -> Vec<Vertex> {
     kp.into_iter()
         .map(|p| builder::vertex(Point3::new(p.x, p.y, 0.0)))
         .collect()
+}
+
+fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>) -> Wire {
+    let mut vert = |p: kurbo::Point| {
+        let (x, y) = (p.x, p.y);
+
+        let k = (x.to_bits(), y.to_bits());
+        if let Some(v) = verts.get(&k) {
+            v.clone()
+        } else {
+            let v = builder::vertex(Point3::new(x, y, 0.0));
+            verts.insert(k, v.clone());
+            v
+        }
+    };
+
+    let mut edges = Vec::with_capacity(path.elements().len());
+    let mut last: Option<Vertex> = None;
+    for seg in path.segments() {
+        match seg {
+            kurbo::PathSeg::Line(kurbo::Line { p0, p1 }) => {
+                let end = vert(p1);
+                edges.push(builder::line(&last.unwrap_or(vert(p0)), &end));
+                last = Some(end);
+            }
+            kurbo::PathSeg::Quad(kurbo::QuadBez { p0, p1, p2 }) => {
+                let end = vert(p2);
+                edges.push(builder::bezier(
+                    &last.unwrap_or(vert(p0)),
+                    &end,
+                    vec![Point3::new(p1.x, p1.y, 0.0)],
+                ));
+                last = Some(end);
+            }
+            kurbo::PathSeg::Cubic(kurbo::CubicBez { p0, p1, p2, p3 }) => {
+                let end = vert(p3);
+                edges.push(builder::bezier(
+                    &last.unwrap_or(vert(p0)),
+                    &end,
+                    vec![Point3::new(p1.x, p1.y, 0.0), Point3::new(p2.x, p2.y, 0.0)],
+                ));
+                last = Some(end);
+            }
+        }
+    }
+
+    let (start, end) = (edges[0].front(), edges.last().unwrap().back());
+    if start != end {
+        edges.push(builder::line(end, start));
+    }
+
+    edges.into()
+}
+
+fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<kurbo::BezPath>) -> Face {
+    let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
+
+    let wires = vec![wire_from_path(exterior, &mut verts)];
+    let mut face = builder::try_attach_plane(&wires).unwrap();
+
+    for p in cutouts.into_iter() {
+        let w = wire_from_path(p, &mut verts);
+        face.add_boundary(w);
+    }
+
+    face
+}
+
+pub fn extrude_from_paths(
+    exterior: kurbo::BezPath,
+    cutouts: Vec<kurbo::BezPath>,
+    height: f64,
+) -> Solid {
+    let face = face_from_paths(exterior, cutouts);
+    builder::tsweep(&face, height * Vector3::unit_z())
 }
 
 pub fn extrude_from_points(
@@ -38,13 +114,13 @@ pub fn extrude_from_points(
     builder::tsweep(&face, height * Vector3::unit_z())
 }
 
-pub fn solid_to_stl(s: Solid) -> Vec<u8> {
+pub fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
     use truck_meshalgo::tessellation::MeshableShape;
     use truck_meshalgo::tessellation::MeshedShape;
 
     let mut out = Vec::with_capacity(1024);
     truck_polymesh::stl::write(
-        &s.compress().triangulation(0.02).to_polygon(),
+        &s.compress().triangulation(tolerance).to_polygon(),
         &mut out,
         truck_polymesh::stl::STLType::Binary,
     )

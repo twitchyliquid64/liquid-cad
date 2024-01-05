@@ -1009,11 +1009,15 @@ impl<'a> Widget<'a> {
                 ui.add(egui::DragValue::new(&mut self.state.extrusion_amt)
                         .speed(0.1).suffix("mm"));
 
+                if self.state.extrusion_amt < 0.1 {
+                    self.state.extrusion_amt = 0.1;
+                }
+
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("STL 📥")).clicked() {
-                    if let Ok((p, e, i)) = self.drawing.flatten_to_idxs(self.drawing.props.flatten_tolerance) {
+                    if let Ok(solid) = self.drawing.part_extrude(self.state.extrusion_amt) {
                         use drawing::l::three_d::*;
 
-                        export_fn.take().map(|f| f("STL", "stl", solid_to_stl(extrude_from_points(p, e, i, self.state.extrusion_amt))));
+                        export_fn.take().map(|f| f("STL", "stl", solid_to_stl(solid, self.drawing.props.flatten_tolerance)));
                     } else {
                         self.toasts.add(egui_toast::Toast {
                             text: "Export failed!".into(),

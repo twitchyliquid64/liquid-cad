@@ -960,6 +960,60 @@ impl Data {
 
         Ok((points, indices_outer, indices_inner))
     }
+
+    pub fn part_paths(&self) -> Result<(kurbo::BezPath, Vec<kurbo::BezPath>), ()> {
+        use crate::GroupType;
+        let mut outer: Option<kurbo::BezPath> = None;
+        let mut cutouts: Vec<kurbo::BezPath> = Vec::with_capacity(12);
+
+        let paths: Vec<(GroupType, Result<Vec<kurbo::BezPath>, ()>)> = self
+            .groups
+            .iter()
+            .map(|g| (g.typ, g.compute_path(self)))
+            .collect();
+
+        // Do boundaries first
+        for p in paths
+            .iter()
+            .filter(|(gt, _)| gt == &GroupType::Boundary)
+            .map(|(_gt, paths)| paths.iter())
+            .flatten()
+            .flatten()
+        {
+            match outer {
+                None => {
+                    outer = Some(p.clone());
+                }
+                Some(_) => {
+                    println!("multiple outer geometries!");
+                    return Err(());
+                }
+            }
+        }
+        // Now interior geometry
+        for p in paths
+            .into_iter()
+            .filter(|(gt, _)| gt == &GroupType::Interior)
+            .map(|(_gt, paths)| paths.into_iter())
+            .flatten()
+            .flatten()
+        {
+            cutouts.push(p);
+        }
+
+        if outer.is_none() {
+            Err(())
+        } else {
+            Ok((outer.unwrap(), cutouts))
+        }
+    }
+
+    pub fn part_extrude(&self, height: f64) -> Result<truck_modeling::Solid, ()> {
+        let (exterior, cutouts) = self.part_paths()?;
+        Ok(crate::l::three_d::extrude_from_paths(
+            exterior, cutouts, height,
+        ))
+    }
 }
 
 #[cfg(test)]
