@@ -66,8 +66,7 @@ fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<kurbo::BezPath>) -> Fa
     let mut face = builder::try_attach_plane(&wires).unwrap();
 
     for p in cutouts.into_iter() {
-        let mut w = wire_from_path(p, &mut verts);
-        w.invert();
+        let w = wire_from_path(p, &mut verts);
         face.add_boundary(w);
     }
 
