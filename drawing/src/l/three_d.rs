@@ -61,16 +61,14 @@ fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>)
 
 fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<kurbo::BezPath>) -> Face {
     let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
-
-    let wires = vec![wire_from_path(exterior, &mut verts)];
-    let mut face = builder::try_attach_plane(&wires).unwrap();
+    let mut wires: Vec<Wire> = Vec::with_capacity(1 + cutouts.len());
+    wires.push(wire_from_path(exterior, &mut verts));
 
     for p in cutouts.into_iter() {
-        let w = wire_from_path(p, &mut verts);
-        face.add_boundary(w);
+        wires.push(wire_from_path(p, &mut verts));
     }
 
-    face
+    builder::try_attach_plane(&wires).unwrap()
 }
 
 pub fn extrude_from_paths(
@@ -117,14 +115,27 @@ pub fn extrude_from_points(
 pub fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
     use truck_meshalgo::tessellation::MeshableShape;
     use truck_meshalgo::tessellation::MeshedShape;
+    let mesh = s.triangulation(tolerance).to_polygon();
+
+    // use truck_meshalgo::filters::OptimizingFilter;
+    // mesh.put_together_same_attrs();
 
     let mut out = Vec::with_capacity(1024);
-    truck_polymesh::stl::write(
-        &s.compress().triangulation(tolerance).to_polygon(),
-        &mut out,
-        truck_polymesh::stl::STLType::Binary,
-    )
-    .unwrap();
+    truck_polymesh::stl::write(&mesh, &mut out, truck_polymesh::stl::STLType::Binary).unwrap();
+
+    out
+}
+
+pub fn solid_to_obj(s: Solid, tolerance: f64) -> Vec<u8> {
+    use truck_meshalgo::tessellation::MeshableShape;
+    use truck_meshalgo::tessellation::MeshedShape;
+    let mut mesh = s.triangulation(tolerance).to_polygon();
+
+    use truck_meshalgo::filters::OptimizingFilter;
+    mesh.put_together_same_attrs();
+
+    let mut out = Vec::with_capacity(1024);
+    truck_polymesh::obj::write(&mesh, &mut out).unwrap();
 
     out
 }

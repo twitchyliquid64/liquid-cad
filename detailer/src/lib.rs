@@ -1028,7 +1028,23 @@ impl<'a> Widget<'a> {
                         });
                     }
                 }
+                if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("OBJ 📥")).clicked() {
+                    if let Ok(solid) = self.drawing.part_extrude(self.state.extrusion_amt) {
+                        use drawing::l::three_d::*;
+
+                        export_fn.take().map(|f| f("OBJ", "obj", solid_to_obj(solid, self.drawing.props.flatten_tolerance)));
+                    } else {
+                        self.toasts.add(egui_toast::Toast {
+                            text: "Export failed!".into(),
+                            kind: egui_toast::ToastKind::Error,
+                            options: egui_toast::ToastOptions::default()
+                                .duration_in_seconds(4.0)
+                                .show_progress(true)
+                        });
+                    }
+                }
             });
+            ui.label("(OBJ export has issues atm :( help always welcome)")
         });
 
         if let Some(idx) = boundary_group_set {
