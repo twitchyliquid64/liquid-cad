@@ -107,6 +107,8 @@ pub struct Data {
     pub terms: TermAllocator,
 
     pub menu_state: ContextMenuData,
+    pub drag_features_enabled: bool,
+    pub drag_dimensions_enabled: bool,
 }
 
 impl Default for Data {
@@ -121,6 +123,8 @@ impl Default for Data {
             selected_constraint: None,
             terms: TermAllocator::default(),
             menu_state: ContextMenuData::default(),
+            drag_features_enabled: true,
+            drag_dimensions_enabled: true,
         }
     }
 }

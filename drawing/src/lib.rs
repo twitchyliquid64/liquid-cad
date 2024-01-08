@@ -130,16 +130,18 @@ impl<'a> Widget<'a> {
         }
 
         // Handle: selection, dragging
-        let state_id = egui::Id::new("select_box_start");
+        let state_id = egui::Id::new("_drawing_input_state");
         let current_input = if let Some(hp) = hp {
             let drag_state = match (
                 hover,
                 response.drag_started_by(egui::PointerButton::Primary),
                 response.double_clicked_by(egui::PointerButton::Primary),
                 response.clicked_by(egui::PointerButton::Secondary),
+                self.drawing.drag_features_enabled,
+                self.drawing.drag_dimensions_enabled,
             ) {
                 // dragging a box to select
-                (Hover::None, true, false, false) => {
+                (Hover::None, true, false, false, _, _) => {
                     let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
                     ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
@@ -153,6 +155,8 @@ impl<'a> Widget<'a> {
                     true,
                     false,
                     false,
+                    true,
+                    _,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
                     let state = DragState::Point(*k, offset);
@@ -168,6 +172,8 @@ impl<'a> Widget<'a> {
                     true,
                     false,
                     false,
+                    true,
+                    _,
                 ) => {
                     let (a, b) = self.drawing.get_line_points(*k).unwrap();
 
@@ -185,6 +191,8 @@ impl<'a> Widget<'a> {
                     true,
                     false,
                     false,
+                    true,
+                    _,
                 ) => {
                     let center_pt = if let Some(Feature::Point(_, x, y, ..)) =
                         self.drawing.features.get(*center)
@@ -208,6 +216,8 @@ impl<'a> Widget<'a> {
                     true,
                     false,
                     false,
+                    _,
+                    true,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
                     let state = DragState::Constraint(*k, offset);
@@ -223,6 +233,8 @@ impl<'a> Widget<'a> {
                     true,
                     false,
                     false,
+                    _,
+                    true,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
                     let state = DragState::Constraint(*k, offset);
@@ -238,10 +250,10 @@ impl<'a> Widget<'a> {
                     false,
                     true,
                     false,
+                    _,
+                    _,
                 ) => {
-                    if let Some(Constraint::LineLength(meta, ..)) = self.drawing.constraint_mut(*k)
-                    {
-                        meta.focus_to = true;
+                    if let Some(Constraint::LineLength(..)) = self.drawing.constraints.get(*k) {
                         let state = DragState::EditingLineLength(*k);
                         ui.memory_mut(|mem| {
                             mem.data.insert_temp(state_id, state);
@@ -251,7 +263,6 @@ impl<'a> Widget<'a> {
                         unreachable!();
                     }
                 }
-                (Hover::Constraint { .. }, true, false, false) => None,
                 // Right-click on a point
                 (
                     Hover::Feature {
@@ -261,6 +272,8 @@ impl<'a> Widget<'a> {
                     false,
                     false,
                     true,
+                    _,
+                    _,
                 ) => {
                     let state = DragState::PointRightClick(*k, self.drawing.vp.screen_to_point(hp));
                     ui.memory_mut(|mem| {
@@ -269,7 +282,8 @@ impl<'a> Widget<'a> {
                     Some(state)
                 }
 
-                (_, _, _, _) => ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)),
+                (Hover::Constraint { .. }, true, false, false, _, _) => None,
+                (_, _, _, _, _, _) => ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)),
             };
 
             let released = response.drag_released_by(egui::PointerButton::Primary);
@@ -379,6 +393,7 @@ impl<'a> Widget<'a> {
             // Cases where we want to keep track even if the cursor is in another window
             match ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)) {
                 Some(DragState::PointRightClick(k, p)) => Some(Input::PointRightClick(k, p)),
+                Some(DragState::EditingLineLength(ck)) => Some(Input::EditingLineLength(ck)),
                 _ => None,
             }
         };
@@ -564,48 +579,76 @@ impl<'a> Widget<'a> {
                 self.show_point_context_menu(ui, k, p);
             }
 
-            Some(Input::FeatureDrag(_, _))
-            | Some(Input::ConstraintDrag(_, _))
-            | Some(Input::EditingLineLength(_))
-            | None => {}
+            Some(Input::EditingLineLength(ck)) => {
+                if let Some(Constraint::LineLength(_, fk, _, _, dd)) =
+                    self.drawing.constraints.get(ck)
+                {
+                    if let Some(Feature::LineSegment(_, f1, f2)) = self.drawing.features.get(*fk) {
+                        let (a, b) = match (
+                            self.drawing.features.get(*f1).unwrap(),
+                            self.drawing.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
+
+                        let reference = egui::Vec2::from((dd.x, dd.y));
+                        let t = (a - b).angle() + reference.angle();
+                        let reference_screen = self.drawing.vp.translate_point(a.lerp(b, 0.5))
+                            + egui::Vec2::angled(t) * reference.length();
+
+                        let mut changed: Option<()> = None;
+                        if let Some(Constraint::LineLength(_, _, d, ..)) =
+                            self.drawing.constraints.get_mut(ck)
+                        {
+                            egui::Area::new(egui::Id::new("dimension_popup"))
+                                .order(egui::Order::Foreground)
+                                .fixed_pos(reference_screen)
+                                .constrain(true)
+                                .pivot(egui::Align2::CENTER_CENTER)
+                                .show(ui.ctx(), |ui| {
+                                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                        let text_height =
+                                            egui::TextStyle::Body.resolve(ui.style()).size;
+
+                                        let dv = ui.add_sized(
+                                            [75., text_height * 1.4],
+                                            egui::DragValue::new(d),
+                                        );
+
+                                        if dv.changed() {
+                                            if *d < 0. {
+                                                *d = 0.;
+                                            }
+                                            changed = Some(());
+                                        }
+                                        if dv.lost_focus()
+                                            || ui.input(|i| i.key_pressed(egui::Key::Escape))
+                                        {
+                                            ui.memory_mut(|mem| {
+                                                mem.data.remove::<DragState>(egui::Id::new(
+                                                    "_drawing_input_state",
+                                                ))
+                                            });
+                                        }
+                                    });
+                                });
+                        }
+
+                        if changed.is_some() {
+                            self.drawing.changed_in_ui();
+                        }
+                    };
+                };
+            }
+
+            Some(Input::FeatureDrag(_, _)) | Some(Input::ConstraintDrag(_, _)) | None => {}
         };
 
         self.tools
             .paint(ui, painter, response, hp, &base_params, self.drawing);
-
-        // if let Some(Input::EditingLineLength(ck)) = current_input {
-        //     if let Some(Constraint::LineLength(_, fk, _, dd)) = self.drawing.constraints.get(ck) {
-        //         if let Some(Feature::LineSegment(_, f1, f2)) = self.drawing.features.get(*fk) {
-        //             let (a, b) = match (
-        //                 self.drawing.features.get(*f1).unwrap(),
-        //                 self.drawing.features.get(*f2).unwrap(),
-        //             ) {
-        //                 (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
-        //                     (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
-        //                 }
-        //                 _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
-        //             };
-
-        //             let reference = egui::Vec2::from((dd.x, dd.y));
-        //             let t = (a - b).angle() + reference.angle();
-        //             let reference_screen = self.drawing.vp.translate_point(a.lerp(b, 0.5))
-        //                 + egui::Vec2::angled(t) * reference.length();
-
-        //             let area_response = egui::Area::new(popup_id)
-        //                 .order(egui::Order::Foreground)
-        //                 .fixed_pos(reference_screen)
-        //                 .constrain(true)
-        //                 .pivot(egui::Align2::CENTER_CENTER)
-        //                 .show(ui.ctx(), |ui| {
-        //                     ui.vertical(|ui| ui.label("HI"));
-        //                     // egui::Frame::popup(ui.style()).show(ui, |ui| {
-        //                     //     ui.label("HI");
-        //                     // });
-        //                 })
-        //                 .response;
-        //         };
-        //     };
-        // }
 
         self.draw_debug(ui, painter, hp, &base_params);
     }
@@ -689,7 +732,6 @@ impl<'a> Widget<'a> {
                                 ui.label("Wizard: Generate points array");
                                 ui.indent("points array", |ui| {
                                     ui.horizontal_wrapped(|ui| {
-                                        ui.style_mut().spacing.interact_size.x -= 15.;
                                         let text_height =
                                             egui::TextStyle::Body.resolve(ui.style()).size;
 

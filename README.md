@@ -11,8 +11,7 @@ https://github.com/twitchyliquid64/liquid-cad/assets/6328589/70ce6e84-25ff-4af1-
 ### Backlog for Beta
 
  * More work on Help page
- * Export to OBJ, STEP
- * 3d operations should work on raw rather than flattened geometry
+ * Export to STEP
  * Arc dragging
  * Warn if solver tolerance if off in export UI
  * Broken constraint tools / solver stability (need help!):

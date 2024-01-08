@@ -324,7 +324,7 @@ impl<'a> Widget<'a> {
         d: &mut f32,
         aa_info: &mut Option<(Axis, bool)>,
         _ref_pt: &mut DimensionDisplay,
-        meta: &mut ConstraintMeta,
+        _meta: &mut ConstraintMeta,
     ) {
         let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
         ui.horizontal(|ui| {
@@ -334,13 +334,7 @@ impl<'a> Widget<'a> {
             ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
             let dv = ui.add_sized([50., text_height * 1.4], egui::DragValue::new(d));
-            if meta.focus_to {
-                meta.focus_to = false;
-                dv.request_focus();
-                ui.memory_mut(|mem| mem.request_focus(dv.id));
-            } else {
-                *changed |= dv.changed();
-            }
+            *changed |= dv.changed();
 
             if *changed && *d < 0. {
                 *d = 0.;

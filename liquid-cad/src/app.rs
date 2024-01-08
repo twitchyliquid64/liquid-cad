@@ -372,6 +372,21 @@ impl eframe::App for App {
 
                 ui.checkbox(&mut self.show_help, "Show help");
                 ui.add_space(8.0);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    ui.checkbox(
+                        &mut self.drawing.drag_dimensions_enabled,
+                        "Allow dragging dimensions",
+                    );
+                    ui.add_space(4.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+                    ui.checkbox(
+                        &mut self.drawing.drag_features_enabled,
+                        "Allow dragging features",
+                    );
+                    ui.add_space(6.0);
+                });
             });
         });
 

@@ -8,10 +8,7 @@ slotmap::new_key_type! {
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ConstraintMeta {
-    #[serde(skip)]
-    pub focus_to: bool,
-}
+pub struct ConstraintMeta {}
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct DimensionDisplay {
