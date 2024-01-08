@@ -55,6 +55,43 @@ impl Default for DrawingProperties {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    #[default]
+    Right,
+}
+
+impl Direction {
+    pub fn extend(&self, dist: f32) -> egui::Vec2 {
+        match self {
+            Direction::Up => egui::Vec2 { x: 0.0, y: -dist },
+            Direction::Down => egui::Vec2 { x: 0.0, y: dist },
+            Direction::Left => egui::Vec2 { x: -dist, y: 0.0 },
+            Direction::Right => egui::Vec2 { x: dist, y: 0.0 },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ContextMenuData {
+    pub array_wizard_count: usize,
+    pub array_wizard_separation: f32,
+    pub array_wizard_direction: Direction,
+}
+
+impl Default for ContextMenuData {
+    fn default() -> Self {
+        Self {
+            array_wizard_count: 3,
+            array_wizard_separation: 6.0,
+            array_wizard_direction: Direction::default(),
+        }
+    }
+}
+
 /// Data stores live state about the drawing and what it is composed of.
 #[derive(Clone, Debug)]
 pub struct Data {
@@ -68,6 +105,8 @@ pub struct Data {
     pub selected_constraint: Option<ConstraintKey>,
 
     pub terms: TermAllocator,
+
+    pub menu_state: ContextMenuData,
 }
 
 impl Default for Data {
@@ -81,6 +120,7 @@ impl Default for Data {
             selected_map: HashMap::default(),
             selected_constraint: None,
             terms: TermAllocator::default(),
+            menu_state: ContextMenuData::default(),
         }
     }
 }

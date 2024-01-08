@@ -405,6 +405,13 @@ impl eframe::App for App {
         )
         .show(ctx);
 
+        // egui::Window::new("📝 Memory")
+        //     .resizable(false)
+        //     .show(ctx, |ui| {
+        //         ctx.memory_ui(ui);
+        //         ctx.inspection_ui(ui);
+        //     });
+
         self.toasts.show(ctx);
 
         if let Some((type_name, ext, data)) = pending_export {

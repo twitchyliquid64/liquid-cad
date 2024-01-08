@@ -25,6 +25,8 @@ pub enum ToolResponse {
     ConstraintLinesEqualRemoveMultiplier(ConstraintKey),
 
     DeleteGroup(usize),
+
+    ArrayWizard(FeatureKey, egui::Vec2, crate::data::ContextMenuData),
 }
 
 #[derive(Debug, Default)]
@@ -334,6 +336,45 @@ impl Handler {
                 }
                 _ => {}
             },
+
+            ToolResponse::ArrayWizard(k, pos, info) => {
+                let mut last_point = k;
+                for n in 0..info.array_wizard_count {
+                    let new_k = drawing.features.insert(Feature::Point(
+                        FeatureMeta::default_construction(),
+                        pos.x
+                            + info
+                                .array_wizard_direction
+                                .extend((n + 1) as f32 * info.array_wizard_separation)
+                                .x,
+                        pos.y
+                            + info
+                                .array_wizard_direction
+                                .extend((n + 1) as f32 * info.array_wizard_separation)
+                                .y,
+                    ));
+                    let line = drawing.features.insert(Feature::LineSegment(
+                        FeatureMeta::default_construction(),
+                        last_point,
+                        new_k,
+                    ));
+
+                    use crate::data::Direction::*;
+                    drawing.add_constraint(Constraint::LineLength(
+                        ConstraintMeta::default(),
+                        line,
+                        info.array_wizard_separation,
+                        match info.array_wizard_direction {
+                            Up => Some((Axis::TopBottom, true)),
+                            Down => Some((Axis::TopBottom, false)),
+                            Left => Some((Axis::LeftRight, true)),
+                            Right => Some((Axis::LeftRight, false)),
+                        },
+                        DimensionDisplay { x: 0., y: 35.0 },
+                    ));
+                    last_point = new_k;
+                }
+            }
         }
     }
 }

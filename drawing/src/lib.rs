@@ -44,6 +44,7 @@ enum DragState {
     Circle(FeatureKey, egui::Vec2, egui::Vec2),           // center, offset
     Constraint(ConstraintKey, egui::Vec2),
     EditingLineLength(ConstraintKey),
+    PointRightClick(FeatureKey, egui::Pos2),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -52,6 +53,7 @@ enum Input {
     FeatureDrag(FeatureKey, egui::Pos2),
     ConstraintDrag(ConstraintKey, egui::Pos2),
     EditingLineLength(ConstraintKey),
+    PointRightClick(FeatureKey, egui::Pos2),
 }
 
 /// Widget implements the egui drawing widget.
@@ -128,17 +130,18 @@ impl<'a> Widget<'a> {
         }
 
         // Handle: selection, dragging
+        let state_id = egui::Id::new("select_box_start");
         let current_input = if let Some(hp) = hp {
-            let select_id = ui.make_persistent_id("select_box_start");
             let drag_state = match (
                 hover,
                 response.drag_started_by(egui::PointerButton::Primary),
                 response.double_clicked_by(egui::PointerButton::Primary),
+                response.clicked_by(egui::PointerButton::Secondary),
             ) {
                 // dragging a box to select
-                (Hover::None, true, false) => {
+                (Hover::None, true, false, false) => {
                     let state = DragState::SelectBox(self.drawing.vp.screen_to_point(hp));
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Dragging a point
@@ -149,10 +152,11 @@ impl<'a> Widget<'a> {
                     },
                     true,
                     false,
+                    false,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(*px, *py);
                     let state = DragState::Point(*k, offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Dragging a line
@@ -163,12 +167,13 @@ impl<'a> Widget<'a> {
                     },
                     true,
                     false,
+                    false,
                 ) => {
                     let (a, b) = self.drawing.get_line_points(*k).unwrap();
 
                     let offset = self.drawing.vp.screen_to_point(hp).to_vec2();
                     let state = DragState::Line(*k, a.to_vec2(), b.to_vec2(), offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Dragging a circle
@@ -178,6 +183,7 @@ impl<'a> Widget<'a> {
                         feature: Feature::Circle(_, center, ..),
                     },
                     true,
+                    false,
                     false,
                 ) => {
                     let center_pt = if let Some(Feature::Point(_, x, y, ..)) =
@@ -190,7 +196,7 @@ impl<'a> Widget<'a> {
 
                     let offset = self.drawing.vp.screen_to_point(hp).to_vec2();
                     let state = DragState::Circle(*k, center_pt, offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Dragging a LineLength constraint reference
@@ -201,10 +207,11 @@ impl<'a> Widget<'a> {
                     },
                     true,
                     false,
+                    false,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
                     let state = DragState::Constraint(*k, offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Dragging a CircleRadius constraint reference
@@ -215,10 +222,11 @@ impl<'a> Widget<'a> {
                     },
                     true,
                     false,
+                    false,
                 ) => {
                     let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
                     let state = DragState::Constraint(*k, offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(select_id, state));
+                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
                 // Double-clicking a LineLength constraint reference
@@ -229,22 +237,39 @@ impl<'a> Widget<'a> {
                     },
                     false,
                     true,
+                    false,
                 ) => {
                     if let Some(Constraint::LineLength(meta, ..)) = self.drawing.constraint_mut(*k)
                     {
                         meta.focus_to = true;
                         let state = DragState::EditingLineLength(*k);
                         ui.memory_mut(|mem| {
-                            mem.data.insert_temp(select_id, state);
+                            mem.data.insert_temp(state_id, state);
                         });
                         Some(state)
                     } else {
                         unreachable!();
                     }
                 }
-                (Hover::Constraint { .. }, true, false) => None,
+                (Hover::Constraint { .. }, true, false, false) => None,
+                // Right-click on a point
+                (
+                    Hover::Feature {
+                        k,
+                        feature: Feature::Point(..),
+                    },
+                    false,
+                    false,
+                    true,
+                ) => {
+                    let state = DragState::PointRightClick(*k, self.drawing.vp.screen_to_point(hp));
+                    ui.memory_mut(|mem| {
+                        mem.data.insert_temp(state_id, state);
+                    });
+                    Some(state)
+                }
 
-                (_, _, _) => ui.memory(|mem| mem.data.get_temp(select_id)),
+                (_, _, _, _) => ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)),
             };
 
             let released = response.drag_released_by(egui::PointerButton::Primary);
@@ -266,7 +291,7 @@ impl<'a> Widget<'a> {
                             true,
                         );
                     }
-                    ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                    ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     None
                 }
                 (Some(DragState::SelectBox(drag_start)), false) => {
@@ -285,7 +310,7 @@ impl<'a> Widget<'a> {
 
                 (Some(DragState::Point(fk, offset)), _) => {
                     if released {
-                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
                     let new_pos = self.drawing.vp.screen_to_point(hp) - offset;
                     self.drawing.move_point(fk, new_pos);
@@ -294,7 +319,7 @@ impl<'a> Widget<'a> {
                 }
                 (Some(DragState::Line(fk, p1, p2, offset)), _) => {
                     if released {
-                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
 
                     let (fk1, fk2) = if let Some(Feature::LineSegment(_, fk1, fk2)) =
@@ -315,7 +340,7 @@ impl<'a> Widget<'a> {
                 }
                 (Some(DragState::Circle(fk, center, offset)), _) => {
                     if released {
-                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
 
                     let c_fk =
@@ -334,7 +359,7 @@ impl<'a> Widget<'a> {
 
                 (Some(DragState::Constraint(ck, _offset)), _) => {
                     if released {
-                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
                     self.drawing.move_constraint(ck, hp);
                     Some(Input::ConstraintDrag(ck, hp))
@@ -342,15 +367,20 @@ impl<'a> Widget<'a> {
 
                 (Some(DragState::EditingLineLength(ck)), _) => {
                     if response.clicked() && matches!(hover, Hover::None) {
-                        ui.memory_mut(|mem| mem.data.remove::<DragState>(select_id));
+                        ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
                     Some(Input::EditingLineLength(ck))
                 }
 
+                (Some(DragState::PointRightClick(k, p)), _) => Some(Input::PointRightClick(k, p)),
                 (None, _) => None,
             }
         } else {
-            None
+            // Cases where we want to keep track even if the cursor is in another window
+            match ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)) {
+                Some(DragState::PointRightClick(k, p)) => Some(Input::PointRightClick(k, p)),
+                _ => None,
+            }
         };
 
         self.drawing.selected_constraint = if let Some(Input::EditingLineLength(ck)) = current_input
@@ -530,6 +560,10 @@ impl<'a> Widget<'a> {
                 );
             }
 
+            Some(Input::PointRightClick(k, p)) => {
+                self.show_point_context_menu(ui, k, p);
+            }
+
             Some(Input::FeatureDrag(_, _))
             | Some(Input::ConstraintDrag(_, _))
             | Some(Input::EditingLineLength(_))
@@ -574,6 +608,190 @@ impl<'a> Widget<'a> {
         // }
 
         self.draw_debug(ui, painter, hp, &base_params);
+    }
+
+    fn show_point_context_menu(&mut self, ui: &egui::Ui, k: FeatureKey, p: egui::Pos2) {
+        let mut command: Option<handler::ToolResponse> = None;
+        let mut show_more = ui.memory(|m| {
+            m.data
+                .get_temp::<bool>(egui::Id::new("show_more").with(k))
+                .unwrap_or(false)
+        });
+
+        if let Some(Feature::Point(meta, ..)) = self.drawing.features.get_mut(k) {
+            egui::Area::new(egui::Id::new("drawing_ctx_menu"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(self.drawing.vp.translate_point(p) + egui::Vec2::new(4., 4.))
+                .constrain(true)
+                .interactable(true)
+                .movable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.allocate_ui(egui::Vec2::new(250., 550.), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let new_show_wizard = if show_more {
+                                    if ui.button("⏷").clicked() {
+                                        Some(false)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    if ui.button("⏵").clicked() {
+                                        Some(true)
+                                    } else {
+                                        None
+                                    }
+                                };
+                                if let Some(new_val) = new_show_wizard {
+                                    ui.memory_mut(|m| {
+                                        m.data.insert_temp(
+                                            egui::Id::new("show_more").with(k),
+                                            new_val,
+                                        )
+                                    });
+                                    show_more = new_val;
+                                }
+
+                                use slotmap::Key;
+                                ui.label(format!("Point {:?}", k.data()));
+                                ui.add_space(12.);
+
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::TOP),
+                                    |ui| {
+                                        if ui
+                                            .add(
+                                                egui::Button::new("⊗")
+                                                    .fill(egui::Color32::DARK_RED),
+                                            )
+                                            .clicked()
+                                        {
+                                            command = Some(handler::ToolResponse::Delete(k));
+                                        }
+                                        ui.add_space(4.);
+
+                                        ui.add(egui::Checkbox::without_text(
+                                            &mut meta.construction,
+                                        ));
+                                        ui.add(
+                                            egui::Image::new(egui::include_image!(
+                                                "../../assets/emoji_u1f6a7.png"
+                                            ))
+                                            .rounding(5.0),
+                                        );
+                                    },
+                                );
+                            });
+
+                            if show_more {
+                                ui.separator();
+
+                                ui.label("Wizard: Generate points array");
+                                ui.indent("points array", |ui| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.style_mut().spacing.interact_size.x -= 15.;
+                                        let text_height =
+                                            egui::TextStyle::Body.resolve(ui.style()).size;
+
+                                        ui.columns(2, |columns| {
+                                            columns[0].add_sized(
+                                                [75., text_height * 1.4],
+                                                egui::Label::new("No. points"),
+                                            );
+                                            columns[1].add_sized(
+                                                [25., text_height * 1.4],
+                                                egui::DragValue::new(
+                                                    &mut self.drawing.menu_state.array_wizard_count,
+                                                ),
+                                            );
+
+                                            columns[0].add_sized(
+                                                [75., text_height * 1.4],
+                                                egui::Label::new("Direction"),
+                                            );
+                                            egui::ComboBox::from_id_source(
+                                                "points_array_wizard_direction",
+                                            )
+                                            .selected_text(format!(
+                                                "{:?}",
+                                                self.drawing.menu_state.array_wizard_direction
+                                            ))
+                                            .show_ui(
+                                                &mut columns[1],
+                                                |ui| {
+                                                    ui.selectable_value(
+                                                        &mut self
+                                                            .drawing
+                                                            .menu_state
+                                                            .array_wizard_direction,
+                                                        crate::data::Direction::Up,
+                                                        "Up",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut self
+                                                            .drawing
+                                                            .menu_state
+                                                            .array_wizard_direction,
+                                                        crate::data::Direction::Down,
+                                                        "Down",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut self
+                                                            .drawing
+                                                            .menu_state
+                                                            .array_wizard_direction,
+                                                        crate::data::Direction::Left,
+                                                        "Left",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut self
+                                                            .drawing
+                                                            .menu_state
+                                                            .array_wizard_direction,
+                                                        crate::data::Direction::Right,
+                                                        "Right",
+                                                    );
+                                                },
+                                            );
+
+                                            columns[0].add_sized(
+                                                [75., text_height * 1.4],
+                                                egui::Label::new("Spacing"),
+                                            );
+                                            columns[1].add_sized(
+                                                [25., text_height * 1.4],
+                                                egui::DragValue::new(
+                                                    &mut self
+                                                        .drawing
+                                                        .menu_state
+                                                        .array_wizard_separation,
+                                                )
+                                                .speed(0.05)
+                                                .clamp_range(0.00..=1000.0)
+                                                .suffix("mm"),
+                                            );
+                                        });
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(12.);
+                                        if ui.button("Execute").clicked() {
+                                            command = Some(handler::ToolResponse::ArrayWizard(
+                                                k,
+                                                p.to_vec2(),
+                                                self.drawing.menu_state.clone(),
+                                            ));
+                                        };
+                                    });
+                                });
+                            }
+                        });
+                    });
+                });
+        }
+
+        if let Some(c) = command {
+            self.handler.handle(self.drawing, self.tools, c);
+        }
     }
 
     fn draw_debug(
