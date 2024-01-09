@@ -332,7 +332,7 @@ impl Tool {
             Tool::Horizontal => "Constrain horizontal",
             Tool::Vertical => "Constrain vertical",
             Tool::Lerp(_) => "Constrain point along line",
-            Tool::Equal(_) => "Constrain lengths as equal",
+            Tool::Equal(_) => "Constrain equal",
             Tool::Parallel(_) => "Constrain lines as parallel",
             Tool::Angle => "Constain line angle",
         }
@@ -364,7 +364,7 @@ impl Tool {
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
             Tool::Vertical => Some("Constrains a line to be vertical."),
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
-            Tool::Equal(_) => Some("Constrains a line to be equal in length to another line."),
+            Tool::Equal(_) => Some("Constrains a line/circle to be equal in length/radius to another line/circle."),
             Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nWARNING: THIS TOOL IS EXPERIMENTAL and not working properly.\n\nClick on the first line, and then the second line to create this constraint."),
             Tool::Angle => Some("Constrains a line to have some angle clockwise from the vertical axis.\n\nWARNING: THIS TOOL IS EXPERIMENTAL."),
         }
@@ -787,7 +787,7 @@ impl Tool {
 
             Tool::Equal(l1) => {
                 let c = match (hover, &l1, response.clicked()) {
-                    // No first line, clicked on a line
+                    // No first feature, clicked on a line
                     (
                         Hover::Feature {
                             k,
@@ -812,11 +812,36 @@ impl Tool {
                         *l1 = None;
                         Some(ToolResponse::NewEqual(starting_line, *k))
                     }
+                    // No first feature, clicked on a circle
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Circle(..),
+                        },
+                        None,
+                        true,
+                    ) => {
+                        *l1 = Some(*k);
+                        Some(ToolResponse::Handled)
+                    }
+                    // Has first circle, clicked on a circle
+                    (
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Circle(..),
+                        },
+                        Some(starting_circle),
+                        true,
+                    ) => {
+                        let starting_circle = starting_circle.clone();
+                        *l1 = None;
+                        Some(ToolResponse::NewEqual(starting_circle, *k))
+                    }
                     (Hover::None, Some(_), true) => {
                         *l1 = None;
                         Some(ToolResponse::Handled)
                     }
-                    // No first line, clicked empty space or point
+                    // No first feature, clicked empty space or point
                     (Hover::None, None, true)
                     | (
                         Hover::Feature {
@@ -1078,12 +1103,12 @@ impl Tool {
             Tool::Equal(None) => {
                 response
                     .clone()
-                    .on_hover_text_at_pointer("constrain equal: click 1st line");
+                    .on_hover_text_at_pointer("constrain equal: click 1st line/circle");
             }
             Tool::Equal(Some(_)) => {
                 response
                     .clone()
-                    .on_hover_text_at_pointer("constrain equal: click 2nd line");
+                    .on_hover_text_at_pointer("constrain equal: click 2nd line/circle");
             }
 
             Tool::Parallel(None) => {

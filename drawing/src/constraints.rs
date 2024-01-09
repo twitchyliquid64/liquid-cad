@@ -65,13 +65,14 @@ pub enum Constraint {
     LineAngle(ConstraintMeta, FeatureKey, f32),
 
     CircleRadius(ConstraintMeta, FeatureKey, f32, DimensionDisplay),
+    CircleRadiusEqual(ConstraintMeta, FeatureKey, FeatureKey, Option<f32>),
 }
 
 impl Constraint {
     pub fn affecting_features(&self) -> Vec<FeatureKey> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, fk, ..) => vec![fk.clone()],
@@ -82,13 +83,14 @@ impl Constraint {
             LinesParallel(_, l1, l2, ..) => vec![l1.clone(), l2.clone()],
             LineAngle(_, fk, ..) => vec![fk.clone()],
             CircleRadius(_, fk, ..) => vec![fk.clone()],
+            CircleRadiusEqual(_, c1, c2, ..) => vec![c1.clone(), c2.clone()],
         }
     }
 
     pub fn valid_for_feature(&self, ft: &Feature) -> bool {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(..) => matches!(ft, &Feature::Point(..)),
@@ -99,13 +101,14 @@ impl Constraint {
             LinesParallel(..) => matches!(ft, &Feature::LineSegment(..)),
             LineAngle(..) => matches!(ft, &Feature::LineSegment(..)),
             CircleRadius(..) => matches!(ft, &Feature::Circle(..)),
+            CircleRadiusEqual(..) => matches!(ft, &Feature::Circle(..)),
         }
     }
 
     pub fn conflicts(&self, other: &Constraint) -> bool {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match (self, other) {
             (Fixed(_, f1, _, _), Fixed(_, f2, _, _)) => f1 == f2,
@@ -124,6 +127,9 @@ impl Constraint {
             }
             (LineAngle(_, f1, ..), LineAngle(_, f2, ..)) => f1 == f2,
             (CircleRadius(_, f1, ..), CircleRadius(_, f2, ..)) => f1 == f2,
+            (CircleRadiusEqual(_, c11, c12, ..), CircleRadiusEqual(_, c21, c22, ..)) => {
+                (c11 == c21 && c12 == c22) || (c11 == c22 && c12 == c21)
+            }
             _ => false,
         }
     }
@@ -135,8 +141,8 @@ impl Constraint {
         vp: &crate::Viewport,
     ) -> Option<f32> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(..) => None,
@@ -198,7 +204,7 @@ impl Constraint {
                 }
             }
             PointLerpLine(..) => None,
-            LineLengthsEqual(..) => None,
+            LineLengthsEqual(..) | CircleRadiusEqual(..) => None,
             LinesParallel(..) => None,
             LineAngle(..) => None,
         }
@@ -212,8 +218,8 @@ impl Constraint {
         painter: &egui::Painter,
     ) {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, k, _, _) => {
@@ -284,7 +290,7 @@ impl Constraint {
             }
 
             PointLerpLine(..) => {}
-            LineLengthsEqual(..) => {}
+            LineLengthsEqual(..) | CircleRadiusEqual(..) => {}
             LinesParallel(..) => {}
             LineAngle(..) => {}
 
@@ -311,8 +317,8 @@ impl Constraint {
 
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
         use Constraint::{
-            CircleRadius, Fixed, LineAlongCardinal, LineAngle, LineLength, LineLengthsEqual,
-            LinesParallel, PointLerpLine,
+            CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,
+            LineLengthsEqual, LinesParallel, PointLerpLine,
         };
         match self {
             Fixed(_, k, x, y) => {
@@ -337,6 +343,7 @@ impl Constraint {
                     ),
                 ]
             }
+
             CircleRadius(_, k, r, _) => {
                 let cr = &drawing.terms.get_feature_term(*k, TermType::ScalarRadius);
                 vec![Expression::Equal(
@@ -347,6 +354,27 @@ impl Constraint {
                     )),
                 )]
             }
+            CircleRadiusEqual(_, c1, c2, multiplier, ..) => {
+                let (cr1, cr2) = (
+                    &drawing.terms.get_feature_term(*c1, TermType::ScalarRadius),
+                    &drawing.terms.get_feature_term(*c2, TermType::ScalarRadius),
+                );
+
+                vec![Expression::Equal(
+                    Box::new(Expression::Variable(cr2.into())),
+                    Box::new(match multiplier {
+                        Some(a) => Expression::Product(
+                            Box::new(Expression::Rational(
+                                Rational::from_float(*a).unwrap(),
+                                true,
+                            )),
+                            Box::new(Expression::Variable(cr1.into())),
+                        ),
+                        None => Expression::Variable(cr1.into()),
+                    }),
+                )]
+            }
+
             LineLength(_, k, d, aa_info, _) => {
                 if let Some(Feature::LineSegment(_, f1, f2)) = drawing.features.get(*k) {
                     let td = &drawing.terms.get_feature_term(*k, TermType::ScalarDistance);
@@ -748,6 +776,18 @@ impl Constraint {
                 ref_offset: ref_offset.clone(),
                 ..SerializedConstraint::default()
             }),
+            Constraint::CircleRadiusEqual(meta, fk1, fk2, ratio) => {
+                let (fk1_idx, fk2_idx) =
+                    (fk_to_idx.get(fk1).ok_or(())?, fk_to_idx.get(fk2).ok_or(())?);
+
+                Ok(SerializedConstraint {
+                    kind: "radius_equal".to_string(),
+                    meta: meta.clone(),
+                    feature_idx: vec![*fk1_idx, *fk2_idx],
+                    amt: ratio.unwrap_or(0.0),
+                    ..SerializedConstraint::default()
+                })
+            }
         }
     }
 
@@ -853,6 +893,17 @@ impl Constraint {
                     *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
                     sc.amt,
                     sc.ref_offset,
+                ))
+            }
+            "radius_equal" => {
+                if sc.feature_idx.len() < 2 {
+                    return Err(());
+                }
+                Ok(Self::CircleRadiusEqual(
+                    sc.meta,
+                    *idx_to_fk.get(&sc.feature_idx[0]).ok_or(())?,
+                    *idx_to_fk.get(&sc.feature_idx[1]).ok_or(())?,
+                    if sc.amt == 0.0 { None } else { Some(sc.amt) },
                 ))
             }
             _ => Err(()),
@@ -1033,6 +1084,22 @@ mod tests {
                 ..SerializedConstraint::default()
             }),
         );
+        assert_eq!(
+            Constraint::CircleRadiusEqual(
+                ConstraintMeta::default(),
+                point_key,
+                point_key,
+                Some(0.5)
+            )
+            .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedConstraint {
+                kind: "radius_equal".to_string(),
+                meta: ConstraintMeta::default(),
+                feature_idx: vec![42, 42],
+                amt: 0.5,
+                ..SerializedConstraint::default()
+            }),
+        );
     }
 
     #[test]
@@ -1114,6 +1181,18 @@ mod tests {
             Constraint::LineLengthsEqual(ConstraintMeta::default(), k, k, Some(0.5),),
         );
 
+        assert_eq!(
+            Constraint::deserialize(
+                SerializedConstraint {
+                    kind: "radius_equal".to_string(),
+                    feature_idx: vec![1, 1],
+                    ..SerializedConstraint::default()
+                },
+                &HashMap::from([(1, k)])
+            )
+            .unwrap(),
+            Constraint::CircleRadiusEqual(ConstraintMeta::default(), k, k, None,),
+        );
         // TODO: PointLerpLine, LinesParallel, CircleRadius
     }
 }

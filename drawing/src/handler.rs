@@ -23,6 +23,7 @@ pub enum ToolResponse {
 
     ConstraintDelete(ConstraintKey),
     ConstraintLinesEqualRemoveMultiplier(ConstraintKey),
+    ConstraintRadiusEqualRemoveMultiplier(ConstraintKey),
 
     DeleteGroup(usize),
 
@@ -281,6 +282,18 @@ impl Handler {
 
                         tools.clear();
                     }
+                    (Some(Feature::Circle(..)), Some(Feature::Circle(..))) => {
+                        // TODO: Delete/modify existing constraints that would clash, if any
+
+                        drawing.add_constraint(Constraint::CircleRadiusEqual(
+                            ConstraintMeta::default(),
+                            l1,
+                            l2,
+                            None,
+                        ));
+
+                        tools.clear();
+                    }
                     _ => {}
                 }
             }
@@ -295,6 +308,7 @@ impl Handler {
                     }
                 }
             }
+
             ToolResponse::NewCircleRadiusConstraint(k) => match drawing.features.get(k) {
                 Some(Feature::Circle(_, _, radius)) => {
                     drawing.add_constraint(Constraint::CircleRadius(
@@ -307,6 +321,17 @@ impl Handler {
                 }
                 _ => {}
             },
+            ToolResponse::ConstraintRadiusEqualRemoveMultiplier(ck) => {
+                match drawing.constraints.get_mut(ck) {
+                    Some(Constraint::CircleRadiusEqual(_meta, _l1, _l2, multiplier)) => {
+                        *multiplier = None;
+                        drawing.changed_in_ui();
+                    }
+                    _ => {
+                        unreachable!();
+                    }
+                }
+            }
 
             ToolResponse::NewParallelLine(l1, l2) => {
                 match (drawing.features.get(l1), drawing.features.get(l2)) {
