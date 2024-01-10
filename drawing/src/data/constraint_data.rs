@@ -80,4 +80,26 @@ impl ConstraintData {
     pub fn get(&self, ck: ConstraintKey) -> Option<&Constraint> {
         self.constraints.get(ck)
     }
+
+    pub fn get_using_feature_and_type(
+        &self,
+        k: &FeatureKey,
+        t: std::mem::Discriminant<Constraint>,
+    ) -> Option<&Constraint> {
+        match self.by_feature.get(k) {
+            Some(set) => {
+                for ck in set.iter() {
+                    let c = self.constraints.get(*ck);
+                    if let Some(c) = c {
+                        use std::mem::discriminant;
+                        if discriminant(c) == t {
+                            return Some(c);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        };
+        None
+    }
 }

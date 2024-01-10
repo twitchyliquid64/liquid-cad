@@ -45,6 +45,7 @@ enum DragState {
     Constraint(ConstraintKey, egui::Vec2),
     EditingLineLength(ConstraintKey),
     PointRightClick(FeatureKey, egui::Pos2),
+    LineRightClick(FeatureKey, egui::Pos2),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -54,6 +55,7 @@ enum Input {
     ConstraintDrag(ConstraintKey, egui::Pos2),
     EditingLineLength(ConstraintKey),
     PointRightClick(FeatureKey, egui::Pos2),
+    LineRightClick(FeatureKey, egui::Pos2),
 }
 
 /// Widget implements the egui drawing widget.
@@ -281,6 +283,24 @@ impl<'a> Widget<'a> {
                     });
                     Some(state)
                 }
+                // Right-click on a line
+                (
+                    Hover::Feature {
+                        k,
+                        feature: Feature::LineSegment(..),
+                    },
+                    false,
+                    false,
+                    true,
+                    _,
+                    _,
+                ) => {
+                    let state = DragState::LineRightClick(*k, self.drawing.vp.screen_to_point(hp));
+                    ui.memory_mut(|mem| {
+                        mem.data.insert_temp(state_id, state);
+                    });
+                    Some(state)
+                }
 
                 (Hover::Constraint { .. }, true, false, false, _, _) => None,
                 (_, _, _, _, _, _) => ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)),
@@ -387,12 +407,14 @@ impl<'a> Widget<'a> {
                 }
 
                 (Some(DragState::PointRightClick(k, p)), _) => Some(Input::PointRightClick(k, p)),
+                (Some(DragState::LineRightClick(k, p)), _) => Some(Input::LineRightClick(k, p)),
                 (None, _) => None,
             }
         } else {
             // Cases where we want to keep track even if the cursor is in another window
             match ui.memory(|mem| mem.data.get_temp::<DragState>(state_id)) {
                 Some(DragState::PointRightClick(k, p)) => Some(Input::PointRightClick(k, p)),
+                Some(DragState::LineRightClick(k, p)) => Some(Input::LineRightClick(k, p)),
                 Some(DragState::EditingLineLength(ck)) => Some(Input::EditingLineLength(ck)),
                 _ => None,
             }
@@ -578,70 +600,12 @@ impl<'a> Widget<'a> {
             Some(Input::PointRightClick(k, p)) => {
                 self.show_point_context_menu(ui, k, p);
             }
+            Some(Input::LineRightClick(k, p)) => {
+                self.show_line_context_menu(ui, k, p);
+            }
 
             Some(Input::EditingLineLength(ck)) => {
-                if let Some(Constraint::LineLength(_, fk, _, _, dd)) =
-                    self.drawing.constraints.get(ck)
-                {
-                    if let Some(Feature::LineSegment(_, f1, f2)) = self.drawing.features.get(*fk) {
-                        let (a, b) = match (
-                            self.drawing.features.get(*f1).unwrap(),
-                            self.drawing.features.get(*f2).unwrap(),
-                        ) {
-                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
-                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
-                            }
-                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
-                        };
-
-                        let reference = egui::Vec2::from((dd.x, dd.y));
-                        let t = (a - b).angle() + reference.angle();
-                        let reference_screen = self.drawing.vp.translate_point(a.lerp(b, 0.5))
-                            + egui::Vec2::angled(t) * reference.length();
-
-                        let mut changed: Option<()> = None;
-                        if let Some(Constraint::LineLength(_, _, d, ..)) =
-                            self.drawing.constraints.get_mut(ck)
-                        {
-                            egui::Area::new(egui::Id::new("dimension_popup"))
-                                .order(egui::Order::Foreground)
-                                .fixed_pos(reference_screen)
-                                .constrain(true)
-                                .pivot(egui::Align2::CENTER_CENTER)
-                                .show(ui.ctx(), |ui| {
-                                    egui::Frame::popup(ui.style()).show(ui, |ui| {
-                                        let text_height =
-                                            egui::TextStyle::Body.resolve(ui.style()).size;
-
-                                        let dv = ui.add_sized(
-                                            [75., text_height * 1.4],
-                                            egui::DragValue::new(d),
-                                        );
-
-                                        if dv.changed() {
-                                            if *d < 0. {
-                                                *d = 0.;
-                                            }
-                                            changed = Some(());
-                                        }
-                                        if dv.lost_focus()
-                                            || ui.input(|i| i.key_pressed(egui::Key::Escape))
-                                        {
-                                            ui.memory_mut(|mem| {
-                                                mem.data.remove::<DragState>(egui::Id::new(
-                                                    "_drawing_input_state",
-                                                ))
-                                            });
-                                        }
-                                    });
-                                });
-                        }
-
-                        if changed.is_some() {
-                            self.drawing.changed_in_ui();
-                        }
-                    };
-                };
+                self.show_line_dimension_popover(ui, ck);
             }
 
             Some(Input::FeatureDrag(_, _)) | Some(Input::ConstraintDrag(_, _)) | None => {}
@@ -653,6 +617,65 @@ impl<'a> Widget<'a> {
         self.draw_debug(ui, painter, hp, &base_params);
     }
 
+    fn show_line_dimension_popover(&mut self, ui: &egui::Ui, ck: ConstraintKey) {
+        if let Some(Constraint::LineLength(_, fk, _, _, dd)) = self.drawing.constraints.get(ck) {
+            if let Some(Feature::LineSegment(_, f1, f2)) = self.drawing.features.get(*fk) {
+                let (a, b) = match (
+                    self.drawing.features.get(*f1).unwrap(),
+                    self.drawing.features.get(*f2).unwrap(),
+                ) {
+                    (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                        (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                    }
+                    _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                };
+
+                let reference = egui::Vec2::from((dd.x, dd.y));
+                let t = (a - b).angle() + reference.angle();
+                let reference_screen = self.drawing.vp.translate_point(a.lerp(b, 0.5))
+                    + egui::Vec2::angled(t) * reference.length();
+
+                let mut changed: Option<()> = None;
+                if let Some(Constraint::LineLength(_, _, d, ..)) =
+                    self.drawing.constraints.get_mut(ck)
+                {
+                    egui::Area::new(egui::Id::new("dimension_popup"))
+                        .order(egui::Order::Foreground)
+                        .fixed_pos(reference_screen)
+                        .constrain(true)
+                        .pivot(egui::Align2::CENTER_CENTER)
+                        .show(ui.ctx(), |ui| {
+                            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+                                let dv =
+                                    ui.add_sized([75., text_height * 1.4], egui::DragValue::new(d));
+
+                                if dv.changed() {
+                                    if *d < 0. {
+                                        *d = 0.;
+                                    }
+                                    changed = Some(());
+                                }
+                                if dv.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Escape))
+                                {
+                                    ui.memory_mut(|mem| {
+                                        mem.data.remove::<DragState>(egui::Id::new(
+                                            "_drawing_input_state",
+                                        ))
+                                    });
+                                }
+                            });
+                        });
+                }
+
+                if changed.is_some() {
+                    self.drawing.changed_in_ui();
+                }
+            };
+        };
+    }
+
     fn show_point_context_menu(&mut self, ui: &egui::Ui, k: FeatureKey, p: egui::Pos2) {
         let mut command: Option<handler::ToolResponse> = None;
         let mut show_more = ui.memory(|m| {
@@ -661,7 +684,13 @@ impl<'a> Widget<'a> {
                 .unwrap_or(false)
         });
 
-        if let Some(Feature::Point(meta, ..)) = self.drawing.features.get_mut(k) {
+        let Data {
+            features,
+            constraints,
+            ..
+        } = self.drawing;
+
+        if let Some(Feature::Point(meta, ..)) = features.get_mut(k) {
             egui::Area::new(egui::Id::new("drawing_ctx_menu"))
                 .order(egui::Order::Foreground)
                 .fixed_pos(self.drawing.vp.translate_point(p) + egui::Vec2::new(4., 4.))
@@ -725,6 +754,30 @@ impl<'a> Widget<'a> {
                                     },
                                 );
                             });
+
+                            // If constrained to fixed co-ordinates, show those coords
+                            if let Some(Constraint::Fixed(_, _, x, y)) = constraints
+                                .get_using_feature_and_type(
+                                    &k,
+                                    std::mem::discriminant(&Constraint::Fixed(
+                                        ConstraintMeta::default(),
+                                        k,
+                                        0.,
+                                        0.,
+                                    )),
+                                )
+                            {
+                                ui.add_space(4.);
+                                ui.horizontal(|ui| {
+                                    ui.label("Fixed coordinates");
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::TOP),
+                                        |ui| {
+                                            ui.label(format!("({}, {})", x, y));
+                                        },
+                                    );
+                                });
+                            }
 
                             if show_more {
                                 ui.separator();
@@ -825,6 +878,94 @@ impl<'a> Widget<'a> {
                                         };
                                     });
                                 });
+                            }
+                        });
+                    });
+                });
+        }
+
+        if let Some(c) = command {
+            self.handler.handle(self.drawing, self.tools, c);
+        }
+    }
+
+    fn show_line_context_menu(&mut self, ui: &egui::Ui, k: FeatureKey, p: egui::Pos2) {
+        let mut command: Option<handler::ToolResponse> = None;
+        let mut show_more = ui.memory(|m| {
+            m.data
+                .get_temp::<bool>(egui::Id::new("show_more").with(k))
+                .unwrap_or(false)
+        });
+
+        let Data { features, .. } = self.drawing;
+
+        if let Some(Feature::LineSegment(meta, ..)) = features.get_mut(k) {
+            egui::Area::new(egui::Id::new("drawing_ctx_menu"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(self.drawing.vp.translate_point(p) + egui::Vec2::new(4., 4.))
+                .constrain(true)
+                .interactable(true)
+                .movable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.allocate_ui(egui::Vec2::new(250., 550.), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let new_show_wizard = if show_more {
+                                    if ui.button("⏷").clicked() {
+                                        Some(false)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    if ui.button("⏵").clicked() {
+                                        Some(true)
+                                    } else {
+                                        None
+                                    }
+                                };
+                                if let Some(new_val) = new_show_wizard {
+                                    ui.memory_mut(|m| {
+                                        m.data.insert_temp(
+                                            egui::Id::new("show_more").with(k),
+                                            new_val,
+                                        )
+                                    });
+                                    show_more = new_val;
+                                }
+
+                                use slotmap::Key;
+                                ui.label(format!("Line {:?}", k.data()));
+                                ui.add_space(12.);
+
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::TOP),
+                                    |ui| {
+                                        if ui
+                                            .add(
+                                                egui::Button::new("⊗")
+                                                    .fill(egui::Color32::DARK_RED),
+                                            )
+                                            .clicked()
+                                        {
+                                            command = Some(handler::ToolResponse::Delete(k));
+                                        }
+                                        ui.add_space(4.);
+
+                                        ui.add(egui::Checkbox::without_text(
+                                            &mut meta.construction,
+                                        ));
+                                        ui.add(
+                                            egui::Image::new(egui::include_image!(
+                                                "../../assets/emoji_u1f6a7.png"
+                                            ))
+                                            .rounding(5.0),
+                                        );
+                                    },
+                                );
+                            });
+
+                            if show_more {
+                                ui.separator();
                             }
                         });
                     });
