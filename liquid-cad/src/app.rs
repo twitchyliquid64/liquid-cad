@@ -338,6 +338,10 @@ impl eframe::App for App {
                         if ui.button("Quick save").clicked() {
                             self.save(frame.storage_mut().unwrap());
                         }
+                        ui.separator();
+                        if ui.button("Reset egui state").clicked() {
+                            ctx.memory_mut(|mem| *mem = Default::default());
+                        }
                     });
                 }
                 ui.add_space(8.0);
@@ -351,19 +355,22 @@ impl eframe::App for App {
                         zoom = true;
                     }
                     ui.separator();
-                    if ui.button("Clear selection   (Esc)").clicked() {
-                        self.drawing.selection_clear();
-                    }
-                    if ui.button("Select all   (Ctrl-A)").clicked() {
-                        self.drawing.select_all();
-                    }
-                    ui.separator();
                     if ui.button("Solve step").clicked() {
                         self.drawing.changed_in_ui();
                     }
                     // if ui.button("Bruteforce solve").clicked() {
                     //     self.drawing.bruteforce_solve();
                     // }
+                });
+                ui.add_space(8.0);
+
+                ui.menu_button("Selection", |ui| {
+                    if ui.button("Clear   (Esc)").clicked() {
+                        self.drawing.selection_clear();
+                    }
+                    if ui.button("Select all   (Ctrl-A)").clicked() {
+                        self.drawing.select_all();
+                    }
                 });
 
                 ui.add_space(8.0);
@@ -385,7 +392,28 @@ impl eframe::App for App {
                         &mut self.drawing.drag_features_enabled,
                         "Allow dragging features",
                     );
-                    ui.add_space(6.0);
+                    ui.add_space(10.0);
+
+                    let amt = ctx.animate_bool_with_time(
+                        "error_display".into(),
+                        self.drawing.last_solve_error.is_some(),
+                        0.4,
+                    );
+                    ui.style_mut().visuals.override_text_color =
+                        Some(egui::Color32::RED.linear_multiply(amt));
+
+                    if ui
+                        .add(
+                            egui::Label::new(format!(
+                                "⚠ Solver inconsistency! avg: {:.3}mm",
+                                self.drawing.last_solve_error.unwrap_or(0.0)
+                            ))
+                            .sense(egui::Sense::click()),
+                        )
+                        .clicked()
+                    {
+                        self.drawing.changed_in_ui();
+                    };
                 });
             });
         });

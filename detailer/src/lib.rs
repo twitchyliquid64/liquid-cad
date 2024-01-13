@@ -969,6 +969,12 @@ impl<'a> Widget<'a> {
             ui.add_space(2.0);
             ui.add(egui::Slider::new(&mut self.drawing.props.flatten_tolerance, 0.0001..=5.0)
                     .text("Flatten tolerance").suffix("mm").logarithmic(true));
+
+            if let Some(err) = self.drawing.last_solve_error {
+                ui.add(egui::Label::new(format!("⚠ Solver is inconsistent!! avg err: {:.3}mm", err)));
+                ui.add_space(5.0);
+            }
+
             ui.add_space(5.0);
 
             use std::cell::OnceCell;

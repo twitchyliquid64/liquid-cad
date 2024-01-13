@@ -109,6 +109,8 @@ pub struct Data {
     pub menu_state: ContextMenuData,
     pub drag_features_enabled: bool,
     pub drag_dimensions_enabled: bool,
+
+    pub last_solve_error: Option<f64>,
 }
 
 impl Default for Data {
@@ -125,6 +127,7 @@ impl Default for Data {
             menu_state: ContextMenuData::default(),
             drag_features_enabled: true,
             drag_dimensions_enabled: true,
+            last_solve_error: None,
         }
     }
 }
@@ -157,6 +160,7 @@ impl Data {
     )> {
         let equations = self.equations();
         if equations.len() == 0 {
+            self.last_solve_error = None;
             return None;
         }
 
@@ -183,6 +187,7 @@ impl Data {
         // Solve the rest using an iterative solver.
         let residuals = solver.all_residuals(&mut sub_solver_state);
         if residuals.len() == 0 {
+            self.last_solve_error = None;
             return None;
         }
         let initials = unresolved
@@ -214,10 +219,13 @@ impl Data {
         let mut solver =
             eq::solve::DumbassSolver::new_with_initials(params, &solver_state, initials);
         let results = match solver.solve(&mut solver_state) {
-            Ok(results) => Some(results),
+            Ok(results) => {
+                self.last_solve_error = None;
+                Some(results)
+            }
             Err((avg_err, results)) => {
-                println!("solve failed: {}", avg_err);
-                if avg_err < 24.0 {
+                self.last_solve_error = Some(avg_err);
+                if avg_err < 32.0 {
                     Some(results)
                 } else {
                     None
