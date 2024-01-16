@@ -3,6 +3,8 @@ use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMe
 use drawing::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 use drawing::{Group, GroupType};
 
+const FEATURE_NAME_WIDTH: f32 = 88.0;
+
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Tab {
     #[default]
@@ -707,12 +709,14 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [80., text_height * 1.4],
+            ui.add(
                 egui::Label::new(format!("Point {:?}", k.data()))
                     .wrap(false)
                     .truncate(true),
             );
+            if r.x - ui.available_width() < FEATURE_NAME_WIDTH {
+                ui.add_space(FEATURE_NAME_WIDTH - (r.x - ui.available_width()));
+            }
 
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
@@ -749,15 +753,16 @@ impl<'a> Widget<'a> {
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [80., text_height * 1.4],
+            ui.add(
                 egui::Label::new(format!("Line {:?}", k.data()))
                     .wrap(false)
                     .truncate(true),
             );
+            if r.x - ui.available_width() < FEATURE_NAME_WIDTH {
+                ui.add_space(FEATURE_NAME_WIDTH - (r.x - ui.available_width()));
+            }
 
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
@@ -788,15 +793,16 @@ impl<'a> Widget<'a> {
     ) {
         ui.horizontal(|ui| {
             let r = ui.available_size();
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [80., text_height * 1.4],
+            ui.add(
                 egui::Label::new(format!("Arc {:?}", k.data()))
                     .wrap(false)
                     .truncate(true),
             );
+            if r.x - ui.available_width() < FEATURE_NAME_WIDTH {
+                ui.add_space(FEATURE_NAME_WIDTH - (r.x - ui.available_width()));
+            }
 
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
@@ -831,12 +837,14 @@ impl<'a> Widget<'a> {
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
-            ui.add_sized(
-                [80., text_height * 1.4],
+            ui.add(
                 egui::Label::new(format!("Circle {:?}", k.data()))
                     .wrap(false)
                     .truncate(true),
             );
+            if r.x - ui.available_width() < FEATURE_NAME_WIDTH {
+                ui.add_space(FEATURE_NAME_WIDTH - (r.x - ui.available_width()));
+            }
 
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
