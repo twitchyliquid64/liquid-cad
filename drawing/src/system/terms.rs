@@ -9,7 +9,8 @@ pub enum TermType {
     PositionX,
     PositionY,
     ScalarRadius,
-    ScalarGlobalAngle,
+    ScalarGlobalCos,
+    ScalarGlobalSin,
 }
 
 /// Represents a term in the system of equations.
@@ -28,13 +29,16 @@ impl PartialEq for TermRef {
 
 impl std::fmt::Display for TermRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use TermType::{PositionX, PositionY, ScalarDistance, ScalarGlobalAngle, ScalarRadius};
+        use TermType::{
+            PositionX, PositionY, ScalarDistance, ScalarGlobalCos, ScalarGlobalSin, ScalarRadius,
+        };
         match self.t {
             ScalarDistance => write!(f, "d{}", self.base),
             PositionX => write!(f, "x{}", self.base),
             PositionY => write!(f, "y{}", self.base),
             ScalarRadius => write!(f, "r{}", self.base),
-            ScalarGlobalAngle => write!(f, "g{}", self.base),
+            ScalarGlobalCos => write!(f, "c{}", self.base),
+            ScalarGlobalSin => write!(f, "s{}", self.base),
         }
     }
 }
@@ -90,10 +94,18 @@ impl TermAllocator {
                     for_feature: self.by_base.get(&base).copied(),
                 })
             }
-            (Some("g"), Some(base)) => {
+            (Some("c"), Some(base)) => {
                 let base: usize = base.parse().ok()?;
                 Some(TermRef {
-                    t: TermType::ScalarGlobalAngle,
+                    t: TermType::ScalarGlobalCos,
+                    base,
+                    for_feature: self.by_base.get(&base).copied(),
+                })
+            }
+            (Some("s"), Some(base)) => {
+                let base: usize = base.parse().ok()?;
+                Some(TermRef {
+                    t: TermType::ScalarGlobalSin,
                     base,
                     for_feature: self.by_base.get(&base).copied(),
                 })

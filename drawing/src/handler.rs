@@ -355,7 +355,7 @@ impl Handler {
                     drawing.add_constraint(Constraint::LineAngle(
                         ConstraintMeta::default(),
                         k,
-                        0.539,
+                        0.0,
                     ));
                     tools.clear();
                 }

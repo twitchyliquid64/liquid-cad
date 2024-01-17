@@ -59,39 +59,47 @@ impl DumbassSolverState {
     pub fn new(
         concrete: HashMap<Variable, Concrete>,
         solve_for: Vec<Variable>,
-        residuals: Vec<Expression>,
+        mut residuals: Vec<Expression>,
     ) -> Self {
         let jacobians: Vec<Expression> = solve_for
             .iter()
-            .map(|var| {
-                residuals.iter().map(move |fx| {
-                    let mut has_trig = false;
-                    fx.walk(&mut |e| match e {
-                        Expression::Trig(..) => {
-                            has_trig = true;
-                            false
-                        }
-                        _ => true,
-                    });
-
-                    let jfx = fx.derivative_wrt(&var);
-
-                    if has_trig {
-                        Expression::Quotient(
-                            Box::new(jfx),
-                            Box::new(Expression::Integer(12.into())),
-                        )
-                    } else {
-                        jfx
-                    }
-                })
-            })
+            .map(|var| residuals.iter().map(move |fx| fx.derivative_wrt(&var)))
             .flatten()
             .collect();
 
-        // for (i, r) in residuals.iter().enumerate() {
-        //     println!("residual: {}", r);
-        // }
+        for r in residuals.iter_mut() {
+            let mut needs_scaling = false;
+            let mut var: Option<Variable> = None;
+            r.walk(&mut |e| match e {
+                Expression::Variable(v) => {
+                    // Hack to find residuals for the global angle
+                    if v.starts_with("c") || v.starts_with("s") {
+                        needs_scaling = true;
+                        var = Some(v.clone());
+                        false
+                    } else {
+                        true
+                    }
+                }
+                _ => true,
+            });
+
+            if needs_scaling {
+                let original = r.clone();
+                let v = "d".to_string() + &var.unwrap()[1..];
+                *r = Expression::Product(
+                    Box::new(Expression::Product(
+                        Box::new(Expression::Variable(v.as_str().into())),
+                        Box::new(Expression::Rational(
+                            Rational::new(9.into(), 10.into()),
+                            true,
+                        )),
+                    )),
+                    Box::new(original),
+                );
+            }
+            // println!("residual: {}", r);
+        }
 
         Self {
             resolved: concrete,
@@ -156,8 +164,6 @@ pub struct DumbassSolver {
     fx: OVector<f64, Dyn>,
     // jacobian by [variable, residual]
     j: OMatrix<f64, Dyn, Dyn>,
-    // scaling of adjustment based on residual
-    scale: OVector<f64, Dyn>,
 
     // sign bitfield of adjustment at last iteration
     adj_sign_hash: Option<usize>,
@@ -181,7 +187,6 @@ impl DumbassSolver {
             momentum: params.momentum_windup,
             momentum_div: params.momentum_div,
             params,
-            scale: DVector::from_element(st.residuals.len(), 1.0),
         }
     }
 
@@ -197,9 +202,7 @@ impl DumbassSolver {
     }
 
     fn solve_step(&mut self, st: &mut DumbassSolverState) -> f64 {
-        let DumbassSolver {
-            x, fx, j, scale, ..
-        } = self;
+        let DumbassSolver { x, fx, j, .. } = self;
 
         let mut resolver = VarResolver {
             x: &x,
@@ -213,9 +216,13 @@ impl DumbassSolver {
             // correct length, see DumbassSolverState::new
             let j_fn = unsafe { st.jacobians.get_unchecked(i) };
 
-            let mut v = match j_fn.evaluate_1(&mut resolver).unwrap() {
-                Concrete::Float(f) => f as f64,
-                Concrete::Rational(r) => r.to_f64().unwrap(),
+            let mut v = match j_fn.evaluate_1(&mut resolver) {
+                Ok(f) => match f {
+                    Concrete::Float(f) => f as f64,
+                    Concrete::Rational(r) => r.to_f64().unwrap(),
+                },
+                Err(ResolveErr::DivByZero) => 0.0,
+                Err(e) => panic!("err: {:?}", e),
             };
             // TODO: These conditionals are not quite right
             if v.is_nan() {
@@ -261,9 +268,6 @@ impl DumbassSolver {
         //     j,
         //     fx
         // );
-
-        // Scale residuals
-        fx.component_mul_assign(scale);
 
         // Compute adjustment
         let adjustment = (fx.transpose() * &*j).transpose() * self.params.step_mul;

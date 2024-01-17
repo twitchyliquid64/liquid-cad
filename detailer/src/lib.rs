@@ -673,18 +673,18 @@ impl<'a> Widget<'a> {
             let text_rect = ui.add(egui::Label::new("Line angle").wrap(false)).rect;
             ui.add_space(r.x / 2. - text_rect.width() - 3.0 * ui.spacing().item_spacing.x);
 
-            let mut degrees = amt.to_degrees();
+            let mut degrees = (*amt + (0.5 * std::f32::consts::PI)).to_degrees();
 
             let dv = ui.add_sized(
                 [50., text_height * 1.4],
                 egui::DragValue::new(&mut degrees)
-                    .clamp_range(0.0..=360.0)
+                    .clamp_range(-360.0..=360.0)
                     .speed(0.1)
                     .suffix("°"),
             );
 
             if dv.changed() {
-                *amt = degrees.to_radians() % std::f32::consts::TAU;
+                *amt = degrees.to_radians() - (0.5 * std::f32::consts::PI);
                 *changed |= true;
             }
 

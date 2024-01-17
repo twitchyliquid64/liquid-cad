@@ -593,9 +593,12 @@ impl Constraint {
                     let td = &drawing
                         .terms
                         .get_feature_term(*l1, TermType::ScalarDistance);
-                    let ta = &drawing
+                    let tc = &drawing
                         .terms
-                        .get_feature_term(*l1, TermType::ScalarGlobalAngle);
+                        .get_feature_term(*l1, TermType::ScalarGlobalCos);
+                    let ts = &drawing
+                        .terms
+                        .get_feature_term(*l1, TermType::ScalarGlobalSin);
                     let (x1, y1, x2, y2) = (
                         &drawing.terms.get_feature_term(*f1, TermType::PositionX),
                         &drawing.terms.get_feature_term(*f1, TermType::PositionY),
@@ -605,31 +608,27 @@ impl Constraint {
 
                     vec![
                         Expression::Equal(
-                            Box::new(Expression::Variable(ta.into())),
+                            Box::new(Expression::Variable(tc.into())),
                             Box::new(Expression::Rational(
                                 Rational::from_float(angle.cos()).unwrap(),
                                 true,
                             )),
                         ),
                         Expression::Equal(
-                            Box::new(Expression::Variable(ta.into())),
-                            Box::new(Expression::Neg(Box::new(cosine_angle_eq(
-                                td, x1, y1, x2, y2,
-                            )))),
+                            Box::new(Expression::Variable(ts.into())),
+                            Box::new(Expression::Rational(
+                                Rational::from_float(angle.sin()).unwrap(),
+                                true,
+                            )),
                         ),
-                        // Expression::Equal(
-                        //     Box::new(Expression::Variable(y2.into())),
-                        //     Box::new(Expression::Sum(
-                        //         Box::new(Expression::Variable(y1.into())),
-                        //         Box::new(Expression::Product(
-                        //             Box::new(distance_eq(td, x1, y1, x2, y2)),
-                        //             Box::new(Expression::Trig(
-                        //                 TrigOp::Sin,
-                        //                 Box::new(Expression::Variable(ta.into())),
-                        //             )),
-                        //         )),
-                        //     )),
-                        // ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(tc.into())),
+                            Box::new(cosine_angle_eq(td, x1, x2)),
+                        ),
+                        Expression::Equal(
+                            Box::new(Expression::Variable(ts.into())),
+                            Box::new(sine_angle_eq(td, y1, y2)),
+                        ),
                     ]
                 } else {
                     unreachable!();
@@ -933,46 +932,40 @@ fn distance_eq(_d: &TermRef, x1: &TermRef, y1: &TermRef, x2: &TermRef, y2: &Term
     )
 }
 
-fn cosine_angle_eq(
-    d: &TermRef,
-    x1: &TermRef,
-    y1: &TermRef,
-    x2: &TermRef,
-    y2: &TermRef,
-) -> Expression {
+fn cosine_angle_eq(d: &TermRef, x1: &TermRef, x2: &TermRef) -> Expression {
     // dot = ax × bx + ay × by
-    // a = [1, -1]
+    // a = [1, 0]
 
-    let dot = Expression::Sum(
-        Box::new(Expression::Product(
-            Box::new(Expression::Integer(1.into())),
-            Box::new(Expression::Difference(
-                Box::new(Expression::Variable(x2.into())),
-                Box::new(Expression::Variable(x1.into())),
-            )),
-        )),
-        Box::new(Expression::Product(
-            Box::new(Expression::Integer((-1).into())),
-            Box::new(Expression::Difference(
-                Box::new(Expression::Variable(y2.into())),
-                Box::new(Expression::Variable(y1.into())),
-            )),
+    let dot = Expression::Product(
+        Box::new(Expression::Integer((-1).into())),
+        Box::new(Expression::Difference(
+            Box::new(Expression::Variable(x2.into())),
+            Box::new(Expression::Variable(x1.into())),
         )),
     );
 
     // The cosine of the angle between two vectors is equal to the dot product of the vectors,
     // divided by the product of their magnitude.
-    // a magnitude is sqrt(1), so we just need to use b's magnitude which is just its distance.
-    Expression::Quotient(
-        Box::new(dot),
-        Box::new(Expression::Product(
-            Box::new(Expression::Variable(d.into())),
-            Box::new(Expression::Sqrt(
-                Box::new(Expression::Integer(1.into())),
-                false,
-            )),
+    // a magnitude is 1, so we just need to use b's magnitude which is just its distance.
+    Expression::Quotient(Box::new(dot), Box::new(Expression::Variable(d.into())))
+}
+
+fn sine_angle_eq(d: &TermRef, y1: &TermRef, y2: &TermRef) -> Expression {
+    // dot = ax × bx + ay × by
+    // a = [0, 1]
+
+    let dot = Expression::Product(
+        Box::new(Expression::Integer((-1).into())),
+        Box::new(Expression::Difference(
+            Box::new(Expression::Variable(y2.into())),
+            Box::new(Expression::Variable(y1.into())),
         )),
-    )
+    );
+
+    // The cosine of the angle between two vectors is equal to the dot product of the vectors,
+    // divided by the product of their magnitude.
+    // a magnitude is 1, so we just need to use b's magnitude which is just its distance.
+    Expression::Quotient(Box::new(dot), Box::new(Expression::Variable(d.into())))
 }
 
 #[cfg(test)]

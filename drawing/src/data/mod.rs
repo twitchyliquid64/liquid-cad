@@ -227,7 +227,7 @@ impl Data {
             }
             Err((avg_err, results)) => {
                 self.last_solve_error = Some(avg_err);
-                if avg_err < 32.0 {
+                if avg_err < 1800.0 {
                     Some(results)
                 } else {
                     None
@@ -294,7 +294,8 @@ impl Data {
                     TermType::PositionY => Some(*y),
                     TermType::ScalarDistance => unreachable!(),
                     TermType::ScalarRadius => unreachable!(),
-                    TermType::ScalarGlobalAngle => unreachable!(),
+                    TermType::ScalarGlobalCos => unreachable!(),
+                    TermType::ScalarGlobalSin => unreachable!(),
                 },
                 Some(Feature::LineSegment(_, f1, f2)) => match term.t {
                     TermType::ScalarDistance => {
@@ -310,7 +311,7 @@ impl Data {
 
                         Some(a.distance(b))
                     }
-                    TermType::ScalarGlobalAngle => {
+                    TermType::ScalarGlobalCos => {
                         let (a, b) = match (
                             self.features.get(*f1).unwrap(),
                             self.features.get(*f2).unwrap(),
@@ -320,7 +321,19 @@ impl Data {
                             }
                             _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
                         };
-                        Some((a - b).angle())
+                        Some((a - b).angle().cos())
+                    }
+                    TermType::ScalarGlobalSin => {
+                        let (a, b) = match (
+                            self.features.get(*f1).unwrap(),
+                            self.features.get(*f2).unwrap(),
+                        ) {
+                            (Feature::Point(_, x1, y1), Feature::Point(_, x2, y2)) => {
+                                (egui::Pos2 { x: *x1, y: *y1 }, egui::Pos2 { x: *x2, y: *y2 })
+                            }
+                            _ => panic!("unexpected subkey types: {:?} & {:?}", f1, f2),
+                        };
+                        Some((a - b).angle().sin())
                     }
                     TermType::PositionX => unreachable!(),
                     TermType::PositionY => unreachable!(),
@@ -331,7 +344,8 @@ impl Data {
                     TermType::PositionX => unreachable!(),
                     TermType::PositionY => unreachable!(),
                     TermType::ScalarDistance => unreachable!(),
-                    TermType::ScalarGlobalAngle => unreachable!(),
+                    TermType::ScalarGlobalCos => unreachable!(),
+                    TermType::ScalarGlobalSin => unreachable!(),
                 },
                 _ => None,
             }
@@ -353,7 +367,8 @@ impl Data {
                         TermType::PositionY => *y = v as f32,
                         TermType::ScalarDistance => unreachable!(),
                         TermType::ScalarRadius => unreachable!(),
-                        TermType::ScalarGlobalAngle => unreachable!(),
+                        TermType::ScalarGlobalCos => unreachable!(),
+                        TermType::ScalarGlobalSin => unreachable!(),
                     }
                     true
                 }
@@ -363,7 +378,8 @@ impl Data {
                         TermType::PositionY => unreachable!(),
                         TermType::ScalarDistance => {}
                         TermType::ScalarRadius => unreachable!(),
-                        TermType::ScalarGlobalAngle => {}
+                        TermType::ScalarGlobalCos => {}
+                        TermType::ScalarGlobalSin => {}
                     }
                     false
                 }
@@ -373,7 +389,8 @@ impl Data {
                         TermType::PositionX => unreachable!(),
                         TermType::PositionY => unreachable!(),
                         TermType::ScalarDistance => unreachable!(),
-                        TermType::ScalarGlobalAngle => unreachable!(),
+                        TermType::ScalarGlobalCos => unreachable!(),
+                        TermType::ScalarGlobalSin => unreachable!(),
                     }
                     true
                 }

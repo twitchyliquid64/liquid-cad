@@ -42,8 +42,10 @@ pub mod solve {
     pub use crate::sub_solve::*;
 }
 
+pub const MAX_VAR_LENGTH: usize = 12;
+
 /// Algebraic unknown, identified by a name up to 12 characters long.
-pub type Variable = heapless::String<12>;
+pub type Variable = heapless::String<MAX_VAR_LENGTH>;
 
 /// Algebraic integer.
 pub type Integer = num::bigint::BigInt;

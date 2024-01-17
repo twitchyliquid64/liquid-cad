@@ -958,6 +958,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "eq",
+ "heapless",
  "kurbo 0.10.4",
  "num",
  "serde",

@@ -350,7 +350,7 @@ impl Tool {
             Tool::Lerp(_) => Some("I"),
             Tool::Equal(_) => Some("E"),
             Tool::Parallel(_) => None,
-            Tool::Angle => None,
+            Tool::Angle => Some("N"),
         }
     }
     pub fn long_tooltip(&self) -> Option<&'static str> {
@@ -366,7 +366,7 @@ impl Tool {
             Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
             Tool::Equal(_) => Some("Constrains a line/circle to be equal in length/radius to another line/circle."),
             Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nWARNING: THIS TOOL IS EXPERIMENTAL and not working properly.\n\nClick on the first line, and then the second line to create this constraint."),
-            Tool::Angle => Some("Constrains a line to have some angle clockwise from the vertical axis.\n\nWARNING: THIS TOOL IS EXPERIMENTAL."),
+            Tool::Angle => Some("Constrains a line to have some angle clockwise from the vertical axis."),
         }
     }
 
@@ -1208,59 +1208,70 @@ impl Toolbar {
 
         // Hotkeys for switching tools
         if response.has_focus() && !response.dragged() {
-            let (l, p, s, d, v, h, i2, e, r, c) = ui.input(|i| {
-                (
-                    i.key_pressed(egui::Key::L),
-                    i.key_pressed(egui::Key::P),
-                    i.key_pressed(egui::Key::S),
-                    i.key_pressed(egui::Key::D),
-                    i.key_pressed(egui::Key::V),
-                    i.key_pressed(egui::Key::H),
-                    i.key_pressed(egui::Key::I),
-                    i.key_pressed(egui::Key::E),
-                    i.key_pressed(egui::Key::R),
-                    i.key_pressed(egui::Key::C),
-                )
+            let (l, p, s, d, v, h, i2, e, r, c, n) = ui.input(|i| {
+                if i.events.len() == 0 {
+                    (
+                        false, false, false, false, false, false, false, false, false, false, false,
+                    )
+                } else {
+                    (
+                        i.key_pressed(egui::Key::L),
+                        i.key_pressed(egui::Key::P),
+                        i.key_pressed(egui::Key::S),
+                        i.key_pressed(egui::Key::D),
+                        i.key_pressed(egui::Key::V),
+                        i.key_pressed(egui::Key::H),
+                        i.key_pressed(egui::Key::I),
+                        i.key_pressed(egui::Key::E),
+                        i.key_pressed(egui::Key::R),
+                        i.key_pressed(egui::Key::C),
+                        i.key_pressed(egui::Key::N),
+                    )
+                }
             });
-            match (l, p, s, d, v, h, i2, e, r, c) {
-                (true, _, _, _, _, _, _, _, _, _) => {
+            match (l, p, s, d, v, h, i2, e, r, c, n) {
+                (true, _, _, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Line(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, true, _, _, _, _, _, _, _, _) => {
+                (_, true, _, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Point);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, true, _, _, _, _, _, _, _) => {
+                (_, _, true, _, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Fixed);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, true, _, _, _, _, _, _) => {
+                (_, _, _, true, _, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Dimension);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, true, _, _, _, _, _) => {
+                (_, _, _, _, true, _, _, _, _, _, _) => {
                     self.current = Some(Tool::Vertical);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, true, _, _, _, _) => {
+                (_, _, _, _, _, true, _, _, _, _, _) => {
                     self.current = Some(Tool::Horizontal);
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, true, _, _, _) => {
+                (_, _, _, _, _, _, true, _, _, _, _) => {
                     self.current = Some(Tool::Lerp(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, _, true, _, _) => {
+                (_, _, _, _, _, _, _, true, _, _, _) => {
                     self.current = Some(Tool::Equal(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, _, _, true, _) => {
+                (_, _, _, _, _, _, _, _, true, _, _) => {
                     self.current = Some(Tool::Arc(None));
                     return Some(ToolResponse::Handled);
                 }
-                (_, _, _, _, _, _, _, _, _, true) => {
+                (_, _, _, _, _, _, _, _, _, true, _) => {
                     self.current = Some(Tool::Circle(None));
+                    return Some(ToolResponse::Handled);
+                }
+                (_, _, _, _, _, _, _, _, _, _, true) => {
+                    self.current = Some(Tool::Angle);
                     return Some(ToolResponse::Handled);
                 }
                 _ => {}

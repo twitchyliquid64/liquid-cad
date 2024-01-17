@@ -13,6 +13,7 @@ serde.workspace = true
 
 eq.workspace = true
 num.workspace = true
+heapless.workspace = true
 kurbo.workspace = true
 
 truck-modeling.workspace = true
