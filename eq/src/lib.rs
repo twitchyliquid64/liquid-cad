@@ -119,6 +119,14 @@ impl From<&Expression> for ExprHash {
     }
 }
 
+/// An instantiation of a function which can be evaluated.
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct Func {
+    pub parameters: heapless::Vec<Box<Expression>, 8>,
+    pub func: Box<fn(heapless::Vec<Concrete, 8>) -> Concrete>,
+    pub d_wrt: Option<Box<fn(&Variable) -> Expression>>,
+}
+
 /// Equation element.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum Expression {
@@ -153,7 +161,8 @@ pub enum Expression {
     Quotient(Box<Self>, Box<Self>),
     /// Power of one expression by another.
     Power(Box<Self>, Box<Self>),
-    // Something(heapless::Vec<Box<Self>, MAX_EQ_ELEMENTS>),
+    /// Dynamically evaluated function.
+    Func(Func),
 }
 
 /// An operation to apply when rearranging the equation
@@ -194,6 +203,8 @@ impl Expression {
             | Expression::Trig(_, a) => a.walk(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
+
+            Expression::Func(f) => f.parameters.iter().for_each(|p| p.walk(cb)),
         }
     }
     pub fn walk_mut(&mut self, cb: &mut impl FnMut(&mut Expression) -> bool) {
@@ -221,6 +232,8 @@ impl Expression {
             | Expression::Trig(_, a) => a.walk_mut(cb),
             // no sub-expressions
             Expression::Integer(_) | Expression::Rational(_, _) | Expression::Variable(_) => {}
+
+            Expression::Func(f) => f.parameters.iter_mut().for_each(|p| p.walk_mut(cb)),
         }
     }
 
@@ -251,6 +264,9 @@ impl Expression {
                 }
                 Expression::Subtitution(_, _, _) => {
                     cost += 35;
+                }
+                Expression::Func(_) => {
+                    cost += 45;
                 }
                 _ => {}
             };
@@ -296,6 +312,7 @@ impl Expression {
             Expression::Integer(_i) => 1,
             Expression::Rational(_r, _) => 1,
             Expression::Variable(_v) => 1,
+            Expression::Func(_) => 1,
 
             Expression::Equal(a, b) => panic!("num_solutions() called on {:?} = {:?}", a, b),
         }
@@ -374,6 +391,15 @@ impl Expression {
             Expression::Variable(v) => Ok(r.resolve_variable(v)?),
 
             Expression::Equal(a, b) => panic!("evaluate_1() called on {:?} = {:?}", a, b),
+
+            Expression::Func(f) => {
+                let mut params: heapless::Vec<Concrete, 8> = heapless::Vec::new();
+                for p in f.parameters.iter() {
+                    params.push(p.evaluate_1(r)?).ok();
+                }
+
+                Ok((f.func)(params))
+            }
         }
     }
 
@@ -492,6 +518,17 @@ impl Expression {
             Expression::Variable(v) => Ok(r.resolve_variable(v)?),
 
             Expression::Equal(a, b) => panic!("evaluate() called on {:?} = {:?}", a, b),
+
+            Expression::Func(f) => {
+                let mut params: heapless::Vec<Concrete, 8> = heapless::Vec::new();
+                for p in f.parameters.iter() {
+                    // FIXME: This is wrong for parameters with multiple solutions, we should
+                    // distribute the which value across parameters like we do for binary ops
+                    params.push(p.evaluate(r, which)?).ok();
+                }
+
+                Ok((f.func)(params))
+            }
         }
     }
 
@@ -526,6 +563,8 @@ impl Expression {
             | Expression::Rational(_, _)
             | Expression::Variable(_)
             | Expression::Subtitution(_, _, _) => {}
+
+            Expression::Func(f) => f.parameters.iter_mut().for_each(|p| p.simplify()),
         }
 
         // handle any simplifications we can do at our end
@@ -1448,6 +1487,14 @@ impl Expression {
                 )),
             ),
 
+            Expression::Func(f) => {
+                if let Some(d_wrt) = &f.d_wrt {
+                    (d_wrt)(v)
+                } else {
+                    panic!("dynamic function has no partial derivative implementation");
+                }
+            }
+
             _ => todo!("d_wrt({:?})", self),
         }
     }
@@ -1596,6 +1643,17 @@ impl Display for Expression {
                 _ => write!(f, "({} * {})", a, b),
             },
             Expression::Power(a, b) => write!(f, "({})^{}", a, b),
+
+            Expression::Func(func) => {
+                write!(f, "func(")?;
+                for (i, p) in func.parameters.iter().enumerate() {
+                    write!(f, "{}", p)?;
+                    if i + 1 < func.parameters.len() {
+                        write!(f, ", ")?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -2042,6 +2100,30 @@ mod tests {
                 Rational::new(1.into(), 5.into()),
                 true,
             ))
+        );
+
+        let double_fn = |p: heapless::Vec<Concrete, 8>| Concrete::Float(p[0].as_f64() * 2.0);
+        assert_eq!(
+            {
+                let mut expr = Expression::Func(Func {
+                    parameters: heapless::Vec::from_slice(&[Box::new(
+                        Expression::parse("2 + 3", false).unwrap(),
+                    )])
+                    .unwrap(),
+                    func: Box::new(double_fn),
+                    d_wrt: None,
+                });
+                expr.simplify();
+                expr
+            },
+            Expression::Func(Func {
+                parameters: heapless::Vec::from_slice(&[Box::new(
+                    Expression::parse("5", false).unwrap()
+                )])
+                .unwrap(),
+                func: Box::new(double_fn),
+                d_wrt: None,
+            })
         );
 
         // TODO: support factoring rationals and across types
@@ -2554,6 +2636,46 @@ mod tests {
             .evaluate(&mut StaticResolver::new([]), 3) // -3 - -2
             .unwrap(),
                 Concrete::Float(f) if (f + 1.0).abs() < 0.001));
+
+        // Test functions
+        let double_fn = |p: heapless::Vec<Concrete, 8>| Concrete::Float(p[0].as_f64() * 2.0);
+        assert!(matches!(Expression::Func(Func {
+                parameters: heapless::Vec::from_slice(&[Box::new(
+                    Expression::parse("2 + 3", false).unwrap(),
+                )])
+                .unwrap(),
+                func: Box::new(double_fn),
+                d_wrt: None,
+            })
+            .evaluate_1(&mut StaticResolver::new([]))
+            .unwrap(),
+                Concrete::Float(f) if (f - 10.0).abs() < 0.001));
+        assert!(matches!(Expression::Func(Func {
+                parameters: heapless::Vec::from_slice(&[Box::new(
+                    Expression::parse("2 + 3", false).unwrap(),
+                )])
+                .unwrap(),
+                func: Box::new(double_fn),
+                d_wrt: None,
+            })
+            .evaluate(&mut StaticResolver::new([]), 0)
+            .unwrap(),
+                Concrete::Float(f) if (f - 10.0).abs() < 0.001));
+
+        assert!(matches!(Expression::Func(Func {
+                parameters: heapless::Vec::from_slice(&[Box::new(
+                    Expression::Variable("v".into()),
+                )])
+                .unwrap(),
+                func: Box::new(double_fn),
+                d_wrt: None,
+            })
+            .evaluate_1(&mut StaticResolver::new([(
+                    "v".into(),
+                    Concrete::Float(0.5)
+                )]))
+            .unwrap(),
+                Concrete::Float(f) if (f - 1.0).abs() < 0.001));
     }
 
     #[test]
