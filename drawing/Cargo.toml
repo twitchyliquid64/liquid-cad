@@ -7,18 +7,14 @@ rust-version = "1.71"
 
 
 [dependencies]
-egui = "0.24.1"
-slotmap = {version = "^1.0", features = ["serde"]}
-serde = { version = "1", features = ["derive"] }
+egui.workspace = true
+slotmap.workspace = true
+serde.workspace = true
 
-# For solver
-eq = {version = "0.1.0", path = "../eq"}
-num = "0.4"
+eq.workspace = true
+num.workspace = true
+kurbo.workspace = true
 
-# For arcs
-kurbo = "0.10"
-
-# For 3d
-truck-modeling = "0.5.*"
-truck-polymesh = "0.5.*"
-truck-meshalgo = "*"
+truck-modeling.workspace = true
+truck-polymesh.workspace = true
+truck-meshalgo.workspace = true

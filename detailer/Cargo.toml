@@ -7,9 +7,10 @@ rust-version = "1.71"
 
 
 [dependencies]
-egui = "0.24.1"
-egui_extras = {version = "0.24.1", features = ["all_loaders"]}
-egui-toast = "0.10"
-slotmap = {version = "^1.0", features = ["serde"]}
-serde = { version = "1", features = ["derive"] }
-drawing = {version = "0.1.0", path = "../drawing"}
+drawing.workspace = true
+
+egui.workspace = true
+egui_extras.workspace = true
+egui-toast.workspace = true
+slotmap.workspace = true
+serde.workspace = true

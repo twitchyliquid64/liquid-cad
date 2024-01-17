@@ -7,27 +7,22 @@ rust-version = "1.71"
 
 
 [dependencies]
-drawing = {version = "0.1.0", path = "../drawing"}
-detailer = {version = "0.1.0", path = "../detailer"}
-helper = {version = "0.1.0", path = "../helper"}
+drawing.workspace = true
+detailer.workspace = true
+helper.workspace = true
 
-egui = "0.24.1"
-eframe = { version = "0.24.1", default-features = false, features = [
-    "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
-] }
-egui_extras = {version = "0.24.1", features = ["all_loaders"]}
-image = { version = "0.24", features = ["png"] }
-log = "0.4"
-egui-toast = "0.10"
+egui.workspace = true
+eframe.workspace = true
+egui_extras.workspace = true
+image.workspace = true
+log.workspace = true
+egui-toast.workspace = true
 
-rfd = {version = "0.12", default-features = false, features = ["xdg-portal"]}
+rfd.workspace = true
 
-slotmap = {version = "^1.0", features = ["serde"]}
-serde = { version = "1", features = ["derive"] }
-ron = { version = "0.8", features = ["integer128"] }
+slotmap.workspace = true
+serde.workspace = true
+ron.workspace = true
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

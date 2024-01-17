@@ -7,8 +7,8 @@ rust-version = "1.71"
 
 
 [dependencies]
-heapless = "0.7"
-num = "0.4"
-chumsky = "1.0.0-alpha.4"
+heapless.workspace = true
+num.workspace = true
 
-nalgebra = "0.32"
+chumsky.workspace = true
+nalgebra.workspace = true
