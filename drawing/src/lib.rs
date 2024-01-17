@@ -15,6 +15,9 @@ mod system;
 pub use handler::Handler;
 pub mod tools;
 
+pub const CONSTRUCTION_IMG: egui::ImageSource<'static> =
+    egui::include_image!("../../assets/emoji_u1f6a7.png");
+
 /// Colors describes the colors with which different elements should be styled.
 #[derive(Clone, Debug, Default)]
 pub struct Colors {
@@ -746,10 +749,7 @@ impl<'a> Widget<'a> {
                                             &mut meta.construction,
                                         ));
                                         ui.add(
-                                            egui::Image::new(egui::include_image!(
-                                                "../../assets/emoji_u1f6a7.png"
-                                            ))
-                                            .rounding(5.0),
+                                            egui::Image::new(crate::CONSTRUCTION_IMG).rounding(5.0),
                                         );
                                     },
                                 );
@@ -955,10 +955,7 @@ impl<'a> Widget<'a> {
                                             &mut meta.construction,
                                         ));
                                         ui.add(
-                                            egui::Image::new(egui::include_image!(
-                                                "../../assets/emoji_u1f6a7.png"
-                                            ))
-                                            .rounding(5.0),
+                                            egui::Image::new(crate::CONSTRUCTION_IMG).rounding(5.0),
                                         );
                                     },
                                 );

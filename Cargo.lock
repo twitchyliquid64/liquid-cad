@@ -1884,6 +1884,7 @@ dependencies = [
  "rfd",
  "ron",
  "serde",
+ "slotmap",
  "wasm-bindgen-futures",
 ]
 

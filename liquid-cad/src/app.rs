@@ -371,6 +371,46 @@ impl eframe::App for App {
                     if ui.button("Select all   (Ctrl-A)").clicked() {
                         self.drawing.select_all();
                     }
+                    ui.menu_button("Select feature...", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::Image::new(drawing::CONSTRUCTION_IMG).rounding(5.0));
+                            ui.checkbox(
+                                &mut self.drawing.select_action_inc_construction,
+                                "include construction features",
+                            );
+                        });
+                        ui.separator();
+                        use slotmap::Key;
+                        if ui.button("Points").clicked() {
+                            self.drawing.select_type(&drawing::Feature::Point(
+                                drawing::FeatureMeta::default(),
+                                0.,
+                                0.,
+                            ));
+                        }
+                        if ui.button("Lines").clicked() {
+                            self.drawing.select_type(&drawing::Feature::LineSegment(
+                                drawing::FeatureMeta::default(),
+                                drawing::FeatureKey::null(),
+                                drawing::FeatureKey::null(),
+                            ));
+                        }
+                        if ui.button("Circles").clicked() {
+                            self.drawing.select_type(&drawing::Feature::Circle(
+                                drawing::FeatureMeta::default(),
+                                drawing::FeatureKey::null(),
+                                0.,
+                            ));
+                        }
+                        if ui.button("Arcs").clicked() {
+                            self.drawing.select_type(&drawing::Feature::Arc(
+                                drawing::FeatureMeta::default(),
+                                drawing::FeatureKey::null(),
+                                drawing::FeatureKey::null(),
+                                drawing::FeatureKey::null(),
+                            ));
+                        }
+                    });
                 });
 
                 ui.add_space(8.0);

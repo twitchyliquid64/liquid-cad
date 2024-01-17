@@ -109,6 +109,7 @@ pub struct Data {
     pub menu_state: ContextMenuData,
     pub drag_features_enabled: bool,
     pub drag_dimensions_enabled: bool,
+    pub select_action_inc_construction: bool,
 
     pub last_solve_error: Option<f64>,
 }
@@ -127,6 +128,7 @@ impl Default for Data {
             menu_state: ContextMenuData::default(),
             drag_features_enabled: true,
             drag_dimensions_enabled: true,
+            select_action_inc_construction: false,
             last_solve_error: None,
         }
     }
@@ -727,6 +729,23 @@ impl Data {
     /// Selects all features.
     pub fn select_all(&mut self) {
         for k in self.features.keys().collect::<Vec<_>>() {
+            self.select_feature(&k, true);
+        }
+    }
+
+    /// Selects all features of the given type.
+    pub fn select_type(&mut self, f: &Feature) {
+        let t = std::mem::discriminant(f);
+        for k in self
+            .features
+            .iter()
+            .filter(|(_k, f)| {
+                std::mem::discriminant(*f) == t
+                    && (self.select_action_inc_construction || !f.is_construction())
+            })
+            .map(|(k, _f)| k)
+            .collect::<Vec<_>>()
+        {
             self.select_feature(&k, true);
         }
     }

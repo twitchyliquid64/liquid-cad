@@ -1,4 +1,5 @@
 use drawing::Handler;
+use drawing::CONSTRUCTION_IMG;
 use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
 use drawing::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 use drawing::{Group, GroupType};
@@ -721,10 +722,7 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
-            ui.add(
-                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
-                    .rounding(5.0),
-            );
+            ui.add(egui::Image::new(CONSTRUCTION_IMG).rounding(5.0));
 
             if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
                 ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
@@ -767,10 +765,7 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
-            ui.add(
-                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
-                    .rounding(5.0),
-            );
+            ui.add(egui::Image::new(CONSTRUCTION_IMG).rounding(5.0));
 
             if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
                 ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
@@ -807,10 +802,7 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
-            ui.add(
-                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
-                    .rounding(5.0),
-            );
+            ui.add(egui::Image::new(CONSTRUCTION_IMG).rounding(5.0));
 
             if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
                 ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
@@ -849,10 +841,7 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add(egui::Checkbox::without_text(&mut meta.construction))
                 .changed();
-            ui.add(
-                egui::Image::new(egui::include_image!("../../assets/emoji_u1f6a7.png"))
-                    .rounding(5.0),
-            );
+            ui.add(egui::Image::new(CONSTRUCTION_IMG).rounding(5.0));
 
             if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
                 ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);

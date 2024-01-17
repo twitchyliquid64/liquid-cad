@@ -13,7 +13,6 @@ https://github.com/twitchyliquid64/liquid-cad/assets/6328589/70ce6e84-25ff-4af1-
  * More work on Help page
  * Export to STEP
  * Arc dragging
- * Warn if solver tolerance if off in export UI
  * Broken constraint tools / solver stability (need help!):
  * * Line angle
  * * Lines parallel
