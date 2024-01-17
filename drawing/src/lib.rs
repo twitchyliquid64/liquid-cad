@@ -897,7 +897,11 @@ impl<'a> Widget<'a> {
                 .unwrap_or(false)
         });
 
-        let Data { features, .. } = self.drawing;
+        let Data {
+            features,
+            constraints,
+            ..
+        } = self.drawing;
 
         if let Some(Feature::LineSegment(meta, ..)) = features.get_mut(k) {
             egui::Area::new(egui::Id::new("drawing_ctx_menu"))
@@ -960,6 +964,71 @@ impl<'a> Widget<'a> {
                                     },
                                 );
                             });
+
+                            // If constrained to a certain length, show that
+                            if let Some(Constraint::LineLength(_, _, length, cardinality, ..)) =
+                                constraints.get_using_feature_and_type(
+                                    &k,
+                                    std::mem::discriminant(&Constraint::LineLength(
+                                        ConstraintMeta::default(),
+                                        k,
+                                        0.0,
+                                        None,
+                                        constraints::DimensionDisplay::default(),
+                                    )),
+                                )
+                            {
+                                ui.add_space(4.);
+                                ui.horizontal(|ui| {
+                                    ui.label("Length");
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::TOP),
+                                        |ui| {
+                                            ui.label(format!("{:.3}mm", length));
+                                        },
+                                    );
+                                });
+                                if let Some((c, _)) = cardinality {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Cardinality");
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::TOP),
+                                            |ui| {
+                                                ui.label(match c {
+                                                    constraints::Axis::LeftRight => "Horizontal",
+                                                    constraints::Axis::TopBottom => "Vertical",
+                                                });
+                                            },
+                                        );
+                                    });
+                                }
+                            }
+
+                            // If constrained to be horizontal/vertical, show that
+                            if let Some(Constraint::LineAlongCardinal(_, _, axis, ..)) = constraints
+                                .get_using_feature_and_type(
+                                    &k,
+                                    std::mem::discriminant(&Constraint::LineAlongCardinal(
+                                        ConstraintMeta::default(),
+                                        k,
+                                        constraints::Axis::TopBottom,
+                                    )),
+                                )
+                            {
+                                ui.add_space(4.);
+                                ui.horizontal(|ui| {
+                                    ui.label("Cardinality");
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::TOP),
+                                        |ui| {
+                                            ui.label(match axis {
+                                                constraints::Axis::LeftRight => "Horizontal",
+                                                constraints::Axis::TopBottom => "Vertical",
+                                            });
+                                        },
+                                    );
+                                });
+                            }
 
                             if show_more {
                                 ui.separator();
