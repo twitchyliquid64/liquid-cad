@@ -1,4 +1,5 @@
 use egui::text::LayoutJob;
+use egui_extras::{Column, TableBuilder};
 
 const HOTKEY_BACKGROUND_WHITENESS: u8 = 39;
 
@@ -51,7 +52,42 @@ impl<'a> Widget<'a> {
             egui::CollapsingHeader::new(egui::RichText::new("Constraints reference").heading())
                 .default_open(false)
                 .show(ui, |ui| {
-                    ui.label("todo :)");
+                    ui.add_space(6.0);
+                    let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+                    let table = TableBuilder::new(ui)
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::TOP))
+                        .column(Column::exact(110.0))
+                        .column(Column::exact(80.0))
+                        .column(Column::remainder())
+                        .striped(true)
+                        .auto_shrink([false, true])
+                        .header(21.0, |mut header| {
+                        header.col(|ui| {
+                            ui.heading("Constraint");
+                        });
+                        header.col(|ui| {
+                            ui.heading("Hotkey");
+                        });
+                        header.col(|ui| {
+                            ui.heading("Info");
+                        });
+                    });
+                    table.body(|mut body| {
+                        body.row(text_height, |mut row| {
+                            row.col(|ui| {
+                                ui.strong("Constraint");
+                            });
+                            row.col(|ui| {
+                                ui.label("Hotkey");
+                            });
+                            row.col(|ui| {
+                                ui.label("todo :)");
+                            });
+                        });
+                    });
+
+                    ui.add_space(6.0);
                 });
 
             egui::CollapsingHeader::new(egui::RichText::new("Exporting").heading())
@@ -66,6 +102,7 @@ impl<'a> Widget<'a> {
                 .show(ui, |ui| {
                     ui.label("1. Use at least one fixed-point constraint (i.e. for your zero co-ordinate). It really helps solving.");
                     ui.label("2. Set 'construction' on geometry you've used as scaffolding (by checking the construction checkbox in the detailer -> selection view)");
+                    ui.label("3. If the solver is struggling to keep up with your changes, you'll see a \"solver inconsistency\" warning appear in the top right. You can click it to trigger a solve run and step closer to convergence.");
                     ui.label("todo :)");
                 });
         });

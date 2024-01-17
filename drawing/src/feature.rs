@@ -98,14 +98,17 @@ impl Feature {
                 p1.bb(drawing).union(p2.bb(drawing))
             }
             Feature::Arc(_, p1, p2, p3) => {
-                // TODO: super incorrect, fix this
                 let (p1, p2, p3) = (
-                    drawing.features.get(*p1).unwrap(),
-                    drawing.features.get(*p2).unwrap(),
-                    drawing.features.get(*p3).unwrap(),
+                    drawing.features.get(*p1).unwrap().bb(drawing).center(),
+                    drawing.features.get(*p2).unwrap().bb(drawing),
+                    drawing.features.get(*p3).unwrap().bb(drawing).center(),
                 );
 
-                p1.bb(drawing).union(p2.bb(drawing).union(p3.bb(drawing)))
+                let radius = (p2.center().to_vec2() - p1.to_vec2())
+                    .length()
+                    .max((p2.center().to_vec2() - p3.to_vec2()).length());
+
+                p2.expand(radius)
             }
             Feature::Circle(_, p, r, ..) => {
                 let p = drawing.features.get(*p).unwrap();
