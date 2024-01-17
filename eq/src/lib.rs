@@ -16,6 +16,7 @@ pub mod solve {
         pub vars: &'a Vec<Variable>,
 
         pub x: &'a OVector<f64, Dyn>,
+        pub lookup: Option<HashMap<Variable, usize>>,
     }
 
     impl<'a> Resolver for VarResolver<'a> {
@@ -26,6 +27,22 @@ pub mod solve {
                 }
                 None => {}
             };
+
+            // TODO: Unclear how much / if this helps?
+            if self.lookup.is_none() && self.vars.len() > 7 {
+                // Build the lookup table if we are keeping track of
+                // more than 7 variables.
+                self.lookup = Some(HashMap::from_iter(
+                    self.vars.iter().enumerate().map(|(i, v)| (v.clone(), i)),
+                ));
+            }
+            if let Some(l) = &self.lookup {
+                return if let Some(i) = l.get(v) {
+                    Ok(Concrete::Float(self.x[*i]))
+                } else {
+                    Err(ResolveErr::UnknownVar(v.clone()))
+                };
+            }
 
             for (i, v2) in self.vars.iter().enumerate() {
                 if v == v2 {

@@ -36,7 +36,7 @@ pub struct DumbassSolverParams {
 impl Default for DumbassSolverParams {
     fn default() -> Self {
         Self {
-            max_iter: 450,
+            max_iter: 530,
             step_mul: -0.99,
             momentum_step: 0.5,
             momentum_div: 2,
@@ -46,13 +46,19 @@ impl Default for DumbassSolverParams {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum Jacobian {
+    Func(Expression),
+    Float(f64),
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct DumbassSolverState {
     resolved: HashMap<Variable, Concrete>,
 
     vars: Vec<Variable>,
     residuals: Vec<Expression>,
-    jacobians: Vec<Expression>,
+    jacobians: Vec<Jacobian>,
 }
 
 impl DumbassSolverState {
@@ -61,9 +67,18 @@ impl DumbassSolverState {
         solve_for: Vec<Variable>,
         mut residuals: Vec<Expression>,
     ) -> Self {
-        let jacobians: Vec<Expression> = solve_for
+        let jacobians: Vec<Jacobian> = solve_for
             .iter()
-            .map(|var| residuals.iter().map(move |fx| fx.derivative_wrt(&var)))
+            .map(|var| {
+                residuals.iter().map(move |fx| {
+                    let jfx = fx.derivative_wrt(&var);
+                    match jfx {
+                        Expression::Integer(i) => Jacobian::Float(i.to_f64().unwrap()),
+                        Expression::Rational(r, _) => Jacobian::Float(r.to_f64().unwrap()),
+                        _ => Jacobian::Func(jfx),
+                    }
+                })
+            })
             .flatten()
             .collect();
 
@@ -208,6 +223,7 @@ impl DumbassSolver {
             x: &x,
             vars: &st.vars,
             resolved: &st.resolved,
+            lookup: None,
         };
 
         // Compute jacobian
@@ -216,13 +232,16 @@ impl DumbassSolver {
             // correct length, see DumbassSolverState::new
             let j_fn = unsafe { st.jacobians.get_unchecked(i) };
 
-            let mut v = match j_fn.evaluate_1(&mut resolver) {
-                Ok(f) => match f {
-                    Concrete::Float(f) => f as f64,
-                    Concrete::Rational(r) => r.to_f64().unwrap(),
+            let mut v = match j_fn {
+                Jacobian::Float(f) => *f,
+                Jacobian::Func(j_fn) => match j_fn.evaluate_1(&mut resolver) {
+                    Ok(f) => match f {
+                        Concrete::Float(f) => f as f64,
+                        Concrete::Rational(r) => r.to_f64().unwrap(),
+                    },
+                    Err(ResolveErr::DivByZero) => 0.0,
+                    Err(e) => panic!("err: {:?}", e),
                 },
-                Err(ResolveErr::DivByZero) => 0.0,
-                Err(e) => panic!("err: {:?}", e),
             };
             // TODO: These conditionals are not quite right
             if v.is_nan() {
@@ -346,16 +365,20 @@ mod tests {
         assert_eq!(
             state.jacobians,
             vec![
-                Expression::parse(
-                    "-((x1 - x0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
-                    false
-                )
-                .unwrap(),
-                Expression::parse(
-                    "-((y1 - y0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
-                    false
-                )
-                .unwrap(),
+                Jacobian::Func(
+                    Expression::parse(
+                        "-((x1 - x0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
+                        false
+                    )
+                    .unwrap()
+                ),
+                Jacobian::Func(
+                    Expression::parse(
+                        "-((y1 - y0) / sqrt((((x1 - x0))^2 + ((y1 - y0))^2)))",
+                        false
+                    )
+                    .unwrap()
+                ),
             ],
         );
 

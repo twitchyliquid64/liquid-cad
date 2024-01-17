@@ -2,6 +2,10 @@
 members = ["liquid-cad", "drawing", "detailer", "eq", "helper"]
 resolver = "2"
 
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+
 [workspace.dependencies]
 # our crates
 drawing = {version = "0.1.0", path = "./drawing"}

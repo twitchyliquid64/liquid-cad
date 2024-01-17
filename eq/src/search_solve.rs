@@ -133,6 +133,7 @@ impl SearchSolver {
             x: &x,
             vars: &vars,
             resolved: &resolved,
+            lookup: None,
         };
 
         // Compute residuals
