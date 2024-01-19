@@ -315,6 +315,36 @@ impl Constraint {
         }
     }
 
+    pub fn dimension_pos(&self, drawing: &crate::Data) -> Option<egui::Pos2> {
+        use Constraint::{CircleRadius, LineLength};
+        match self {
+            LineLength(_, fk, _, _, dd) => {
+                let (a, b) = drawing.get_line_points(*fk).unwrap();
+                let r = egui::Vec2::new(dd.x, dd.y);
+
+                let t = (a - b).angle() + r.angle();
+
+                Some(
+                    drawing.vp.translate_point(a.lerp(b, 0.5)) + egui::Vec2::angled(t) * r.length(),
+                )
+            }
+
+            CircleRadius(_, fk, _r, dd) => {
+                if let Some(Feature::Circle(_, center_fk, ..)) = drawing.features.get(*fk) {
+                    let center = match drawing.features.get(*center_fk).unwrap() {
+                        Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                        _ => panic!("unexpected subkey type: {:?}", center_fk),
+                    };
+
+                    Some(drawing.vp.translate_point(center) + egui::Vec2::new(dd.x, dd.y))
+                } else {
+                    panic!("unexpected feature key: {:?}", drawing.features.get(*fk));
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub fn equations(&self, drawing: &mut crate::Data) -> Vec<Expression> {
         use Constraint::{
             CircleRadius, CircleRadiusEqual, Fixed, LineAlongCardinal, LineAngle, LineLength,

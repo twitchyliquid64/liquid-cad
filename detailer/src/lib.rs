@@ -1,6 +1,8 @@
 use drawing::Handler;
 use drawing::CONSTRUCTION_IMG;
-use drawing::{handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta};
+use drawing::{
+    handler::ToolResponse, tools, Data, Feature, FeatureKey, FeatureMeta, SelectedElement,
+};
 use drawing::{Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay};
 use drawing::{Group, GroupType};
 
@@ -125,9 +127,23 @@ impl<'a> Widget<'a> {
     fn show_selection_tab(&mut self, ui: &mut egui::Ui) {
         let mut commands: Vec<ToolResponse> = Vec::with_capacity(4);
         let mut changed = false;
-        let mut selected: Vec<FeatureKey> = self.drawing.selected_map.keys().map(|k| *k).collect();
+        let mut selected: Vec<FeatureKey> = self
+            .drawing
+            .selected_map
+            .keys()
+            .filter_map(|k| match k {
+                SelectedElement::Feature(f) => Some(*f),
+                _ => None,
+            })
+            .collect();
 
-        if let Some(ck) = self.drawing.selected_constraint {
+        for ck in self.drawing.selected_map.keys().filter_map(|e| {
+            if let SelectedElement::Constraint(ck) = e {
+                Some(*ck)
+            } else {
+                None
+            }
+        }) {
             if let Some(c) = self.drawing.constraints.get(ck) {
                 for fk in c.affecting_features() {
                     if !selected.contains(&fk) {
@@ -135,7 +151,7 @@ impl<'a> Widget<'a> {
                     }
                 }
             }
-        };
+        }
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             for k in selected {
@@ -916,9 +932,8 @@ impl<'a> Widget<'a> {
                                     ui.add_space(r.x / 2. - text_rect.width());
                                 }
                                 if ui.button("Select").clicked() {
-                                    self.drawing.selected_constraint = None;
                                     self.drawing.selected_map = std::collections::HashMap::from_iter(
-                                        group.features.iter().enumerate().map(|(i, fk)| (*fk, i))
+                                        group.features.iter().enumerate().map(|(i, fk)| (SelectedElement::Feature(*fk), i))
                                     );
                                 };
                                 if ui.add_enabled(group.features.len() > 0, egui::Button::new("Clear")).clicked() {
@@ -928,7 +943,7 @@ impl<'a> Widget<'a> {
 
                             ui.horizontal(|ui| {
                                 if ui.button("+ Add from selection").clicked() {
-                                    for fk in self.drawing.selected_map.keys() {
+                                    for fk in self.drawing.selected_map.keys().filter_map(|e| if let SelectedElement::Feature(f) = e { Some(f) } else { None }) {
                                         if let Some(f) = self.drawing.features.get(*fk) {
                                             if f.is_point() || f.is_construction() {
                                                 continue;

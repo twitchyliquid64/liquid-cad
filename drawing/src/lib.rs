@@ -3,7 +3,7 @@
 pub mod l;
 
 mod data;
-pub use data::{group::*, Data, Hover, SerializedDrawing, Viewport};
+pub use data::{group::*, Data, Hover, SelectedElement, SerializedDrawing, Viewport};
 mod feature;
 pub use feature::{Feature, FeatureKey, FeatureMeta, SerializedFeature};
 mod constraints;
@@ -212,37 +212,13 @@ impl<'a> Widget<'a> {
                     ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
-                // Dragging a LineLength constraint reference
-                (
-                    Hover::Constraint {
-                        k,
-                        constraint: Constraint::LineLength(_, _, _, _, dd),
-                    },
-                    true,
-                    false,
-                    false,
-                    _,
-                    true,
-                ) => {
-                    let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
-                    let state = DragState::Constraint(*k, offset);
-                    ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
-                    Some(state)
-                }
-                // Dragging a CircleRadius constraint reference
-                (
-                    Hover::Constraint {
-                        k,
-                        constraint: Constraint::CircleRadius(_, _, _, dd),
-                    },
-                    true,
-                    false,
-                    false,
-                    _,
-                    true,
-                ) => {
-                    let offset = self.drawing.vp.screen_to_point(hp) - egui::Pos2::new(dd.x, dd.y);
-                    let state = DragState::Constraint(*k, offset);
+                // Dragging a LineLength or CircleRadius constraint reference
+                (Hover::Constraint { k, constraint }, true, false, false, _, true)
+                    if matches!(constraint, Constraint::CircleRadius(..))
+                        || matches!(constraint, Constraint::LineLength(..)) =>
+                {
+                    let offset = constraint.dimension_pos(self.drawing).unwrap() - hp.to_vec2();
+                    let state = DragState::Constraint(*k, offset.to_vec2());
                     ui.memory_mut(|mem| mem.data.insert_temp(state_id, state));
                     Some(state)
                 }
@@ -394,11 +370,11 @@ impl<'a> Widget<'a> {
                     Some(Input::FeatureDrag(fk, np))
                 }
 
-                (Some(DragState::Constraint(ck, _offset)), _) => {
+                (Some(DragState::Constraint(ck, offset)), _) => {
                     if released {
                         ui.memory_mut(|mem| mem.data.remove::<DragState>(state_id));
                     }
-                    self.drawing.move_constraint(ck, hp);
+                    self.drawing.move_constraint(ck, hp + offset);
                     Some(Input::ConstraintDrag(ck, hp))
                 }
 
@@ -423,13 +399,6 @@ impl<'a> Widget<'a> {
             }
         };
 
-        self.drawing.selected_constraint = if let Some(Input::EditingLineLength(ck)) = current_input
-        {
-            Some(ck)
-        } else {
-            None
-        };
-
         // All clicks get keyboard focus.
         // println!("focus-w: {:?}", response.ctx.memory(|mem| mem.focus()));
         if response.clicked() && !response.lost_focus() {
@@ -449,7 +418,13 @@ impl<'a> Widget<'a> {
                     self.drawing.selection_clear();
                 }
                 self.drawing
-                    .select_feature(k, !self.drawing.feature_selected(k));
+                    .select_feature(*k, !self.drawing.feature_selected(*k));
+            } else if let Hover::Constraint { k, .. } = hover {
+                if !shift_held {
+                    self.drawing.selection_clear();
+                }
+                self.drawing
+                    .select_constraint(*k, !self.drawing.constraint_selected(*k));
             } else if !shift_held {
                 // empty space clicked, clear selection.
                 self.drawing.selection_clear();
@@ -539,7 +514,11 @@ impl<'a> Widget<'a> {
                     })
                     .unwrap_or(false);
 
-                let selected = self.drawing.selected_map.get(&k).is_some();
+                let selected = self
+                    .drawing
+                    .selected_map
+                    .get(&SelectedElement::Feature(k))
+                    .is_some();
 
                 let pp = PaintParams {
                     hovered,
@@ -556,7 +535,11 @@ impl<'a> Widget<'a> {
                 Hover::Constraint { k: hk, .. } => hk == k,
                 _ => false,
             };
-            let selected = false;
+            let selected = self
+                .drawing
+                .selected_map
+                .get(&SelectedElement::Constraint(k))
+                .is_some();
 
             let pp = PaintParams {
                 hovered,

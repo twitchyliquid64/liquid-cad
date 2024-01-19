@@ -28,6 +28,12 @@ pub enum Hover {
     },
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum SelectedElement {
+    Feature(FeatureKey),
+    Constraint(ConstraintKey),
+}
+
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SerializedDrawing {
     pub features: Vec<SerializedFeature>,
@@ -101,8 +107,7 @@ pub struct Data {
     pub vp: Viewport,
     pub groups: Vec<Group>,
 
-    pub selected_map: HashMap<FeatureKey, usize>,
-    pub selected_constraint: Option<ConstraintKey>,
+    pub selected_map: HashMap<SelectedElement, usize>,
 
     pub terms: TermAllocator,
 
@@ -123,7 +128,6 @@ impl Default for Data {
             vp: Viewport::default(),
             groups: vec![],
             selected_map: HashMap::default(),
-            selected_constraint: None,
             terms: TermAllocator::default(),
             menu_state: ContextMenuData::default(),
             drag_features_enabled: true,
@@ -648,7 +652,7 @@ impl Data {
     }
 
     fn delete_feature_impl(&mut self, k: FeatureKey) -> bool {
-        self.selected_map.remove(&k);
+        self.selected_map.remove(&SelectedElement::Feature(k));
         for g in self.groups.iter_mut() {
             g.trim_feature_if_present(k);
         }
@@ -707,20 +711,32 @@ impl Data {
 
     /// Deletes the currently-selected features.
     pub fn selection_delete(&mut self) {
-        let elements: Vec<_> = self.selected_map.drain().map(|(k, _)| k).collect();
+        let elements: Vec<_> = self
+            .selected_map
+            .drain()
+            .map(|(k, _)| k)
+            .filter_map(|k| {
+                if let SelectedElement::Feature(f) = k {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+            .collect();
         for k in elements {
             self.delete_feature(k);
         }
     }
 
     /// Selects or de-selects the given feature.
-    pub fn select_feature(&mut self, feature: &FeatureKey, select: bool) {
-        let currently_selected = self.selected_map.contains_key(feature);
+    pub fn select_feature(&mut self, feature: FeatureKey, select: bool) {
+        let se = SelectedElement::Feature(feature);
+        let currently_selected = self.selected_map.contains_key(&se);
         if currently_selected && !select {
-            self.selected_map.remove(feature);
+            self.selected_map.remove(&se);
         } else if !currently_selected && select {
             let next_idx = self.selected_map.values().fold(0, |acc, x| acc.max(*x)) + 1;
-            self.selected_map.insert(feature.clone(), next_idx);
+            self.selected_map.insert(se, next_idx);
         }
     }
 
@@ -734,7 +750,7 @@ impl Data {
             .collect();
 
         for k in keys.into_iter() {
-            self.select_feature(&k, select);
+            self.select_feature(k, select);
         }
     }
 
@@ -746,7 +762,7 @@ impl Data {
     /// Selects all features.
     pub fn select_all(&mut self) {
         for k in self.features.keys().collect::<Vec<_>>() {
-            self.select_feature(&k, true);
+            self.select_feature(k, true);
         }
     }
 
@@ -763,13 +779,34 @@ impl Data {
             .map(|(k, _f)| k)
             .collect::<Vec<_>>()
         {
-            self.select_feature(&k, true);
+            self.select_feature(k, true);
         }
     }
 
     /// Returns true if the feature with the given key is currently selected.
-    pub fn feature_selected(&self, feature: &FeatureKey) -> bool {
-        self.selected_map.get(feature).is_some()
+    pub fn feature_selected(&self, feature: FeatureKey) -> bool {
+        self.selected_map
+            .get(&SelectedElement::Feature(feature))
+            .is_some()
+    }
+
+    /// Selects or de-selects the given constraint.
+    pub fn select_constraint(&mut self, constraint: ConstraintKey, select: bool) {
+        let se = SelectedElement::Constraint(constraint);
+        let currently_selected = self.selected_map.contains_key(&se);
+        if currently_selected && !select {
+            self.selected_map.remove(&se);
+        } else if !currently_selected && select {
+            let next_idx = self.selected_map.values().fold(0, |acc, x| acc.max(*x)) + 1;
+            self.selected_map.insert(se, next_idx);
+        }
+    }
+
+    /// Returns true if the constraint with the given key is currently selected.
+    pub fn constraint_selected(&self, constraint: ConstraintKey) -> bool {
+        self.selected_map
+            .get(&SelectedElement::Constraint(constraint))
+            .is_some()
     }
 
     pub fn serialize(&self) -> SerializedDrawing {
