@@ -809,6 +809,40 @@ impl Data {
             .is_some()
     }
 
+    pub fn selection_labels_center(&mut self, x_axis: bool) {
+        let elements: Vec<_> = self
+            .selected_map
+            .drain()
+            .map(|(k, _)| k)
+            .filter_map(|k| {
+                if let SelectedElement::Constraint(c) = k {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for k in elements {
+            match self.constraint_mut(k) {
+                Some(Constraint::CircleRadius(_, _, _, dd)) => {
+                    if x_axis {
+                        dd.x = 0.0;
+                    } else {
+                        dd.y = 0.0;
+                    }
+                }
+                Some(Constraint::LineLength(_, _, _, _, dd)) => {
+                    if x_axis {
+                        dd.x = 0.0;
+                    } else {
+                        dd.y = 0.0;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub fn serialize(&self) -> SerializedDrawing {
         // First pass just get points
         let mut feature_keys = HashMap::with_capacity(self.features.len());

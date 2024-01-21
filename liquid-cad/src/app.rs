@@ -371,7 +371,7 @@ impl eframe::App for App {
                     if ui.button("Select all   (Ctrl-A)").clicked() {
                         self.drawing.select_all();
                     }
-                    ui.menu_button("Select feature...", |ui| {
+                    ui.menu_button("Select feature", |ui| {
                         ui.horizontal(|ui| {
                             ui.add(egui::Image::new(drawing::CONSTRUCTION_IMG).rounding(5.0));
                             ui.checkbox(
@@ -409,6 +409,16 @@ impl eframe::App for App {
                                 drawing::FeatureKey::null(),
                                 drawing::FeatureKey::null(),
                             ));
+                        }
+                    });
+
+                    ui.separator();
+                    ui.menu_button("Align dimension label", |ui| {
+                        if ui.button("Center X").clicked() {
+                            self.drawing.selection_labels_center(true);
+                        }
+                        if ui.button("Center Y").clicked() {
+                            self.drawing.selection_labels_center(false);
                         }
                     });
                 });
