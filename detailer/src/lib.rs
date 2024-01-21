@@ -354,7 +354,7 @@ impl<'a> Widget<'a> {
         k: &ConstraintKey,
         d: &mut f32,
         aa_info: &mut Option<(Axis, bool)>,
-        _ref_pt: &mut DimensionDisplay,
+        ref_pt: &mut DimensionDisplay,
         _meta: &mut ConstraintMeta,
     ) {
         let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
@@ -374,6 +374,10 @@ impl<'a> Widget<'a> {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                 if ui.button("⊗").clicked() {
                     commands.push(ToolResponse::ConstraintDelete(*k));
+                }
+                if ui.button("V🔃").clicked() {
+                    ref_pt.next_variant();
+                    *changed = true;
                 }
             });
         });

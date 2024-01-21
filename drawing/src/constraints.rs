@@ -8,12 +8,34 @@ slotmap::new_key_type! {
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum DimensionVariant {
+    #[default]
+    FullLines,
+}
+
+impl DimensionVariant {
+    pub fn next(c: &Option<Self>) -> Option<Self> {
+        match c {
+            None => Some(Self::FullLines),
+            Some(Self::FullLines) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct ConstraintMeta {}
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct DimensionDisplay {
     pub(crate) x: f32,
     pub(crate) y: f32,
+    pub(crate) variant: Option<DimensionVariant>,
+}
+
+impl DimensionDisplay {
+    pub fn next_variant(&mut self) {
+        self.variant = DimensionVariant::next(&self.variant);
+    }
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
@@ -261,6 +283,7 @@ impl Constraint {
                         reference: egui::Vec2::new(dd.x, dd.y),
                         hovered: params.hovered,
                         selected: params.selected,
+                        arrow_fill: matches!(dd.variant, Some(DimensionVariant::FullLines)),
                     }
                     .draw(painter, params);
                 }
@@ -1025,7 +1048,11 @@ mod tests {
                 point_key,
                 85.0,
                 None,
-                DimensionDisplay { x: 2.0, y: 5.0 }
+                DimensionDisplay {
+                    x: 2.0,
+                    y: 5.0,
+                    ..DimensionDisplay::default()
+                }
             )
             .serialize(&HashMap::from([(point_key, 42)])),
             Ok(SerializedConstraint {
@@ -1033,7 +1060,11 @@ mod tests {
                 meta: ConstraintMeta::default(),
                 feature_idx: vec![42],
                 amt: 85.0,
-                ref_offset: DimensionDisplay { x: 2.0, y: 5.0 },
+                ref_offset: DimensionDisplay {
+                    x: 2.0,
+                    y: 5.0,
+                    ..DimensionDisplay::default()
+                },
                 ..SerializedConstraint::default()
             }),
         );

@@ -177,7 +177,11 @@ impl Handler {
                         k,
                         d,
                         cardinality,
-                        DimensionDisplay { x: 0., y: 35.0 },
+                        DimensionDisplay {
+                            x: 0.,
+                            y: 35.0,
+                            ..DimensionDisplay::default()
+                        },
                     ));
                     tools.clear();
                 }
@@ -315,7 +319,11 @@ impl Handler {
                         ConstraintMeta::default(),
                         k,
                         *radius,
-                        DimensionDisplay { x: 35.0, y: 35.0 },
+                        DimensionDisplay {
+                            x: 35.0,
+                            y: 35.0,
+                            ..DimensionDisplay::default()
+                        },
                     ));
                     tools.clear();
                 }
@@ -395,7 +403,11 @@ impl Handler {
                             Left => Some((Axis::LeftRight, true)),
                             Right => Some((Axis::LeftRight, false)),
                         },
-                        DimensionDisplay { x: 0., y: 35.0 },
+                        DimensionDisplay {
+                            x: 0.,
+                            y: 35.0,
+                            ..DimensionDisplay::default()
+                        },
                     ));
                     last_point = new_k;
                 }
