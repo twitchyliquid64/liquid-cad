@@ -413,11 +413,11 @@ impl eframe::App for App {
                     });
 
                     ui.separator();
-                    ui.menu_button("Align dimension label", |ui| {
-                        if ui.button("Center X").clicked() {
+                    ui.menu_button("Dimension label", |ui| {
+                        if ui.button("Center in-axis").clicked() {
                             self.drawing.selection_labels_center(true);
                         }
-                        if ui.button("Center Y").clicked() {
+                        if ui.button("Center cross-axis").clicked() {
                             self.drawing.selection_labels_center(false);
                         }
                     });

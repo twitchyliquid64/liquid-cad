@@ -115,10 +115,12 @@ pub fn extrude_from_points(
 pub fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
     use truck_meshalgo::tessellation::MeshableShape;
     use truck_meshalgo::tessellation::MeshedShape;
-    let mesh = s.triangulation(tolerance).to_polygon();
+    let mut mesh = s.triangulation(tolerance).to_polygon();
 
-    // use truck_meshalgo::filters::OptimizingFilter;
-    // mesh.put_together_same_attrs();
+    use truck_meshalgo::filters::OptimizingFilter;
+    mesh.put_together_same_attrs()
+        .remove_degenerate_faces()
+        .remove_unused_attrs();
 
     let mut out = Vec::with_capacity(1024);
     truck_polymesh::stl::write(&mesh, &mut out, truck_polymesh::stl::STLType::Binary).unwrap();
