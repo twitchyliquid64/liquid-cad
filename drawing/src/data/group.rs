@@ -59,7 +59,7 @@ impl Group {
         }
     }
 
-    pub fn compute_path(&self, data: &super::Data) -> Result<Vec<kurbo::BezPath>, ()> {
+    pub fn compute_path(&self, data: &super::Data) -> Vec<kurbo::BezPath> {
         // geometry that has been emitted
         let mut remaining = self.features.clone();
         remaining.reverse();
@@ -139,7 +139,7 @@ impl Group {
             paths.push(current.0);
         }
 
-        Ok(paths)
+        paths
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::data::CADOp;
 use std::collections::HashMap;
 use truck_modeling::*;
 
@@ -59,13 +60,16 @@ fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>)
     edges.into()
 }
 
-fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<kurbo::BezPath>) -> Face {
+fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<(CADOp, kurbo::BezPath)>) -> Face {
     let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
     let mut wires: Vec<Wire> = Vec::with_capacity(1 + cutouts.len());
     wires.push(wire_from_path(exterior, &mut verts));
 
-    for p in cutouts.into_iter() {
-        wires.push(wire_from_path(p, &mut verts));
+    for (op, path) in cutouts.into_iter() {
+        if !matches!(op, CADOp::Hole) {
+            panic!("unexpected op! {:?}", op);
+        }
+        wires.push(wire_from_path(path, &mut verts));
     }
 
     builder::try_attach_plane(&wires).unwrap()
@@ -73,7 +77,7 @@ fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<kurbo::BezPath>) -> Fa
 
 pub fn extrude_from_paths(
     exterior: kurbo::BezPath,
-    cutouts: Vec<kurbo::BezPath>,
+    cutouts: Vec<(CADOp, kurbo::BezPath)>,
     height: f64,
 ) -> Solid {
     let face = face_from_paths(exterior, cutouts);
@@ -134,7 +138,9 @@ pub fn solid_to_obj(s: Solid, tolerance: f64) -> Vec<u8> {
     let mut mesh = s.triangulation(tolerance).to_polygon();
 
     use truck_meshalgo::filters::OptimizingFilter;
-    mesh.put_together_same_attrs();
+    mesh.put_together_same_attrs()
+        .remove_degenerate_faces()
+        .remove_unused_attrs();
 
     let mut out = Vec::with_capacity(1024);
     truck_polymesh::obj::write(&mesh, &mut out).unwrap();

@@ -88,12 +88,22 @@ impl App {
     fn export_str_as(&mut self, type_name: &'static str, ext_name: &'static str, data: Vec<u8>) {
         #[cfg(not(target_arch = "wasm32"))]
         {
+            let file_name: String = match &self.last_path {
+                Some(pb) => {
+                    format!("{}.{}", pb.file_stem().unwrap().to_str().unwrap(), ext_name).to_owned()
+                }
+                None => format!("export.{}", ext_name).to_owned(),
+            };
+
             use rfd::FileDialog;
-            let file = FileDialog::new()
+            let mut f = FileDialog::new()
                 .add_filter(type_name, &[ext_name])
                 .add_filter("text", &["txt"])
-                .set_file_name(format!("export.{}", ext_name))
-                .save_file();
+                .set_file_name(file_name);
+            if let Some(pb) = &self.last_path {
+                f = f.set_directory(pb.parent().unwrap());
+            }
+            let file = f.save_file();
 
             if let Some(path) = file {
                 match std::fs::write(path.clone(), data) {
@@ -138,11 +148,14 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use rfd::FileDialog;
-            let file = FileDialog::new()
+            let mut f = FileDialog::new()
                 .add_filter("liquid cad", &["lcad"])
                 .add_filter("text", &["txt"])
-                .set_file_name(file_name)
-                .save_file();
+                .set_file_name(file_name);
+            if let Some(pb) = &self.last_path {
+                f = f.set_directory(pb.parent().unwrap());
+            }
+            let file = f.save_file();
 
             if let Some(path) = file {
                 let sd = &self.drawing.serialize();

@@ -65,6 +65,7 @@ impl<'a> Widget<'a> {
             .constrain(true)
             .collapsible(false)
             .title_bar(false)
+            .default_height(520.0)
             .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-4., 4.));
 
         window.show(ctx, |ui| {
@@ -987,7 +988,8 @@ impl<'a> Widget<'a> {
                     .text("Flatten tolerance").suffix("mm").logarithmic(true));
 
             if let Some(err) = self.drawing.last_solve_error {
-                ui.add(egui::Label::new(format!("⚠ Solver is inconsistent!! avg err: {:.3}mm", err)));
+                ui.add(egui::Label::new(egui::RichText::new(format!("⚠ Solver is inconsistent!! avg err: {:.3}mm", err))
+                .color(ui.visuals().warn_fg_color)));
                 ui.add_space(5.0);
             }
 
@@ -1098,33 +1100,37 @@ impl<'a> Widget<'a> {
                 }
 
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("STL 📥")).clicked() {
-                    if let Ok(solid) = self.drawing.part_extrude(self.state.extrusion_amt) {
-                        use drawing::l::three_d::*;
-
-                        export_fn.take().map(|f| f("STL", "stl", solid_to_stl(solid, self.drawing.props.flatten_tolerance)));
-                    } else {
-                        self.toasts.add(egui_toast::Toast {
-                            text: "Export failed!".into(),
-                            kind: egui_toast::ToastKind::Error,
-                            options: egui_toast::ToastOptions::default()
-                                .duration_in_seconds(4.0)
-                                .show_progress(true)
-                        });
+                    match self.drawing.as_solid(self.state.extrusion_amt) {
+                        Ok(solid) => {
+                            use drawing::l::three_d::*;
+                            export_fn.take().map(|f| f("STL", "stl", solid_to_stl(solid, self.drawing.props.flatten_tolerance)));
+                        },
+                        Err(err) => {
+                            self.toasts.add(egui_toast::Toast {
+                                text: format!("Export failed!\n\nErr: {:?}", err).into(),
+                                kind: egui_toast::ToastKind::Error,
+                                options: egui_toast::ToastOptions::default()
+                                    .duration_in_seconds(4.0)
+                                    .show_progress(true)
+                            });
+                        }
                     }
                 }
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("OBJ 📥")).clicked() {
-                    if let Ok(solid) = self.drawing.part_extrude(self.state.extrusion_amt) {
-                        use drawing::l::three_d::*;
-
-                        export_fn.take().map(|f| f("OBJ", "obj", solid_to_obj(solid, self.drawing.props.flatten_tolerance)));
-                    } else {
-                        self.toasts.add(egui_toast::Toast {
-                            text: "Export failed!".into(),
-                            kind: egui_toast::ToastKind::Error,
-                            options: egui_toast::ToastOptions::default()
-                                .duration_in_seconds(4.0)
-                                .show_progress(true)
-                        });
+                    match self.drawing.as_solid(self.state.extrusion_amt) {
+                        Ok(solid) => {
+                            use drawing::l::three_d::*;
+                            export_fn.take().map(|f| f("OBJ", "obj", solid_to_obj(solid, self.drawing.props.flatten_tolerance)));
+                        },
+                        Err(err) => {
+                            self.toasts.add(egui_toast::Toast {
+                                text: format!("Export failed!\n\nErr: {:?}", err).into(),
+                                kind: egui_toast::ToastKind::Error,
+                                options: egui_toast::ToastOptions::default()
+                                    .duration_in_seconds(4.0)
+                                    .show_progress(true)
+                            });
+                        }
                     }
                 }
             });

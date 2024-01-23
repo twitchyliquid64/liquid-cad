@@ -34,6 +34,19 @@ pub enum SelectedElement {
     Constraint(ConstraintKey),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExportErr {
+    NoBoundaryGroup,
+    MultiBoundaryGroup,
+    IntersectingGroups(usize, usize),
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+pub enum CADOp {
+    Extrude(f64),
+    Hole,
+}
+
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct SerializedDrawing {
     pub features: Vec<SerializedFeature>,
@@ -1055,36 +1068,31 @@ impl Data {
             }
         };
 
-        let paths: Vec<(GroupType, Result<Vec<Vec<kurbo::Point>>, ()>)> = self
+        let paths: Vec<(GroupType, Vec<Vec<kurbo::Point>>)> = self
             .groups
             .iter()
             .map(|g| {
-                let out = if let Ok(paths) = g.compute_path(self) {
-                    let mut out_paths: Vec<Vec<kurbo::Point>> = Vec::with_capacity(4);
-                    for path in paths.into_iter() {
-                        let mut points: Vec<kurbo::Point> = Vec::with_capacity(32);
-                        path.flatten(flatten_tolerance, |el| {
-                            use kurbo::PathEl;
-                            match el {
-                                PathEl::MoveTo(p) | PathEl::LineTo(p) => {
-                                    if points.len() == 0 || points[points.len() - 1] != p {
-                                        points.push(p);
-                                    }
+                let mut out_paths: Vec<Vec<kurbo::Point>> = Vec::with_capacity(4);
+                for path in g.compute_path(self).into_iter() {
+                    let mut points: Vec<kurbo::Point> = Vec::with_capacity(32);
+                    path.flatten(flatten_tolerance, |el| {
+                        use kurbo::PathEl;
+                        match el {
+                            PathEl::MoveTo(p) | PathEl::LineTo(p) => {
+                                if points.len() == 0 || points[points.len() - 1] != p {
+                                    points.push(p);
                                 }
-                                PathEl::ClosePath => {}
-                                _ => panic!("unexpected element: {:?}", el),
                             }
-                        });
-                        if points.len() > 0 {
-                            out_paths.push(points);
+                            PathEl::ClosePath => {}
+                            _ => panic!("unexpected element: {:?}", el),
                         }
+                    });
+                    if points.len() > 0 {
+                        out_paths.push(points);
                     }
-                    Ok(out_paths)
-                } else {
-                    Err(())
-                };
+                }
 
-                (g.typ, out)
+                (g.typ, out_paths)
             })
             .collect();
 
@@ -1093,7 +1101,6 @@ impl Data {
             .iter()
             .filter(|(gt, _)| gt == &GroupType::Boundary)
             .map(|(_gt, paths)| paths.iter())
-            .flatten()
             .flatten()
         {
             let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
@@ -1108,7 +1115,6 @@ impl Data {
             .filter(|(gt, _)| gt == &GroupType::Interior)
             .map(|(_gt, paths)| paths.iter())
             .flatten()
-            .flatten()
         {
             let mut idx: Vec<usize> = Vec::with_capacity(path_points.len());
             for point in path_points.iter() {
@@ -1120,23 +1126,23 @@ impl Data {
         Ok((points, indices_outer, indices_inner))
     }
 
-    pub fn part_paths(&self) -> Result<(kurbo::BezPath, Vec<kurbo::BezPath>), ()> {
+    pub fn part_paths(&self) -> Result<(kurbo::BezPath, Vec<(CADOp, kurbo::BezPath)>), ExportErr> {
         use crate::GroupType;
+        use kurbo::Shape;
         let mut outer: Option<kurbo::BezPath> = None;
-        let mut cutouts: Vec<kurbo::BezPath> = Vec::with_capacity(12);
+        let mut cutouts: Vec<(CADOp, kurbo::BezPath)> = Vec::with_capacity(12);
 
-        let paths: Vec<(GroupType, Result<Vec<kurbo::BezPath>, ()>)> = self
+        let paths: Vec<(&Group, Vec<kurbo::BezPath>)> = self
             .groups
             .iter()
-            .map(|g| (g.typ, g.compute_path(self)))
+            .map(|g| (g, g.compute_path(self)))
             .collect();
 
         // Do boundaries first
         for p in paths
             .iter()
-            .filter(|(gt, _)| gt == &GroupType::Boundary)
-            .map(|(_gt, paths)| paths.iter())
-            .flatten()
+            .filter(|(g, _)| g.typ == GroupType::Boundary)
+            .map(|(_g, paths)| paths.iter())
             .flatten()
         {
             match outer {
@@ -1144,30 +1150,75 @@ impl Data {
                     outer = Some(p.clone());
                 }
                 Some(_) => {
-                    println!("multiple outer geometries!");
-                    return Err(());
+                    return Err(ExportErr::MultiBoundaryGroup);
                 }
             }
         }
         // Now interior geometry
-        for p in paths
+        for (_g, paths) in paths
             .into_iter()
-            .filter(|(gt, _)| gt == &GroupType::Interior)
-            .map(|(_gt, paths)| paths.into_iter())
-            .flatten()
-            .flatten()
+            .filter(|(gt, _)| gt.typ == GroupType::Interior)
         {
-            cutouts.push(p);
+            for p in paths.into_iter() {
+                cutouts.push((CADOp::Hole, p));
+            }
         }
 
         if outer.is_none() {
-            Err(())
-        } else {
-            Ok((outer.unwrap(), cutouts))
+            return Err(ExportErr::NoBoundaryGroup);
         }
+
+        // Check for intersecting cutouts
+        let mut cutout_bb: Vec<_> = cutouts.iter().map(|(_, p)| p.bounding_box()).collect();
+        println!("{:?}", cutout_bb);
+        for i1 in 0..cutouts.len() {
+            for i2 in i1..cutouts.len() {
+                if i1 == i2 {
+                    continue;
+                }
+                if !cutout_bb[i1].intersect(cutout_bb[i2]).is_empty() {
+                    // bounding boxes intersect, need to do expensive intersection to see if
+                    // actual intersection.
+                    let (c1, c2) = (&cutouts[i1], &cutouts[i2]);
+                    for seg in c1.1.segments() {
+                        let mut intersects = false;
+                        kurbo::flatten(
+                            seg.path_elements(self.props.flatten_tolerance),
+                            self.props.flatten_tolerance,
+                            |el| {
+                                use kurbo::PathEl;
+                                match el {
+                                    PathEl::MoveTo(p) | PathEl::LineTo(p) => {
+                                        intersects |= c2.1.contains(p);
+                                    }
+                                    PathEl::ClosePath => {}
+                                    _ => panic!("unexpected element: {:?}", el),
+                                }
+                            },
+                        );
+
+                        if intersects {
+                            return Err(ExportErr::IntersectingGroups(i1, i2));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Order outside-in
+        cutout_bb.sort_by(|a, b| {
+            if a.contains(b.center()) {
+                return std::cmp::Ordering::Less;
+            } else if b.contains(a.center()) {
+                return std::cmp::Ordering::Greater;
+            }
+            ((a.area() * 1000.0) as u64).cmp(&((b.area() * 1000.0) as u64))
+        });
+
+        Ok((outer.unwrap(), cutouts))
     }
 
-    pub fn part_extrude(&self, height: f64) -> Result<truck_modeling::Solid, ()> {
+    pub fn as_solid(&self, height: f64) -> Result<truck_modeling::Solid, ExportErr> {
         let (exterior, cutouts) = self.part_paths()?;
         Ok(crate::l::three_d::extrude_from_paths(
             exterior, cutouts, height,
@@ -2084,7 +2135,7 @@ mod tests {
 
         assert_eq!(
             data.groups[0].compute_path(&data),
-            Ok(vec![
+            vec![
                 kurbo::BezPath::from_vec(vec![
                     kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 0.0 }),
                     kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 0.0 }),
@@ -2097,7 +2148,7 @@ mod tests {
                     kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 15.0 }),
                     kurbo::PathEl::LineTo(kurbo::Point { x: 15.0, y: 15.0 }),
                 ]),
-            ])
+            ]
         );
     }
 
@@ -2173,7 +2224,7 @@ mod tests {
         })
         .unwrap();
 
-        let flattened = data.groups[0].compute_path(&data).unwrap();
+        let flattened = data.groups[0].compute_path(&data);
         //println!("{:?}", flattened);
 
         assert_eq!(
@@ -2367,5 +2418,116 @@ mod tests {
 
         assert_eq!(idx_outer, vec![vec![0, 1, 2, 3, 0]]);
         assert_eq!(idx_inner, Vec::<Vec<usize>>::new());
+    }
+
+    #[test]
+    fn as_solid_error_results() {
+        let features = vec![
+            SerializedFeature {
+                kind: "pt".to_string(),
+                using_idx: vec![],
+                x: 0.0,
+                y: 0.0,
+                ..SerializedFeature::default()
+            },
+            SerializedFeature {
+                kind: "pt".to_string(),
+                using_idx: vec![],
+                x: 25.0,
+                y: 0.0,
+                ..SerializedFeature::default()
+            },
+            SerializedFeature {
+                kind: "circle".to_string(),
+                using_idx: vec![0],
+                r: 50.0,
+                ..SerializedFeature::default()
+            },
+            SerializedFeature {
+                kind: "circle".to_string(),
+                using_idx: vec![1],
+                r: 50.0,
+                ..SerializedFeature::default()
+            },
+            SerializedFeature {
+                kind: "circle".to_string(),
+                using_idx: vec![0],
+                r: 26.0,
+                ..SerializedFeature::default()
+            },
+        ];
+
+        {
+            let mut data = Data::default();
+            data.load(SerializedDrawing {
+                features: features.clone(),
+                groups: vec![crate::SerializedGroup {
+                    typ: crate::GroupType::Interior,
+                    name: "Not boundary".into(),
+                    features_idx: vec![2],
+                    ..crate::SerializedGroup::default()
+                }],
+                ..SerializedDrawing::default()
+            })
+            .unwrap();
+
+            assert_eq!(data.as_solid(3.0), Err(ExportErr::NoBoundaryGroup));
+        }
+
+        {
+            let mut data = Data::default();
+            data.load(SerializedDrawing {
+                features: features.clone(),
+                groups: vec![
+                    crate::SerializedGroup {
+                        typ: crate::GroupType::Boundary,
+                        name: "Boundary".into(),
+                        features_idx: vec![2],
+                        ..crate::SerializedGroup::default()
+                    },
+                    crate::SerializedGroup {
+                        typ: crate::GroupType::Boundary,
+                        name: "Boundary 2".into(),
+                        features_idx: vec![3],
+                        ..crate::SerializedGroup::default()
+                    },
+                ],
+                ..SerializedDrawing::default()
+            })
+            .unwrap();
+
+            assert_eq!(data.as_solid(3.0), Err(ExportErr::MultiBoundaryGroup));
+        }
+
+        {
+            let mut data = Data::default();
+            data.load(SerializedDrawing {
+                features,
+                groups: vec![
+                    crate::SerializedGroup {
+                        typ: crate::GroupType::Boundary,
+                        name: "Boundary".into(),
+                        features_idx: vec![2],
+                        ..crate::SerializedGroup::default()
+                    },
+                    crate::SerializedGroup {
+                        typ: crate::GroupType::Interior,
+                        name: "cutout 1".into(),
+                        features_idx: vec![3],
+                        ..crate::SerializedGroup::default()
+                    },
+                    crate::SerializedGroup {
+                        typ: crate::GroupType::Interior,
+                        name: "cutout 2".into(),
+                        features_idx: vec![4],
+                        ..crate::SerializedGroup::default()
+                    },
+                ],
+                ..SerializedDrawing::default()
+            })
+            .unwrap();
+
+            assert_eq!(data.as_solid(3.0), Err(ExportErr::IntersectingGroups(0, 1)));
+        }
     }
 }
