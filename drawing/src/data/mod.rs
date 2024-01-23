@@ -62,6 +62,8 @@ pub struct DrawingProperties {
 
     pub flatten_tolerance: f64,
     pub solver_stop_err: f64,
+
+    pub solve_continuously: Option<()>,
 }
 
 impl Default for DrawingProperties {
@@ -70,6 +72,7 @@ impl Default for DrawingProperties {
             name: String::new(),
             flatten_tolerance: 0.05,
             solver_stop_err: 0.0005,
+            solve_continuously: None,
         }
     }
 }

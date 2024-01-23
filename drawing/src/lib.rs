@@ -1159,6 +1159,16 @@ impl<'a> Widget<'a> {
             current_input,
             &base_params,
         );
+
+        if self.drawing.props.solve_continuously.is_some()
+            && self.drawing.last_solve_error.is_some()
+        {
+            self.drawing.changed_in_ui();
+            if self.drawing.last_solve_error.is_some() {
+                ui.ctx().request_repaint();
+            }
+        }
+
         DrawResponse {}
     }
 }

@@ -1159,6 +1159,18 @@ impl<'a> Widget<'a> {
 
         ui.add_space(10.0);
         ui.label("General settings");
+
+        let mut cont_solve = self.drawing.props.solve_continuously.is_some();
+        if ui
+            .add(egui::Checkbox::new(
+                &mut cont_solve,
+                "Solve continuously when inconsistent",
+            ))
+            .changed()
+        {
+            self.drawing.props.solve_continuously = if cont_solve { Some(()) } else { None };
+        }
+
         ui.add(
             egui::Slider::new(&mut self.drawing.props.solver_stop_err, 0.1..=0.00001)
                 .text("Solver desired accuracy")
