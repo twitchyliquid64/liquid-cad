@@ -1169,15 +1169,21 @@ impl<'a> Widget<'a> {
             .changed()
         {
             self.drawing.props.solve_continuously = if cont_solve { Some(()) } else { None };
+            self.drawing.changed_in_ui();
         }
 
-        ui.add(
-            egui::Slider::new(&mut self.drawing.props.solver_stop_err, 0.1..=0.00001)
-                .text("Solver desired accuracy")
-                .suffix("mm")
-                .min_decimals(7)
-                .logarithmic(true),
-        );
+        if ui
+            .add(
+                egui::Slider::new(&mut self.drawing.props.solver_stop_err, 0.1..=0.00001)
+                    .text("Solver desired accuracy")
+                    .suffix("mm")
+                    .min_decimals(7)
+                    .logarithmic(true),
+            )
+            .changed()
+        {
+            self.drawing.changed_in_ui();
+        };
         ui.add(
             egui::Slider::new(&mut self.drawing.props.flatten_tolerance, 0.0001..=5.0)
                 .text("Flatten tolerance")

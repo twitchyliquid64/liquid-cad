@@ -1014,28 +1014,36 @@ impl Tool {
                         let dcross = d_start.x * d_end.y - d_end.x * d_start.y;
                         dcross < 0.0
                     },
-                })
-                .unwrap();
-
-                let mut last = (start.x, start.y);
-                a.to_cubic_beziers(0.1, |p1, p2, p| {
-                    let shape = egui::epaint::CubicBezierShape::from_points_stroke(
-                        [
-                            last.into(),
-                            (p1.x as f32, p1.y as f32).into(),
-                            (p2.x as f32, p2.y as f32).into(),
-                            (p.x as f32, p.y as f32).into(),
-                        ],
-                        false,
-                        egui::Color32::TRANSPARENT,
-                        egui::Stroke {
-                            width: TOOL_ICON_STROKE,
-                            color: egui::Color32::WHITE,
-                        },
-                    );
-                    painter.add(shape);
-                    last = (p.x as f32, p.y as f32);
                 });
+
+                if let Some(a) = a {
+                    let mut last = (start.x, start.y);
+                    a.to_cubic_beziers(0.1, |p1, p2, p| {
+                        let shape = egui::epaint::CubicBezierShape::from_points_stroke(
+                            [
+                                last.into(),
+                                (p1.x as f32, p1.y as f32).into(),
+                                (p2.x as f32, p2.y as f32).into(),
+                                (p.x as f32, p.y as f32).into(),
+                            ],
+                            false,
+                            egui::Color32::TRANSPARENT,
+                            egui::Stroke {
+                                width: TOOL_ICON_STROKE,
+                                color: egui::Color32::WHITE,
+                            },
+                        );
+                        painter.add(shape);
+                        last = (p.x as f32, p.y as f32);
+                    });
+                } else {
+                    painter.debug_text(
+                        start.lerp(end, 0.5),
+                        egui::Align2::CENTER_CENTER,
+                        egui::Color32::DARK_RED,
+                        "arc :/",
+                    );
+                }
 
                 response
                     .clone()
