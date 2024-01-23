@@ -2143,13 +2143,13 @@ mod tests {
                     kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 0.0 }),
                     kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 0.0 }),
                     kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 0.0 }),
-                    kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 5.0 }),
-                    kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 5.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: -5.0 }),
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: -5.0 }),
                     kurbo::PathEl::LineTo(kurbo::Point { x: 0.0, y: 0.0 }),
                 ]),
                 kurbo::BezPath::from_vec(vec![
-                    kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: 15.0 }),
-                    kurbo::PathEl::LineTo(kurbo::Point { x: 15.0, y: 15.0 }),
+                    kurbo::PathEl::MoveTo(kurbo::Point { x: 0.0, y: -15.0 }),
+                    kurbo::PathEl::LineTo(kurbo::Point { x: 15.0, y: -15.0 }),
                 ]),
             ]
         );
@@ -2240,13 +2240,13 @@ mod tests {
         );
         assert!(matches!(
             &flattened[0].elements()[3],
-            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: 1.0 },
+            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: -1.0 },
         ));
         assert_eq!(
             &flattened[0].elements()[4..],
             &[
-                kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: 1.0 }),
-                kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: 4.0 }),
+                kurbo::PathEl::MoveTo(kurbo::Point { x: 5.0, y: -1.0 }),
+                kurbo::PathEl::LineTo(kurbo::Point { x: 5.0, y: -4.0 }),
             ],
         );
 
@@ -2257,7 +2257,7 @@ mod tests {
         );
         assert!(matches!(
             &flattened[1].elements()[1],
-            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: 5.0 },
+            kurbo::PathEl::CurveTo(_, _, end) if end == &kurbo::Point { x: 5.0, y: -5.0 },
         ));
         assert!(matches!(
             &flattened[1].elements()[4],
@@ -2360,9 +2360,9 @@ mod tests {
             vec![
                 kurbo::Point { x: 0.0, y: 0.0 },
                 kurbo::Point { x: 5.0, y: 0.0 },
-                kurbo::Point { x: 5.0, y: 5.0 },
-                kurbo::Point { x: 4.0, y: 2.0 },
-                kurbo::Point { x: 4.0, y: 3.0 },
+                kurbo::Point { x: 5.0, y: -5.0 },
+                kurbo::Point { x: 4.0, y: -2.0 },
+                kurbo::Point { x: 4.0, y: -3.0 },
             ],
         );
 
@@ -2373,7 +2373,7 @@ mod tests {
             data.serialize_openscad(5.0).unwrap().as_str(),
             "polygon(
   points = [
-    [0, 0], [5, 0], [5, 5], [4, 2], [4, 3]
+    [0, 0], [5, 0], [5, -5], [4, -2], [4, -3]
   ],
   paths = [
     [0, 1, 2, 0],
@@ -2416,8 +2416,8 @@ mod tests {
         let (points, idx_outer, idx_inner) = data.flatten_to_idxs(1.0).unwrap();
         assert_eq!(points.len(), 4);
         assert_eq!(points[0], kurbo::Point { x: 2.0, y: 0.0 });
-        assert_eq!(points[1].y, 2.0);
-        assert_eq!(points[3].y, -2.0);
+        assert_eq!(points[1].y, -2.0);
+        assert_eq!(points[3].y, 2.0);
 
         assert_eq!(idx_outer, vec![vec![0, 1, 2, 3, 0]]);
         assert_eq!(idx_inner, Vec::<Vec<usize>>::new());
