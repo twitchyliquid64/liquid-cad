@@ -1173,7 +1173,6 @@ impl Data {
 
         // Check for intersecting cutouts
         let mut cutout_bb: Vec<_> = cutouts.iter().map(|(_, p)| p.bounding_box()).collect();
-        println!("{:?}", cutout_bb);
         for i1 in 0..cutouts.len() {
             for i2 in i1..cutouts.len() {
                 if i1 == i2 {

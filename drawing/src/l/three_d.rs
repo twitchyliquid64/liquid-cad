@@ -2,12 +2,6 @@ use crate::data::CADOp;
 use std::collections::HashMap;
 use truck_modeling::*;
 
-fn kurbo_to_truck_vtx(kp: Vec<kurbo::Point>) -> Vec<Vertex> {
-    kp.into_iter()
-        .map(|p| builder::vertex(Point3::new(p.x, p.y, 0.0)))
-        .collect()
-}
-
 fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>) -> Wire {
     let mut vert = |p: kurbo::Point| {
         let (x, y) = (p.x, p.y);
@@ -60,60 +54,72 @@ fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>)
     edges.into()
 }
 
-fn face_from_paths(exterior: kurbo::BezPath, cutouts: Vec<(CADOp, kurbo::BezPath)>) -> Face {
-    let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
-    let mut wires: Vec<Wire> = Vec::with_capacity(1 + cutouts.len());
-    wires.push(wire_from_path(exterior, &mut verts));
-
-    for (op, path) in cutouts.into_iter() {
-        if !matches!(op, CADOp::Hole) {
-            panic!("unexpected op! {:?}", op);
-        }
-        wires.push(wire_from_path(path, &mut verts));
-    }
-
-    builder::try_attach_plane(&wires).unwrap()
+fn op_parents(ops: &Vec<(CADOp, kurbo::BezPath)>) -> Vec<isize> {
+    // Using the bounding box of each shape, compute which operation it is dependent upon.
+    use kurbo::Shape;
+    let op_bb: Vec<_> = ops.iter().map(|(_, p)| p.bounding_box()).collect();
+    ops.iter()
+        .enumerate()
+        .map(|(i, _)| {
+            let mut best: (isize, f64) = (-1, f64::INFINITY);
+            for i2 in 0..ops.len() {
+                if i == i2 {
+                    continue;
+                }
+                if op_bb[i2].area() > op_bb[i].area()
+                    && op_bb[i2].intersect(op_bb[i]) == op_bb[i]
+                    && op_bb[i2].area() < best.1
+                {
+                    best = (i2 as isize, op_bb[i2].area());
+                }
+            }
+            best.0
+        })
+        .collect()
 }
 
 pub fn extrude_from_paths(
     exterior: kurbo::BezPath,
-    cutouts: Vec<(CADOp, kurbo::BezPath)>,
+    ops: Vec<(CADOp, kurbo::BezPath)>,
     height: f64,
 ) -> Solid {
-    let face = face_from_paths(exterior, cutouts);
-    builder::tsweep(&face, height * Vector3::unit_z())
-}
+    use kurbo::Shape;
+    let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
+    // let op_parent_idx = op_parents(&ops);
 
-pub fn extrude_from_points(
-    points: Vec<kurbo::Point>,
-    boundary_paths_idxs: Vec<Vec<usize>>,
-    cutout_paths_idxs: Vec<Vec<usize>>,
-    height: f64,
-) -> Solid {
-    let points = kurbo_to_truck_vtx(points);
+    let ea = exterior.area();
+    let base_face: Face =
+        builder::try_attach_plane(&vec![wire_from_path(exterior, &mut verts)]).unwrap();
+    let mut base: Shell = builder::tsweep(&base_face, height * Vector3::unit_z())
+        .into_boundaries()
+        .pop()
+        .unwrap();
+    let (bottom_idx, top_idx) = (0, base.len() - 1);
 
-    let mut lines = Vec::with_capacity(boundary_paths_idxs.iter().flatten().count());
-    for path in boundary_paths_idxs.into_iter() {
-        for inds in path.windows(2) {
-            lines.push(builder::line(&points[inds[0]], &points[inds[1]]));
-        }
-    }
-
-    let wire: Wire = lines.into();
-    let wires = vec![wire];
-    let mut face = builder::try_attach_plane(&wires).unwrap();
-
-    for cutout in cutout_paths_idxs.into_iter() {
-        let mut lines = Vec::with_capacity(cutout.len());
-        for inds in cutout.windows(2) {
-            lines.push(builder::line(&points[inds[0]], &points[inds[1]]));
+    for (op, path) in ops.into_iter() {
+        let pa = path.area();
+        if !matches!(op, CADOp::Hole) {
+            panic!("unexpected op! {:?}", op);
         }
 
-        let wire: Wire = lines.into();
-        face.add_boundary(wire);
+        let mut w = wire_from_path(path, &mut verts);
+        if ea.signum() == pa.signum() {
+            w.invert(); // HACK: truck cares about winding order
+        }
+        let shell = builder::tsweep(&w, height * Vector3::unit_z());
+        let b = shell.extract_boundaries();
+
+        // Extract copies of the wires representing the boundaries of the hole.
+        // Use these to insert holes in the boundary of the base shell.
+        let bottom_wire = b.first().unwrap();
+        base[bottom_idx].add_boundary(bottom_wire.inverse());
+        let top_wire = b.last().unwrap();
+        base[top_idx].add_boundary(top_wire.inverse());
+
+        base.extend(shell);
     }
 
-    builder::tsweep(&face, height * Vector3::unit_z())
+    Solid::new(vec![base])
 }
 
 pub fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
@@ -153,43 +159,141 @@ mod tests {
     use super::*;
 
     #[test]
-    fn points_convert() {
+    fn op_parents_basic() {
+        use kurbo::Shape;
+
+        // Empty
+        assert_eq!(op_parents(&vec![]), vec![],);
+
+        // Not nested, 1 element
         assert_eq!(
-            kurbo_to_truck_vtx(vec![kurbo::Point::from((1.0, 2.0)),])[0].get_point(),
-            Point3::new(1.0, 2.0, 0.0),
+            op_parents(&vec![(
+                CADOp::Hole,
+                kurbo::Rect {
+                    x0: 1.0,
+                    y0: 1.0,
+                    x1: 5.0,
+                    y1: 5.0
+                }
+                .into_path(0.1)
+            ),]),
+            vec![-1],
         );
-    }
-
-    #[test]
-    fn extrude_triangle() {
-        let _solid = extrude_from_points(
-            vec![
-                (0.0, 0.0).into(),
-                (0.0, 25.).into(),
-                (50., 0.0).into(),
-                (2.0, 2.0).into(),
-                (6.0, 2.).into(),
-                (10., 10.).into(),
-            ],
-            vec![vec![0, 1, 2, 0]],
-            vec![vec![3, 4, 5, 3]],
-            3.0,
+        // Not nested, 2 elements
+        assert_eq!(
+            op_parents(&vec![
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 1.0,
+                        y0: 1.0,
+                        x1: 5.0,
+                        y1: 5.0
+                    }
+                    .into_path(0.1)
+                ),
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 6.0,
+                        y0: 6.0,
+                        x1: 9.0,
+                        y1: 9.0
+                    }
+                    .into_path(0.1)
+                ),
+            ]),
+            vec![-1, -1],
+        );
+        // Intersecting
+        assert_eq!(
+            op_parents(&vec![
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 1.0,
+                        y0: 1.0,
+                        x1: 5.0,
+                        y1: 5.0
+                    }
+                    .into_path(0.1)
+                ),
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 4.0,
+                        y0: 4.0,
+                        x1: 6.0,
+                        y1: 6.0
+                    }
+                    .into_path(0.1)
+                ),
+            ]),
+            vec![-1, -1],
         );
 
-        // use truck_meshalgo::tessellation::MeshableShape;
-        // use truck_meshalgo::tessellation::MeshedShape;
-        // let mut file = std::fs::File::create("/tmp/ye.stl").unwrap();
-        // truck_polymesh::stl::write(
-        //     &solid.compress().triangulation(0.02).to_polygon(),
-        //     &mut file,
-        //     truck_polymesh::stl::STLType::Binary,
-        // )
-        // .unwrap();
-        // let mut file = std::fs::File::create("/tmp/ye.obj").unwrap();
-        // truck_polymesh::obj::write(
-        //     &solid.compress().triangulation(0.02).to_polygon(),
-        //     &mut file,
-        // )
-        // .unwrap();
+        // Basic
+        assert_eq!(
+            op_parents(&vec![
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 1.0,
+                        y0: 1.0,
+                        x1: 5.0,
+                        y1: 5.0
+                    }
+                    .into_path(0.1)
+                ),
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 2.0,
+                        y0: 2.0,
+                        x1: 3.0,
+                        y1: 3.0
+                    }
+                    .into_path(0.1)
+                ),
+            ]),
+            vec![-1, 0],
+        );
+
+        // Multiple
+        assert_eq!(
+            op_parents(&vec![
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 1.0,
+                        y0: 1.0,
+                        x1: 5.0,
+                        y1: 5.0
+                    }
+                    .into_path(0.1)
+                ),
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 2.5,
+                        y0: 2.1,
+                        x1: 2.9,
+                        y1: 2.8
+                    }
+                    .into_path(0.1)
+                ),
+                (
+                    CADOp::Hole,
+                    kurbo::Rect {
+                        x0: 2.0,
+                        y0: 2.0,
+                        x1: 3.0,
+                        y1: 3.0
+                    }
+                    .into_path(0.1)
+                ),
+            ]),
+            vec![-1, 2, 0],
+        );
     }
 }

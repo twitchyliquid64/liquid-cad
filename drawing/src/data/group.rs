@@ -139,9 +139,9 @@ impl Group {
             paths.push(current.0);
         }
 
-        paths
-            .iter_mut()
-            .for_each(|p| p.apply_affine(kurbo::Affine::FLIP_Y));
+        paths.iter_mut().for_each(|p| {
+            p.apply_affine(kurbo::Affine::FLIP_Y);
+        });
         paths
     }
 }
