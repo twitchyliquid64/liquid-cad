@@ -1134,7 +1134,6 @@ impl<'a> Widget<'a> {
                     }
                 }
             });
-            ui.label("(OBJ export has issues atm :( help always welcome)")
         });
 
         if let Some(idx) = boundary_group_set {

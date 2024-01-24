@@ -88,8 +88,11 @@ pub fn extrude_from_paths(
     // let op_parent_idx = op_parents(&ops);
 
     let ea = exterior.area();
-    let base_face: Face =
-        builder::try_attach_plane(&vec![wire_from_path(exterior, &mut verts)]).unwrap();
+    let mut base_wire = wire_from_path(exterior, &mut verts);
+    if ea.signum() < 0.0 {
+        base_wire.invert();
+    }
+    let base_face: Face = builder::try_attach_plane(&vec![base_wire]).unwrap();
     let mut base: Shell = builder::tsweep(&base_face, height * Vector3::unit_z())
         .into_boundaries()
         .pop()
@@ -103,7 +106,7 @@ pub fn extrude_from_paths(
         }
 
         let mut w = wire_from_path(path, &mut verts);
-        if ea.signum() == pa.signum() {
+        if pa.signum() > 0.0 {
             w.invert(); // HACK: truck cares about winding order
         }
         let shell = builder::tsweep(&w, height * Vector3::unit_z());
@@ -294,6 +297,31 @@ mod tests {
                 ),
             ]),
             vec![-1, 2, 0],
+        );
+    }
+
+    #[test]
+    fn extrude_smoke_test() {
+        use kurbo::Shape;
+        extrude_from_paths(
+            kurbo::Rect {
+                x0: 1.0,
+                y0: 1.0,
+                x1: 5.0,
+                y1: 5.0,
+            }
+            .into_path(0.1),
+            vec![(
+                CADOp::Hole,
+                kurbo::Rect {
+                    x0: 2.0,
+                    y0: 2.0,
+                    x1: 3.0,
+                    y1: 3.0,
+                }
+                .into_path(0.1),
+            )],
+            3.0,
         );
     }
 }
