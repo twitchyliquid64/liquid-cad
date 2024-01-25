@@ -1171,7 +1171,7 @@ impl Data {
                 GroupType::Boundary | GroupType::Hole => {}
                 GroupType::Extrude => {
                     for p in paths.into_iter() {
-                        ops.push((CADOp::Extrude(3.0), p));
+                        ops.push((CADOp::Extrude(g.amt.unwrap_or(3.0)), p));
                     }
                 }
             }
@@ -1411,6 +1411,7 @@ mod tests {
             typ: group::GroupType::Boundary,
             name: "yolo".into(),
             features: vec![p1, p2, l1],
+            ..Group::default()
         }];
 
         assert_eq!(
@@ -1419,6 +1420,7 @@ mod tests {
                 typ: group::GroupType::Boundary,
                 name: "yolo".into(),
                 features_idx: vec![0, 1, 2],
+                ..group::SerializedGroup::default()
             },],
         );
     }

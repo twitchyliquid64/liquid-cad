@@ -930,6 +930,29 @@ impl<'a> Widget<'a> {
                             });
                         })
                         .body(|ui| {
+                            if group.typ == GroupType::Extrude {
+                                ui.horizontal(|ui| {
+                                    let r = ui.available_size();
+                                    let text_rect = ui.add(egui::Label::new("Extrusion thickness").wrap(false)).rect;
+
+                                    if text_rect.width() < r.x / 2. {
+                                        ui.add_space(r.x / 2. - text_rect.width());
+                                    }
+                                    let mut amt = group.amt.unwrap_or(3.0);
+                                    if ui.add(
+                                                egui::DragValue::new(&mut amt)
+                                                    .clamp_range(0.1..=1000.0)
+                                                    .suffix("mm")
+                                                    .min_decimals(2),
+                                            ).changed() {
+                                        if amt == 3.0 {
+                                            group.amt = None;
+                                        } else {
+                                            group.amt = Some(amt);
+                                        }
+                                    }
+                                });
+                            }
                             ui.horizontal(|ui| {
                                 let r = ui.available_size();
                                 let text_rect = ui.add(egui::Label::new(format!("{} features", group.features.len())).wrap(false)).rect;
