@@ -914,7 +914,8 @@ impl<'a> Widget<'a> {
                                     .show_ui(ui, |ui| {
                                         ui.style_mut().wrap = Some(false);
                                         ui.set_min_width(60.0);
-                                        ui.selectable_value(&mut group.typ, GroupType::Interior, "Interior");
+                                        ui.selectable_value(&mut group.typ, GroupType::Hole, "Hole");
+                                        ui.selectable_value(&mut group.typ, GroupType::Extrude, "Extrude");
                                         if ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary").changed() {
                                             boundary_group_set = Some(i);
                                         };
@@ -974,7 +975,7 @@ impl<'a> Widget<'a> {
                     typ: if g_len == 0 {
                         GroupType::Boundary
                     } else {
-                        GroupType::Interior
+                        GroupType::Hole
                     },
                     ..Group::default()
                 });
@@ -1139,7 +1140,7 @@ impl<'a> Widget<'a> {
         if let Some(idx) = boundary_group_set {
             for (i, g) in self.drawing.groups.iter_mut().enumerate() {
                 if i != idx && g.typ == GroupType::Boundary {
-                    g.typ = GroupType::Interior;
+                    g.typ = GroupType::Hole;
                 }
             }
         }

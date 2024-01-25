@@ -19,3 +19,4 @@ kurbo.workspace = true
 truck-modeling.workspace = true
 truck-polymesh.workspace = true
 truck-meshalgo.workspace = true
+truck-topology.workspace = true

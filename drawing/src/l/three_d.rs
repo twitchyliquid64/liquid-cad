@@ -1,5 +1,5 @@
 use crate::data::CADOp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use truck_modeling::*;
 
 fn wire_from_path(path: kurbo::BezPath, verts: &mut HashMap<(u64, u64), Vertex>) -> Wire {
@@ -80,7 +80,7 @@ fn op_parents(ops: &Vec<(CADOp, kurbo::BezPath)>) -> Vec<isize> {
 
 pub fn extrude_from_paths(
     exterior: kurbo::BezPath,
-    mut ops: Vec<(CADOp, kurbo::BezPath)>,
+    ops: Vec<(CADOp, kurbo::BezPath)>,
     height: f64,
 ) -> Solid {
     use kurbo::Shape;
@@ -90,6 +90,7 @@ pub fn extrude_from_paths(
     let ea = exterior.area();
     let mut base_wire = wire_from_path(exterior, &mut verts);
     if ea.signum() < 0.0 {
+        println!("inverting base");
         base_wire.invert();
     }
     let base_face: Face = builder::try_attach_plane(&vec![base_wire]).unwrap();
@@ -97,6 +98,7 @@ pub fn extrude_from_paths(
         .into_boundaries()
         .pop()
         .unwrap();
+    // base.face_iter_mut().for_each(|f| if !f.orientation(){ f.invert(); });
     let (bottom_idx, top_idx) = (0, base.len() - 1);
 
     // done_parents tracks the index into the base shell for the top and bottom
@@ -104,50 +106,88 @@ pub fn extrude_from_paths(
     let mut done_parents: HashMap<isize, (usize, usize)> = HashMap::with_capacity(ops.len());
     done_parents.insert(-1, (bottom_idx, top_idx));
 
-    while ops.len() > 0 {
+    let mut done: HashSet<usize> = HashSet::with_capacity(ops.len());
+    while done.len() < ops.len() {
         let next_idx = ops
             .iter()
             .enumerate()
-            .position(|(i, _)| done_parents.contains_key(&op_parent_idx[i]));
+            .filter(|(i, _)| !done.contains(i) && done_parents.contains_key(&op_parent_idx[*i]))
+            .map(|(i, _)| i)
+            .find(|_| true);
 
         match next_idx {
             None => unreachable!(),
             Some(i) => {
                 let (op, path) = &ops[i];
-                // println!("i={}: ({}) {:?}, {:?}", op_parent_idx[i], i, op, path);
+                // println!("i={}: ({}) {:?}, {:?}", i, op_parent_idx[i], op, path);
                 let mut w = wire_from_path(path.clone(), &mut verts);
-                if path.area().signum() > 0.0 {
-                    w.invert(); // HACK: truck cares about winding order
-                }
 
                 let (bottom_idx, top_idx) = *done_parents.get(&op_parent_idx[i]).unwrap();
+                let z_height = base[top_idx]
+                    .absolute_boundaries()
+                    .iter()
+                    .map(|e| e.vertex_iter())
+                    .flatten()
+                    .fold(0.0, |acc: f64, v| acc.max(v.get_point().z));
 
                 match op {
                     CADOp::Hole => {
-                        let shell = builder::tsweep(&w, height * Vector3::unit_z()); // todo: calc height
-                        let b = shell.extract_boundaries();
+                        if path.area().signum() > 0.0 {
+                            println!("inverting part: idx={}", i);
+                            w.invert();
+                        }
+                        let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
+                        let solid = builder::tsweep(&f, z_height * Vector3::unit_z());
+                        let mut b = solid.into_boundaries().pop().unwrap();
 
                         // Extract copies of the wires representing the boundaries of the hole.
                         // Use these to insert holes in the boundary of the base shell.
-                        let bottom_wire = b.first().unwrap();
-                        base[bottom_idx].add_boundary(bottom_wire.inverse());
-                        let top_wire = b.last().unwrap();
-                        base[top_idx].add_boundary(top_wire.inverse());
+                        let bottom_wire = &b.first().unwrap().boundaries()[0];
+                        base[bottom_idx].add_boundary(bottom_wire.clone());
+                        let top_wire = &b.last().unwrap().boundaries()[0];
+                        base[top_idx].add_boundary(top_wire.clone());
 
-                        done_parents.insert(i as isize, (base.len(), base.len() + shell.len() - 1));
-                        base.extend(shell);
+                        b.pop();
+                        base.extend(b.into_iter().skip(1));
                     }
-                    CADOp::Extrude(_) => todo!(),
+                    CADOp::Extrude(amt) => {
+                        if path.area().signum() < 0.0 {
+                            println!("inverting part: idx={}", i);
+                            w.invert();
+                        }
+                        let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
+                        let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
+                        let solid = builder::translated(&tf, z_height * Vector3::unit_z());
+                        let b = solid.into_boundaries().pop().unwrap();
+
+                        // Cut the base shape at the boundary so we can glue the extrusion
+                        let bottom_wire = &b.first().unwrap().boundaries()[0];
+                        base[top_idx].add_boundary(bottom_wire.clone());
+
+                        // Add the faces of the extrusion except the bottom
+                        base.extend(b.into_iter().skip(1));
+
+                        done_parents.insert(i as isize, (bottom_idx, base.len() - 1));
+                    }
                 }
-                ops.remove(i);
+                done.insert(i);
             }
         }
     }
 
-    // if ea.signum() < 0.0 {
-    //     println!("YEPP");
-    //     base.face_iter_mut().for_each(|f| {f.invert();});
-    // }
+    // use truck_topology::{
+    //     EdgeDisplayFormat, FaceDisplayFormat, ShellDisplayFormat, VertexDisplayFormat,
+    //     WireDisplayFormat,
+    // };
+    // let vertex_format = VertexDisplayFormat::AsPoint;
+    // let edge_format = EdgeDisplayFormat::VerticesTuple { vertex_format };
+    // let wire_format = WireDisplayFormat::EdgesList { edge_format };
+    // let face_format = FaceDisplayFormat::Full { wire_format };
+    // println!(
+    //     "{:#?}",
+    //     base.display(ShellDisplayFormat::FacesListTuple { face_format })
+    // );
+
     Solid::new(vec![base])
 }
 
@@ -329,6 +369,35 @@ mod tests {
     #[test]
     fn extrude_smoke_test() {
         use kurbo::Shape;
+
+        let rect = extrude_from_paths(
+            kurbo::Rect {
+                x0: 1.0,
+                y0: 1.0,
+                x1: 5.0,
+                y1: 5.0,
+            }
+            .into_path(0.1),
+            vec![],
+            3.0,
+        );
+        for (i, (f, want)) in rect
+            .face_iter()
+            .zip(&[false, true, true, true, true, true])
+            .enumerate()
+        {
+            assert_eq!(
+                f.orientation(),
+                *want,
+                "face {} was inverted:\n{}",
+                i,
+                f.vertex_iter()
+                    .map(|v| format!(" - {:?}", v).to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+        }
+
         extrude_from_paths(
             kurbo::Rect {
                 x0: 1.0,
@@ -342,8 +411,8 @@ mod tests {
                 kurbo::Rect {
                     x0: 2.0,
                     y0: 2.0,
-                    x1: 3.0,
-                    y1: 3.0,
+                    x1: 4.0,
+                    y1: 4.0,
                 }
                 .into_path(0.1),
             )],

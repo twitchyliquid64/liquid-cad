@@ -5,7 +5,9 @@ use std::collections::HashMap;
 pub enum GroupType {
     Boundary,
     #[default]
-    Interior,
+    #[serde(alias = "Interior")]
+    Hole,
+    Extrude,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
