@@ -80,12 +80,12 @@ fn op_parents(ops: &Vec<(CADOp, kurbo::BezPath)>) -> Vec<isize> {
 
 pub fn extrude_from_paths(
     exterior: kurbo::BezPath,
-    ops: Vec<(CADOp, kurbo::BezPath)>,
+    mut ops: Vec<(CADOp, kurbo::BezPath)>,
     height: f64,
 ) -> Solid {
     use kurbo::Shape;
     let mut verts: HashMap<(u64, u64), Vertex> = HashMap::with_capacity(32);
-    // let op_parent_idx = op_parents(&ops);
+    let op_parent_idx = op_parents(&ops);
 
     let ea = exterior.area();
     let mut base_wire = wire_from_path(exterior, &mut verts);
@@ -99,29 +99,55 @@ pub fn extrude_from_paths(
         .unwrap();
     let (bottom_idx, top_idx) = (0, base.len() - 1);
 
-    for (op, path) in ops.into_iter() {
-        let pa = path.area();
-        if !matches!(op, CADOp::Hole) {
-            panic!("unexpected op! {:?}", op);
+    // done_parents tracks the index into the base shell for the top and bottom
+    // faces which represent the geometry created at that ops index.
+    let mut done_parents: HashMap<isize, (usize, usize)> = HashMap::with_capacity(ops.len());
+    done_parents.insert(-1, (bottom_idx, top_idx));
+
+    while ops.len() > 0 {
+        let next_idx = ops
+            .iter()
+            .enumerate()
+            .position(|(i, _)| done_parents.contains_key(&op_parent_idx[i]));
+
+        match next_idx {
+            None => unreachable!(),
+            Some(i) => {
+                let (op, path) = &ops[i];
+                // println!("i={}: ({}) {:?}, {:?}", op_parent_idx[i], i, op, path);
+                let mut w = wire_from_path(path.clone(), &mut verts);
+                if path.area().signum() > 0.0 {
+                    w.invert(); // HACK: truck cares about winding order
+                }
+
+                let (bottom_idx, top_idx) = *done_parents.get(&op_parent_idx[i]).unwrap();
+
+                match op {
+                    CADOp::Hole => {
+                        let shell = builder::tsweep(&w, height * Vector3::unit_z()); // todo: calc height
+                        let b = shell.extract_boundaries();
+
+                        // Extract copies of the wires representing the boundaries of the hole.
+                        // Use these to insert holes in the boundary of the base shell.
+                        let bottom_wire = b.first().unwrap();
+                        base[bottom_idx].add_boundary(bottom_wire.inverse());
+                        let top_wire = b.last().unwrap();
+                        base[top_idx].add_boundary(top_wire.inverse());
+
+                        done_parents.insert(i as isize, (base.len(), base.len() + shell.len() - 1));
+                        base.extend(shell);
+                    }
+                    CADOp::Extrude(_) => todo!(),
+                }
+                ops.remove(i);
+            }
         }
-
-        let mut w = wire_from_path(path, &mut verts);
-        if pa.signum() > 0.0 {
-            w.invert(); // HACK: truck cares about winding order
-        }
-        let shell = builder::tsweep(&w, height * Vector3::unit_z());
-        let b = shell.extract_boundaries();
-
-        // Extract copies of the wires representing the boundaries of the hole.
-        // Use these to insert holes in the boundary of the base shell.
-        let bottom_wire = b.first().unwrap();
-        base[bottom_idx].add_boundary(bottom_wire.inverse());
-        let top_wire = b.last().unwrap();
-        base[top_idx].add_boundary(top_wire.inverse());
-
-        base.extend(shell);
     }
 
+    // if ea.signum() < 0.0 {
+    //     println!("YEPP");
+    //     base.face_iter_mut().for_each(|f| {f.invert();});
+    // }
     Solid::new(vec![base])
 }
 
