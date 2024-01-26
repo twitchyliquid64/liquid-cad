@@ -11,6 +11,8 @@ https://github.com/twitchyliquid64/liquid-cad/assets/6328589/70ce6e84-25ff-4af1-
 ### Backlog for Beta
 
  * More work on Help page
+ * More tests for 3D solid logic
+ * Move 3D code to own crate
  * Export to STEP
  * Arc dragging
  * Broken constraint tools / solver stability (need help!):

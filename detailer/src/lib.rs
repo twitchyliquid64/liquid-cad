@@ -19,14 +19,12 @@ pub enum Tab {
 #[derive(Debug, Clone)]
 pub struct State {
     tab: Tab,
-    extrusion_amt: f64,
 }
 
 impl Default for State {
     fn default() -> Self {
         let tab = Tab::default();
-        let extrusion_amt = 3.0;
-        Self { tab, extrusion_amt }
+        Self { tab }
     }
 }
 
@@ -930,28 +928,32 @@ impl<'a> Widget<'a> {
                             });
                         })
                         .body(|ui| {
-                            if group.typ == GroupType::Extrude {
-                                ui.horizontal(|ui| {
-                                    let r = ui.available_size();
-                                    let text_rect = ui.add(egui::Label::new("Extrusion thickness").wrap(false)).rect;
+                            match group.typ {
+                                GroupType::Boundary | GroupType::Extrude => {
+                                    ui.horizontal(|ui| {
+                                        let r = ui.available_size();
+                                        let text_rect = ui.add(egui::Label::new("Extrusion thickness").wrap(false)).rect;
 
-                                    if text_rect.width() < r.x / 2. {
-                                        ui.add_space(r.x / 2. - text_rect.width());
-                                    }
-                                    let mut amt = group.amt.unwrap_or(3.0);
-                                    if ui.add(
-                                                egui::DragValue::new(&mut amt)
-                                                    .clamp_range(0.1..=1000.0)
-                                                    .suffix("mm")
-                                                    .min_decimals(2),
-                                            ).changed() {
-                                        if amt == 3.0 {
-                                            group.amt = None;
-                                        } else {
-                                            group.amt = Some(amt);
+                                        if text_rect.width() < r.x / 2. {
+                                            ui.add_space(r.x / 2. - text_rect.width());
                                         }
-                                    }
-                                });
+                                        let mut amt = group.amt.unwrap_or(3.0);
+                                        if ui.add(
+                                                    egui::DragValue::new(&mut amt)
+                                                        .clamp_range(0.1..=1000.0)
+                                                        .suffix("mm")
+                                                        .speed(0.1)
+                                                        .min_decimals(2),
+                                                ).changed() {
+                                            if amt == 3.0 {
+                                                group.amt = None;
+                                            } else {
+                                                group.amt = Some(amt);
+                                            }
+                                        }
+                                    });
+                                }
+                                _ => {}
                             }
                             ui.horizontal(|ui| {
                                 let r = ui.available_size();
@@ -1111,20 +1113,13 @@ impl<'a> Widget<'a> {
 
             ui.horizontal(|ui| {
                 let r = ui.available_size();
-                let text_rect = ui.add(egui::Label::new("3D extrusion")).rect;
+                let text_rect = ui.add(egui::Label::new("3D mesh")).rect;
                 if text_rect.width() < r.x / 2. {
                     ui.add_space(r.x / 2. - text_rect.width());
                 }
 
-                ui.add(egui::DragValue::new(&mut self.state.extrusion_amt)
-                        .speed(0.1).suffix("mm"));
-
-                if self.state.extrusion_amt < 0.1 {
-                    self.state.extrusion_amt = 0.1;
-                }
-
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("STL 📥")).clicked() {
-                    match self.drawing.as_solid(self.state.extrusion_amt) {
+                    match self.drawing.as_solid() {
                         Ok(solid) => {
                             use drawing::l::three_d::*;
                             export_fn.take().map(|f| f("STL", "stl", solid_to_stl(solid, self.drawing.props.flatten_tolerance)));
@@ -1141,7 +1136,7 @@ impl<'a> Widget<'a> {
                     }
                 }
                 if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("OBJ 📥")).clicked() {
-                    match self.drawing.as_solid(self.state.extrusion_amt) {
+                    match self.drawing.as_solid() {
                         Ok(solid) => {
                             use drawing::l::three_d::*;
                             export_fn.take().map(|f| f("OBJ", "obj", solid_to_obj(solid, self.drawing.props.flatten_tolerance)));

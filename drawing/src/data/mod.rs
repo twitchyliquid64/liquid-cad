@@ -1129,10 +1129,12 @@ impl Data {
         Ok((points, indices_outer, indices_inner))
     }
 
-    pub fn part_paths(&self) -> Result<(kurbo::BezPath, Vec<(CADOp, kurbo::BezPath)>), ExportErr> {
+    pub fn part_paths(
+        &self,
+    ) -> Result<((f64, kurbo::BezPath), Vec<(CADOp, kurbo::BezPath)>), ExportErr> {
         use crate::GroupType;
         use kurbo::Shape;
-        let mut outer: Option<kurbo::BezPath> = None;
+        let mut outer: Option<(f64, kurbo::BezPath)> = None;
         let mut ops: Vec<(CADOp, kurbo::BezPath)> = Vec::with_capacity(12);
 
         let paths: Vec<(&Group, Vec<kurbo::BezPath>)> = self
@@ -1142,18 +1144,15 @@ impl Data {
             .collect();
 
         // Do boundaries first
-        for p in paths
-            .iter()
-            .filter(|(g, _)| g.typ == GroupType::Boundary)
-            .map(|(_g, paths)| paths.iter())
-            .flatten()
-        {
-            match outer {
-                None => {
-                    outer = Some(p.clone());
-                }
-                Some(_) => {
-                    return Err(ExportErr::MultiBoundaryGroup);
+        for (g, paths) in paths.iter().filter(|(g, _)| g.typ == GroupType::Boundary) {
+            for p in paths.iter() {
+                match outer {
+                    None => {
+                        outer = Some((g.amt.unwrap_or(3.0), p.clone()));
+                    }
+                    Some(_) => {
+                        return Err(ExportErr::MultiBoundaryGroup);
+                    }
                 }
             }
         }
@@ -1222,8 +1221,8 @@ impl Data {
         Ok((outer.unwrap(), ops))
     }
 
-    pub fn as_solid(&self, height: f64) -> Result<truck_modeling::Solid, ExportErr> {
-        let (exterior, ops) = self.part_paths()?;
+    pub fn as_solid(&self) -> Result<truck_modeling::Solid, ExportErr> {
+        let ((height, exterior), ops) = self.part_paths()?;
         Ok(crate::l::three_d::extrude_from_paths(exterior, ops, height))
     }
 }
@@ -2475,7 +2474,7 @@ mod tests {
             })
             .unwrap();
 
-            assert_eq!(data.as_solid(3.0), Err(ExportErr::NoBoundaryGroup));
+            assert_eq!(data.as_solid(), Err(ExportErr::NoBoundaryGroup));
         }
 
         {
@@ -2500,7 +2499,7 @@ mod tests {
             })
             .unwrap();
 
-            assert_eq!(data.as_solid(3.0), Err(ExportErr::MultiBoundaryGroup));
+            assert_eq!(data.as_solid(), Err(ExportErr::MultiBoundaryGroup));
         }
 
         {
@@ -2531,7 +2530,7 @@ mod tests {
             })
             .unwrap();
 
-            assert_eq!(data.as_solid(3.0), Err(ExportErr::IntersectingGroups(0, 1)));
+            assert_eq!(data.as_solid(), Err(ExportErr::IntersectingGroups(0, 1)));
         }
     }
 }
