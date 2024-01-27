@@ -44,6 +44,7 @@ pub enum ExportErr {
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
 pub enum CADOp {
     Extrude(f64),
+    Bore(f64),
     Hole,
 }
 
@@ -1171,6 +1172,11 @@ impl Data {
                 GroupType::Extrude => {
                     for p in paths.into_iter() {
                         ops.push((CADOp::Extrude(g.amt.unwrap_or(3.0)), p));
+                    }
+                }
+                GroupType::Bore => {
+                    for p in paths.into_iter() {
+                        ops.push((CADOp::Bore(g.amt.unwrap_or(3.0)), p));
                     }
                 }
             }

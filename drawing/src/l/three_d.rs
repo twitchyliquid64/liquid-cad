@@ -123,7 +123,13 @@ pub fn extrude_from_paths(
                 let mut w = wire_from_path(path.clone(), &mut verts);
 
                 let (bottom_idx, top_idx) = *done_parents.get(&op_parent_idx[i]).unwrap();
-                let z_height = base[top_idx]
+                let bottom_offset_z = base[bottom_idx]
+                    .absolute_boundaries()
+                    .iter()
+                    .map(|e| e.vertex_iter())
+                    .flatten()
+                    .fold(0.0, |acc: f64, v| acc.max(v.get_point().z));
+                let top_offset_z = base[top_idx]
                     .absolute_boundaries()
                     .iter()
                     .map(|e| e.vertex_iter())
@@ -133,11 +139,13 @@ pub fn extrude_from_paths(
                 match op {
                     CADOp::Hole => {
                         if path.area().signum() > 0.0 {
-                            println!("inverting part: idx={}", i);
-                            w.invert();
+                            w.invert(); // negative geometry must have edges clockwise
                         }
                         let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
-                        let solid = builder::tsweep(&f, z_height * Vector3::unit_z());
+                        let solid = builder::tsweep(
+                            &f,
+                            (top_offset_z - bottom_offset_z) * Vector3::unit_z(),
+                        );
                         let mut b = solid.into_boundaries().pop().unwrap();
 
                         // Extract copies of the wires representing the boundaries of the hole.
@@ -152,12 +160,11 @@ pub fn extrude_from_paths(
                     }
                     CADOp::Extrude(amt) => {
                         if path.area().signum() < 0.0 {
-                            println!("inverting part: idx={}", i);
-                            w.invert();
+                            w.invert(); // regular geometry must have edges counter-clockwise
                         }
                         let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
                         let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
-                        let solid = builder::translated(&tf, z_height * Vector3::unit_z());
+                        let solid = builder::translated(&tf, top_offset_z * Vector3::unit_z());
                         let b = solid.into_boundaries().pop().unwrap();
 
                         // Cut the base shape at the boundary so we can glue the extrusion
@@ -168,6 +175,26 @@ pub fn extrude_from_paths(
                         base.extend(b.into_iter().skip(1));
 
                         done_parents.insert(i as isize, (bottom_idx, base.len() - 1));
+                    }
+                    CADOp::Bore(amt) => {
+                        if path.area().signum() > 0.0 {
+                            w.invert(); // negative geometry must have edges clockwise
+                        }
+                        let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
+                        let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
+                        let solid =
+                            builder::translated(&tf, (top_offset_z - *amt) * Vector3::unit_z());
+                        let mut b = solid.into_boundaries().pop().unwrap();
+
+                        let top_wire = &b.last().unwrap().boundaries()[0];
+                        base[top_idx].add_boundary(top_wire.clone());
+
+                        let next_face_idx = base.len(); // next face will be the bottom of the bore
+
+                        // Add the faces of the bore except the top
+                        b.pop();
+                        base.extend(b.into_iter());
+                        done_parents.insert(i as isize, (bottom_idx, next_face_idx));
                     }
                 }
                 done.insert(i);
@@ -226,6 +253,9 @@ pub fn solid_to_obj(s: Solid, tolerance: f64) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use truck_meshalgo::analyzers::WithPointCloud;
+    use truck_meshalgo::tessellation::MeshableShape;
+    use truck_meshalgo::tessellation::MeshedShape;
 
     #[test]
     fn op_parents_basic() {
@@ -367,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn extrude_smoke_test() {
+    fn extrude_basic() {
         use kurbo::Shape;
 
         let rect = extrude_from_paths(
@@ -379,7 +409,7 @@ mod tests {
             }
             .into_path(0.1),
             vec![],
-            3.0,
+            4.0,
         );
         for (i, (f, want)) in rect
             .face_iter()
@@ -397,8 +427,20 @@ mod tests {
                     .join("\n")
             );
         }
+        let mesh = rect.triangulation(0.1).to_polygon();
+        assert_eq!(
+            true,
+            mesh.collide_with_neiborhood_of(
+                &[Point3 {
+                    x: 1.5,
+                    y: 1.5,
+                    z: 1.5
+                }],
+                3.
+            )
+        );
 
-        extrude_from_paths(
+        let holey_rect = extrude_from_paths(
             kurbo::Rect {
                 x0: 1.0,
                 y0: 1.0,
@@ -416,7 +458,133 @@ mod tests {
                 }
                 .into_path(0.1),
             )],
-            3.0,
+            4.0,
+        );
+        let mesh = holey_rect.triangulation(0.1).to_polygon();
+        assert_eq!(
+            false,
+            mesh.collide_with_neiborhood_of(
+                &[Point3 {
+                    x: 3.0,
+                    y: 3.0,
+                    z: 2.0,
+                }],
+                1.0
+            )
+        );
+    }
+
+    #[test]
+    fn extrude_hole() {
+        use kurbo::Shape;
+
+        let holey_rect = extrude_from_paths(
+            kurbo::Rect {
+                x0: 1.0,
+                y0: 1.0,
+                x1: 5.0,
+                y1: 5.0,
+            }
+            .into_path(0.1),
+            vec![(
+                CADOp::Hole,
+                kurbo::Rect {
+                    x0: 2.0,
+                    y0: 2.0,
+                    x1: 4.0,
+                    y1: 4.0,
+                }
+                .into_path(0.1),
+            )],
+            4.0,
+        );
+        let mesh = holey_rect.triangulation(0.1).to_polygon();
+        assert_eq!(
+            false,
+            mesh.collide_with_neiborhood_of(
+                &[Point3 {
+                    x: 3.0,
+                    y: 3.0,
+                    z: 2.0,
+                }],
+                1.0
+            )
+        );
+    }
+
+    #[test]
+    fn extrude_extrusion() {
+        use kurbo::Shape;
+
+        let holey_rect = extrude_from_paths(
+            kurbo::Rect {
+                x0: 1.0,
+                y0: 1.0,
+                x1: 5.0,
+                y1: 5.0,
+            }
+            .into_path(0.1),
+            vec![(
+                CADOp::Extrude(4.5),
+                kurbo::Rect {
+                    x0: 2.0,
+                    y0: 2.0,
+                    x1: 4.0,
+                    y1: 4.0,
+                }
+                .into_path(0.1),
+            )],
+            4.0,
+        );
+        let mesh = holey_rect.triangulation(0.1).to_polygon();
+        assert_eq!(
+            true,
+            mesh.collide_with_neiborhood_of(
+                &[Point3 {
+                    x: 3.0,
+                    y: 3.0,
+                    z: 8.0,
+                }],
+                1.0
+            )
+        );
+    }
+
+    #[test]
+    fn extrude_bore() {
+        use kurbo::Shape;
+
+        let holey_rect = extrude_from_paths(
+            kurbo::Rect {
+                x0: 1.0,
+                y0: 1.0,
+                x1: 5.0,
+                y1: 5.0,
+            }
+            .into_path(0.1),
+            vec![(
+                CADOp::Bore(5.0),
+                kurbo::Rect {
+                    x0: 2.0,
+                    y0: 2.0,
+                    x1: 4.0,
+                    y1: 4.0,
+                }
+                .into_path(0.1),
+            )],
+            10.0,
+        );
+        let mesh = holey_rect.triangulation(0.1).to_polygon();
+        assert_eq!(
+            false,
+            mesh.collide_with_neiborhood_of(
+                &[Point3 {
+                    x: 3.0,
+                    y: 3.0,
+                    z: 10.0,
+                }],
+                1.0
+            )
         );
     }
 }

@@ -914,6 +914,7 @@ impl<'a> Widget<'a> {
                                         ui.set_min_width(60.0);
                                         ui.selectable_value(&mut group.typ, GroupType::Hole, "Hole");
                                         ui.selectable_value(&mut group.typ, GroupType::Extrude, "Extrude");
+                                        ui.selectable_value(&mut group.typ, GroupType::Bore, "Bore");
                                         if ui.selectable_value(&mut group.typ, GroupType::Boundary, "Boundary").changed() {
                                             boundary_group_set = Some(i);
                                         };
@@ -929,10 +930,15 @@ impl<'a> Widget<'a> {
                         })
                         .body(|ui| {
                             match group.typ {
-                                GroupType::Boundary | GroupType::Extrude => {
+                                GroupType::Boundary | GroupType::Extrude | GroupType::Bore => {
                                     ui.horizontal(|ui| {
                                         let r = ui.available_size();
-                                        let text_rect = ui.add(egui::Label::new("Extrusion thickness").wrap(false)).rect;
+                                        let text_rect = ui.add(egui::Label::new(match group.typ {
+                                            GroupType::Boundary => "Part thickness",
+                                            GroupType::Extrude => "Extrusion thickness",
+                                            GroupType::Bore => "Bore depth",
+                                            _ => unreachable!(),
+                                        }).wrap(false)).rect;
 
                                         if text_rect.width() < r.x / 2. {
                                             ui.add_space(r.x / 2. - text_rect.width());

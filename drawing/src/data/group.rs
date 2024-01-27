@@ -8,6 +8,7 @@ pub enum GroupType {
     #[serde(alias = "Interior")]
     Hole,
     Extrude,
+    Bore,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
