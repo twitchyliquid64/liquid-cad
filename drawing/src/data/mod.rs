@@ -43,8 +43,8 @@ pub enum ExportErr {
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
 pub enum CADOp {
-    Extrude(f64),
-    Bore(f64),
+    Extrude(f64, bool), // true = extrude on the bottom
+    Bore(f64, bool),    // true = bore from the bottom
     Hole,
 }
 
@@ -1171,12 +1171,12 @@ impl Data {
                 GroupType::Boundary | GroupType::Hole => {}
                 GroupType::Extrude => {
                     for p in paths.into_iter() {
-                        ops.push((CADOp::Extrude(g.amt.unwrap_or(3.0)), p));
+                        ops.push((CADOp::Extrude(g.amt.unwrap_or(3.0), g.bottom.is_some()), p));
                     }
                 }
                 GroupType::Bore => {
                     for p in paths.into_iter() {
-                        ops.push((CADOp::Bore(g.amt.unwrap_or(3.0)), p));
+                        ops.push((CADOp::Bore(g.amt.unwrap_or(3.0), g.bottom.is_some()), p));
                     }
                 }
             }

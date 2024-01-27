@@ -957,6 +957,16 @@ impl<'a> Widget<'a> {
                                                 group.amt = Some(amt);
                                             }
                                         }
+
+                                        if group.typ == GroupType::Extrude || group.typ == GroupType::Bore {
+                                            let mut bottom = group.bottom.is_some();
+                                            if ui.checkbox(
+                                                &mut bottom,
+                                                "Bottom",
+                                            ).changed() {
+                                                group.bottom = bottom.then(|| ());
+                                            }
+                                        }
                                     });
                                 }
                                 _ => {}

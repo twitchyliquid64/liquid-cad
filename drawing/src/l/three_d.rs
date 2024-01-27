@@ -128,13 +128,13 @@ pub fn extrude_from_paths(
                     .iter()
                     .map(|e| e.vertex_iter())
                     .flatten()
-                    .fold(0.0, |acc: f64, v| acc.max(v.get_point().z));
+                    .fold(-99999.0, |acc: f64, v| acc.max(v.get_point().z));
                 let top_offset_z = base[top_idx]
                     .absolute_boundaries()
                     .iter()
                     .map(|e| e.vertex_iter())
                     .flatten()
-                    .fold(0.0, |acc: f64, v| acc.max(v.get_point().z));
+                    .fold(-99999.0, |acc: f64, v| acc.max(v.get_point().z));
 
                 match op {
                     CADOp::Hole => {
@@ -142,10 +142,11 @@ pub fn extrude_from_paths(
                             w.invert(); // negative geometry must have edges clockwise
                         }
                         let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
-                        let solid = builder::tsweep(
+                        let tf = builder::tsweep(
                             &f,
                             (top_offset_z - bottom_offset_z) * Vector3::unit_z(),
                         );
+                        let solid = builder::translated(&tf, bottom_offset_z * Vector3::unit_z());
                         let mut b = solid.into_boundaries().pop().unwrap();
 
                         // Extract copies of the wires representing the boundaries of the hole.
@@ -158,7 +159,8 @@ pub fn extrude_from_paths(
                         b.pop();
                         base.extend(b.into_iter().skip(1));
                     }
-                    CADOp::Extrude(amt) => {
+                    CADOp::Extrude(amt, false) => {
+                        // on top
                         if path.area().signum() < 0.0 {
                             w.invert(); // regular geometry must have edges counter-clockwise
                         }
@@ -176,7 +178,31 @@ pub fn extrude_from_paths(
 
                         done_parents.insert(i as isize, (bottom_idx, base.len() - 1));
                     }
-                    CADOp::Bore(amt) => {
+                    CADOp::Extrude(amt, true) => {
+                        // on bottom
+                        if path.area().signum() < 0.0 {
+                            w.invert(); // regular geometry must have edges counter-clockwise
+                        }
+                        let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
+                        let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
+                        let solid =
+                            builder::translated(&tf, (bottom_offset_z - *amt) * Vector3::unit_z());
+                        let mut b = solid.into_boundaries().pop().unwrap();
+
+                        // Cut the base shape at the boundary so we can glue the extrusion
+                        let top_wire = &b.last().unwrap().boundaries()[0];
+                        base[bottom_idx].add_boundary(top_wire.clone());
+
+                        let next_face_idx = base.len();
+
+                        // Add the faces of the extrusion except the top
+                        b.pop();
+                        base.extend(b.into_iter());
+
+                        done_parents.insert(i as isize, (next_face_idx, top_idx));
+                    }
+                    CADOp::Bore(amt, false) => {
+                        // on top
                         if path.area().signum() > 0.0 {
                             w.invert(); // negative geometry must have edges clockwise
                         }
@@ -195,6 +221,23 @@ pub fn extrude_from_paths(
                         b.pop();
                         base.extend(b.into_iter());
                         done_parents.insert(i as isize, (bottom_idx, next_face_idx));
+                    }
+                    CADOp::Bore(amt, true) => {
+                        // on bottom
+                        if path.area().signum() > 0.0 {
+                            w.invert(); // negative geometry must have edges clockwise
+                        }
+                        let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
+                        let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
+                        let solid = builder::translated(&tf, bottom_offset_z * Vector3::unit_z());
+                        let mut b = solid.into_boundaries().pop().unwrap();
+
+                        let bottom_wire = &b.first().unwrap().boundaries()[0];
+                        base[bottom_idx].add_boundary(bottom_wire.clone());
+
+                        // Add the faces of the bore except the bottom
+                        base.extend(b.into_iter().skip(1));
+                        done_parents.insert(i as isize, (base.len() - 1, top_idx));
                     }
                 }
                 done.insert(i);
@@ -525,7 +568,7 @@ mod tests {
             }
             .into_path(0.1),
             vec![(
-                CADOp::Extrude(4.5),
+                CADOp::Extrude(4.5, false),
                 kurbo::Rect {
                     x0: 2.0,
                     y0: 2.0,
@@ -563,7 +606,7 @@ mod tests {
             }
             .into_path(0.1),
             vec![(
-                CADOp::Bore(5.0),
+                CADOp::Bore(5.0, false),
                 kurbo::Rect {
                     x0: 2.0,
                     y0: 2.0,

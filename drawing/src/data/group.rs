@@ -18,6 +18,7 @@ pub struct Group {
     pub features: Vec<FeatureKey>,
 
     pub amt: Option<f64>,
+    pub bottom: Option<()>,
 }
 
 impl Group {
@@ -36,6 +37,7 @@ impl Group {
             typ: self.typ,
             name: self.name.clone(),
             amt: self.amt,
+            bottom: self.bottom,
             features_idx,
         })
     }
@@ -57,6 +59,7 @@ impl Group {
             name: sg.name.clone(),
             features,
             amt: sg.amt,
+            bottom: sg.bottom,
         })
     }
 
@@ -159,6 +162,7 @@ pub struct SerializedGroup {
     pub name: String,
     pub features_idx: Vec<usize>,
     pub amt: Option<f64>,
+    pub bottom: Option<()>,
 }
 
 #[cfg(test)]
@@ -176,6 +180,7 @@ mod tests {
                 name: "Ye".into(),
                 features: vec![point_key],
                 amt: None,
+                bottom: None,
             }
             .serialize(&HashMap::from([(point_key, 42)])),
             Ok(SerializedGroup {
