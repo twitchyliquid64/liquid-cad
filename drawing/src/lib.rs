@@ -453,6 +453,11 @@ impl<'a> Widget<'a> {
             self.drawing.selection_delete();
         }
 
+        // Handle: Q cycles dragging settings
+        if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Q)) {
+            self.drawing.cycle_drag_setting();
+        }
+
         current_input
     }
 

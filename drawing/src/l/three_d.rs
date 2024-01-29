@@ -230,7 +230,7 @@ pub fn extrude_from_paths(
                         let f: Face = builder::try_attach_plane(&vec![w]).unwrap();
                         let tf = builder::tsweep(&f, *amt * Vector3::unit_z());
                         let solid = builder::translated(&tf, bottom_offset_z * Vector3::unit_z());
-                        let mut b = solid.into_boundaries().pop().unwrap();
+                        let b = solid.into_boundaries().pop().unwrap();
 
                         let bottom_wire = &b.first().unwrap().boundaries()[0];
                         base[bottom_idx].add_boundary(bottom_wire.clone());

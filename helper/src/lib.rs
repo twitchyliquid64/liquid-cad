@@ -34,8 +34,10 @@ impl<'a> Widget<'a> {
             .collapsible(true)
             .vscroll(true)
             .open(self.open)
-            .min_width(350.)
+            .min_width(380.)
+            .default_width(550.)
             .default_height(1750.)
+            .default_pos((320., 250.))
             .pivot(egui::Align2::RIGHT_BOTTOM);
 
         window.show(ctx, |ui| {
@@ -54,12 +56,13 @@ impl<'a> Widget<'a> {
                 .show(ui, |ui| {
                     ui.add_space(6.0);
                     let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+                    let aw = ui.available_width();
 
                     let table = TableBuilder::new(ui)
-                        .cell_layout(egui::Layout::left_to_right(egui::Align::TOP))
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true))
                         .column(Column::exact(110.0))
                         .column(Column::exact(80.0))
-                        .column(Column::remainder())
+                        .column(Column::remainder().at_most(aw / 1.8))
                         .striped(true)
                         .auto_shrink([false, true])
                         .header(21.0, |mut header| {
@@ -74,17 +77,19 @@ impl<'a> Widget<'a> {
                         });
                     });
                     table.body(|mut body| {
-                        body.row(text_height, |mut row| {
-                            row.col(|ui| {
-                                ui.strong("Constraint");
+                        for (name, hotkey, info) in State::CONSTRAINTS {
+                            body.row(8.1 * text_height, |mut row| {
+                                row.col(|ui| {
+                                    ui.strong(*name);
+                                });
+                                row.col(|ui| {
+                                    ui.label(*hotkey);
+                                });
+                                row.col(|ui| {
+                                    ui.label(*info);
+                                });
                             });
-                            row.col(|ui| {
-                                ui.label("Hotkey");
-                            });
-                            row.col(|ui| {
-                                ui.label("todo :)");
-                            });
-                        });
+                        }
                     });
 
                     ui.add_space(6.0);
@@ -110,6 +115,17 @@ impl<'a> Widget<'a> {
 }
 
 impl State {
+    const CONSTRAINTS: &'static [(&'static str, &'static str, &'static str)] = &[
+            (&"Fixed", &"S", &"Constrains a point to be at exactly some X/Y co-ordinate. By default this is (0, 0), but you can edit this by clicking on the point."),
+            (&"Dimension", &"D", &"When applied to a line, a dimension constraint sets the length of the line. When applied to a circle, a dimension constraint sets the radius of the circle.\n\nWhen a horizontal or vertical constraint is applied to a line with a dimension constraint, the dimension constraint additionally becomes responsible for enforcing the horizontal/vertical cardinality."),
+            (&"Horizontal", &"H", &"Constrains a line to be horizontal."),
+            (&"Vertical", &"V", &"Constrains a line to be vertical."),
+            (&"Point along line", &"I", &"Constrains a point to be a certain percentage along a line (i.e. lerp). The percentage defaults to 50% but can be changed later in the selection UI."),
+            (&"Equal", &"E", &"When applied to lines, constrains the lines to have the same length as each other.\n\nWhen applied to circles, constrains the radius to be equal for both circles."),
+            (&"Parallel", &"", &"Constrains lines to be parallel to each other.\n\nThe solver for this constraint doesn't work so well :/"),
+            (&"Angle", &"N", &"Constrains a line to have a certain angle."),
+        ];
+
     fn getting_started_layout_job(&mut self, ui: &egui::Ui) -> LayoutJob {
         if let Some(uij) = &self.uij {
             return uij.clone();

@@ -363,7 +363,7 @@ impl Tool {
             Tool::Dimension => Some("Sets the dimensions of a line or circle.\n\nClick a line/circle to constrain it to its current length/radius respectively. The constrained value can be changed later in the selection UI."),
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
             Tool::Vertical => Some("Constrains a line to be vertical."),
-            Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint.The percentage defaults to 50% but can be changed later in the selection UI."),
+            Tool::Lerp(_) => Some("Constrains a point to be a certain percentage along a line.\n\nClick a point, and then its corresponding line to apply this constraint. The percentage defaults to 50% but can be changed later in the selection UI."),
             Tool::Equal(_) => Some("Constrains a line/circle to be equal in length/radius to another line/circle."),
             Tool::Parallel(_) => Some("Constrains a line to be parallel to another line.\n\nWARNING: THIS TOOL IS EXPERIMENTAL and not working properly.\n\nClick on the first line, and then the second line to create this constraint."),
             Tool::Angle => Some("Constrains a line to have some angle clockwise from the vertical axis."),

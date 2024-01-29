@@ -162,6 +162,16 @@ impl Data {
         self.solve_and_apply();
     }
 
+    pub fn cycle_drag_setting(&mut self) {
+        (self.drag_features_enabled, self.drag_dimensions_enabled) =
+            match (self.drag_features_enabled, self.drag_dimensions_enabled) {
+                (false, false) => (true, false),
+                (true, false) => (true, true),
+                (true, true) => (false, true),
+                (false, true) => (false, false),
+            };
+    }
+
     fn equations(&mut self) -> Vec<eq::Expression> {
         self.constraints
             .iter()
