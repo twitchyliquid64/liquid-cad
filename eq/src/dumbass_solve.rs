@@ -256,13 +256,15 @@ impl DumbassSolver {
         // the proportion of variables which are non-zero
         let total_terms = st.vars.len() as f64;
         for mut col in j.column_iter_mut() {
-            let exp_sum = col.iter().fold(0.0, |acc, x| acc + x.exp());
+            let exp_sum = col
+                .iter()
+                .fold(0.0, |acc, x| acc + fast_math::exp(*x as f32) as f64);
             let terms_non_zero = col
                 .iter()
                 .map(|j| *j == 0.0)
                 .fold(0.0, |acc, zero| acc + if zero { 0.0 } else { 1.0 });
             for j in col.iter_mut() {
-                *j *= j.exp() / exp_sum * terms_non_zero / total_terms;
+                *j *= fast_math::exp(*j as f32) as f64 / exp_sum * terms_non_zero / total_terms;
             }
         }
 

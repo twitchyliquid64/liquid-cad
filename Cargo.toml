@@ -37,6 +37,7 @@ num = "0.4"
 chumsky = "1.0.0-alpha.4"
 nalgebra = "0.32"
 kurbo = "0.10"
+fast-math = "0.1"
 
 truck-modeling = "0.5.*"
 truck-polymesh = "0.5.*"

@@ -9,6 +9,7 @@ rust-version = "1.71"
 [dependencies]
 heapless.workspace = true
 num.workspace = true
+fast-math.workspace = true
 
 chumsky.workspace = true
 nalgebra.workspace = true
