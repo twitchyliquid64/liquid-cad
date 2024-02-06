@@ -90,7 +90,6 @@ pub fn extrude_from_paths(
     let ea = exterior.area();
     let mut base_wire = wire_from_path(exterior, &mut verts);
     if ea.signum() < 0.0 {
-        println!("inverting base");
         base_wire.invert();
     }
     let base_face: Face = builder::try_attach_plane(&vec![base_wire]).unwrap();
