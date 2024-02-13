@@ -5,7 +5,7 @@ pub mod l;
 mod data;
 pub use data::{group::*, Data, Hover, SelectedElement, SerializedDrawing, Viewport};
 mod feature;
-pub use feature::{Feature, FeatureKey, FeatureMeta, SerializedFeature};
+pub use feature::{Feature, FeatureKey, FeatureMeta, GearInfo, SerializedFeature};
 mod constraints;
 pub use constraints::{
     Axis, Constraint, ConstraintKey, ConstraintMeta, DimensionDisplay, SerializedConstraint,

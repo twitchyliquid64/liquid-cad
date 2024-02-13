@@ -10,6 +10,7 @@ pub enum ToolResponse {
     NewLineSegment(FeatureKey, FeatureKey),
     NewArc(FeatureKey, FeatureKey),
     NewCircle(FeatureKey, egui::Pos2),
+    NewSpurGear(FeatureKey),
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
@@ -121,6 +122,17 @@ impl Handler {
                     return;
                 }
                 drawing.features.insert(p);
+                tools.clear();
+            }
+            ToolResponse::NewSpurGear(p_center) => {
+                let g =
+                    Feature::SpurGear(FeatureMeta::default(), p_center, super::GearInfo::default());
+
+                if drawing.feature_exists(&g) {
+                    return;
+                }
+
+                drawing.features.insert(g);
                 tools.clear();
             }
 

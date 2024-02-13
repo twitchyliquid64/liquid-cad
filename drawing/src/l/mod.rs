@@ -1,6 +1,8 @@
 use egui::Pos2;
 
 pub mod draw;
+mod gear;
+pub use gear::SpurGear;
 pub mod three_d;
 
 #[derive(Debug)]

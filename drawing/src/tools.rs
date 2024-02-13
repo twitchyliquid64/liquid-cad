@@ -76,7 +76,7 @@ fn fixed_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     let layout = painter.layout_no_wrap(
         "(x,y)".into(),
         egui::FontId::monospace(8.),
-        egui::Color32::WHITE,
+        egui::Color32::LIGHT_BLUE,
     );
 
     painter.galley(
@@ -303,6 +303,23 @@ fn angle_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn gear_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "gear".into(),
+        egui::FontId::monospace(8.),
+        egui::Color32::WHITE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -310,6 +327,7 @@ enum Tool {
     Line(Option<FeatureKey>),
     Arc(Option<FeatureKey>),
     Circle(Option<FeatureKey>),
+    Gear,
     Fixed,
     Dimension,
     Horizontal,
@@ -327,6 +345,7 @@ impl Tool {
             Tool::Line(_) => "Create Line",
             Tool::Arc(_) => "Create Arc",
             Tool::Circle(_) => "Create Circle",
+            Tool::Gear => "Create spur gear",
             Tool::Fixed => "Constrain to co-ords",
             Tool::Dimension => "Constrain length/radius",
             Tool::Horizontal => "Constrain horizontal",
@@ -343,6 +362,7 @@ impl Tool {
             Tool::Line(_) => Some("L"),
             Tool::Arc(_) => Some("R"),
             Tool::Circle(_) => Some("C"),
+            Tool::Gear => None,
             Tool::Fixed => Some("S"),
             Tool::Dimension => Some("D"),
             Tool::Horizontal => Some("H"),
@@ -359,6 +379,7 @@ impl Tool {
             Tool::Line(_) => Some("Creates lines from existing points.\n\nClick on the first point and then the second to create a line."),
             Tool::Arc(_) => Some("Creates a circular arc between points.\n\nClick on the first point and then the second to create an arc. A center point will be automatically created."),
             Tool::Circle(_) => Some("Creates a circle around some center point.\n\nClick on the center point, and then again in empty space to create the circle."),
+            Tool::Gear => Some("Creates an external spur gear around some center point.\n\nClick on the center point to create the gear."),
             Tool::Fixed => Some("Constraints a point to be at specific co-ordinates.\n\nClick a point to constrain it to (0,0). Co-ordinates can be changed later in the selection UI."),
             Tool::Dimension => Some("Sets the dimensions of a line or circle.\n\nClick a line/circle to constrain it to its current length/radius respectively. The constrained value can be changed later in the selection UI."),
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
@@ -376,6 +397,7 @@ impl Tool {
             (Tool::Line(_), Tool::Line(_)) => true,
             (Tool::Arc(_), Tool::Arc(_)) => true,
             (Tool::Circle(_), Tool::Circle(_)) => true,
+            (Tool::Gear, Tool::Gear) => true,
             (Tool::Fixed, Tool::Fixed) => true,
             (Tool::Dimension, Tool::Dimension) => true,
             (Tool::Horizontal, Tool::Horizontal) => true,
@@ -394,6 +416,7 @@ impl Tool {
             Tool::Line(None),
             Tool::Circle(None),
             Tool::Arc(None),
+            Tool::Gear,
             Tool::Fixed,
             Tool::Dimension,
             Tool::Horizontal,
@@ -641,6 +664,25 @@ impl Tool {
                     return Some(ToolResponse::Handled);
                 }
 
+                None
+            }
+            Tool::Gear => {
+                if response.clicked() {
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Point(..),
+                        } => Some(ToolResponse::NewSpurGear(k.clone())),
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
                 None
             }
 
@@ -1076,6 +1118,11 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("new circle: click to set radius");
             }
+            Tool::Gear => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("new gear: click center point");
+            }
 
             Tool::Fixed => {
                 response.clone().on_hover_text_at_pointer("constrain (x,y)");
@@ -1144,6 +1191,7 @@ impl Tool {
             Tool::Line(_) => line_tool_icon,
             Tool::Arc(_) => arc_tool_icon,
             Tool::Circle(_) => circle_tool_icon,
+            Tool::Gear => gear_tool_icon,
             Tool::Fixed => fixed_tool_icon,
             Tool::Dimension => dim_tool_icon,
             Tool::Horizontal => horizontal_tool_icon,

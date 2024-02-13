@@ -28,6 +28,26 @@ pub struct SerializedFeature {
     pub x: f32,
     pub y: f32,
     pub r: f32,
+    pub gear_info: Option<GearInfo>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct GearInfo {
+    pub module: f32,
+    pub teeth: usize,
+    pub pressure_angle: f32,
+    pub offset: f32,
+}
+
+impl Default for GearInfo {
+    fn default() -> Self {
+        Self {
+            module: 3.0,
+            teeth: 5,
+            pressure_angle: 20.0,
+            offset: 0.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +56,7 @@ pub enum Feature {
     LineSegment(FeatureMeta, FeatureKey, FeatureKey),
     Arc(FeatureMeta, FeatureKey, FeatureKey, FeatureKey), // start, center, end
     Circle(FeatureMeta, FeatureKey, f32),                 // center, radius
+    SpurGear(FeatureMeta, FeatureKey, GearInfo),          // center, gear details
 }
 
 impl Default for Feature {
@@ -46,7 +67,7 @@ impl Default for Feature {
 
 impl PartialEq<Feature> for Feature {
     fn eq(&self, other: &Feature) -> bool {
-        use Feature::{Arc, Circle, LineSegment, Point};
+        use Feature::{Arc, Circle, LineSegment, Point, SpurGear};
         match (self, other) {
             (Point(_, x1, y1), Point(_, x2, y2)) => x1 == x2 && y1 == y2,
             (LineSegment(_, p00, p01), LineSegment(_, p10, p11)) => {
@@ -56,6 +77,28 @@ impl PartialEq<Feature> for Feature {
                 p01 == p11 && ((p00 == p10 && p02 == p12) || (p00 == p12 && p02 == p10))
             }
             (Circle(_, p0, r0, ..), Circle(_, p1, r1, ..)) => p0 == p1 && (r1 - r0).abs() < 0.005,
+            (
+                SpurGear(
+                    _,
+                    p0,
+                    GearInfo {
+                        module: m0,
+                        teeth: t0,
+                        pressure_angle: pa0,
+                        offset: _,
+                    },
+                ),
+                SpurGear(
+                    _,
+                    p1,
+                    GearInfo {
+                        module: m1,
+                        teeth: t1,
+                        pressure_angle: pa1,
+                        offset: _,
+                    },
+                ),
+            ) => p0 == p1 && (m0 - m1).abs() < 0.005 && (pa0 - pa1).abs() < 0.005 && t0 == t1,
             _ => false,
         }
     }
@@ -71,6 +114,7 @@ impl Feature {
             Feature::LineSegment(meta, ..) => meta.construction,
             Feature::Arc(meta, ..) => meta.construction,
             Feature::Circle(meta, ..) => meta.construction,
+            Feature::SpurGear(meta, ..) => meta.construction,
         }
     }
 
@@ -80,6 +124,7 @@ impl Feature {
             Feature::LineSegment(_, p1, p2) => [Some(*p1), Some(*p2), None],
             Feature::Arc(_, p1, p2, p3) => [Some(*p1), Some(*p2), Some(*p3)],
             Feature::Circle(_, p, ..) => [Some(*p), None, None],
+            Feature::SpurGear(_, p, ..) => [Some(*p), None, None],
         }
     }
 
@@ -113,6 +158,27 @@ impl Feature {
             Feature::Circle(_, p, r, ..) => {
                 let p = drawing.features.get(*p).unwrap();
                 p.bb(drawing).expand(*r)
+            }
+            Feature::SpurGear(
+                _,
+                p,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                let p = drawing.features.get(*p).unwrap();
+                p.bb(drawing).expand(
+                    crate::l::SpurGear {
+                        module: *m,
+                        teeth: *t,
+                        pressure_angle: *pressure_angle,
+                    }
+                    .r_tip(),
+                )
             }
         }
     }
@@ -169,6 +235,35 @@ impl Feature {
                 let (x_diff, y_diff) = (hp.x - p.x, hp.y - p.y);
 
                 ((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r / vp.zoom).powi(2)
+            }
+
+            Feature::SpurGear(
+                _,
+                p,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                let g = crate::l::SpurGear {
+                    module: *m,
+                    teeth: *t,
+                    pressure_angle: *pressure_angle,
+                };
+                let (r_pitch, r_tip) = (g.r_pitch(), g.r_tip());
+
+                let p = vp.translate_point(match drawing.features.get(*p).unwrap() {
+                    Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                    _ => unreachable!(),
+                });
+                let (x_diff, y_diff) = (hp.x - p.x, hp.y - p.y);
+
+                ((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r_pitch / vp.zoom)
+                    .powi(2)
+                    .min(((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r_tip / vp.zoom).powi(2))
             }
         }
     }
@@ -290,6 +385,115 @@ impl Feature {
                     },
                 )
             }
+
+            Feature::SpurGear(
+                meta,
+                p,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                let f = drawing.features.get(*p).unwrap();
+                let p = match f {
+                    Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                    _ => panic!("unexpected subkey type: {:?}", f),
+                };
+
+                let stroke = egui::Stroke {
+                    width: 1.,
+                    color: if params.selected {
+                        params.colors.selected
+                    } else if params.hovered {
+                        params.colors.hover
+                    } else if meta.construction {
+                        params.colors.line.gamma_multiply(0.35)
+                    } else {
+                        params.colors.line
+                    },
+                };
+
+                let mut path = crate::l::SpurGear {
+                    module: *m,
+                    teeth: *t,
+                    pressure_angle: *pressure_angle,
+                }
+                .path();
+                path.apply_affine(kurbo::Affine::translate(kurbo::Vec2::new(
+                    p.x as f64, p.y as f64,
+                )));
+
+                for s in path.segments() {
+                    match s {
+                        kurbo::PathSeg::Line(kurbo::Line { p0, p1 }) => {
+                            painter.line_segment(
+                                [
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p0.x as f32,
+                                        y: p0.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p1.x as f32,
+                                        y: p1.y as f32,
+                                    }),
+                                ],
+                                stroke,
+                            );
+                        }
+                        kurbo::PathSeg::Quad(kurbo::QuadBez { p0, p1, p2 }) => {
+                            let shape = egui::epaint::QuadraticBezierShape::from_points_stroke(
+                                [
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p0.x as f32,
+                                        y: p0.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p1.x as f32,
+                                        y: p1.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p2.x as f32,
+                                        y: p2.y as f32,
+                                    }),
+                                ],
+                                false,
+                                egui::Color32::TRANSPARENT,
+                                stroke,
+                            );
+                            painter.add(shape);
+                        }
+                        kurbo::PathSeg::Cubic(kurbo::CubicBez { p0, p1, p2, p3 }) => {
+                            let shape = egui::epaint::CubicBezierShape::from_points_stroke(
+                                [
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p0.x as f32,
+                                        y: p0.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p1.x as f32,
+                                        y: p1.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p2.x as f32,
+                                        y: p2.y as f32,
+                                    }),
+                                    params.vp.translate_point(egui::Pos2 {
+                                        x: p3.x as f32,
+                                        y: p3.y as f32,
+                                    }),
+                                ],
+                                false,
+                                egui::Color32::TRANSPARENT,
+                                stroke,
+                            );
+                            painter.add(shape);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -346,6 +550,18 @@ impl Feature {
                     ..SerializedFeature::default()
                 })
             }
+
+            Feature::SpurGear(meta, p, gear_info) => {
+                let p_idx = fk_to_idx.get(p).ok_or(())?;
+
+                Ok(SerializedFeature {
+                    kind: "spur".to_string(),
+                    meta: meta.clone(),
+                    using_idx: vec![*p_idx],
+                    gear_info: Some(gear_info.clone()),
+                    ..SerializedFeature::default()
+                })
+            }
         }
     }
 
@@ -384,6 +600,19 @@ impl Feature {
                     sf.meta,
                     *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
                     sf.r,
+                ))
+            }
+            "spur" => {
+                if sf.using_idx.len() < 1 {
+                    return Err(());
+                }
+                if sf.gear_info.is_none() {
+                    return Err(());
+                }
+                Ok(Self::SpurGear(
+                    sf.meta,
+                    *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
+                    sf.gear_info.unwrap(),
                 ))
             }
             _ => Err(()),
@@ -481,6 +710,34 @@ impl Feature {
                 )
                 .into_path(0.1);
             }
+
+            Feature::SpurGear(
+                _,
+                p_center,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                let p = drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing);
+
+                out = crate::l::SpurGear {
+                    module: *m,
+                    teeth: *t,
+                    pressure_angle: *pressure_angle,
+                }
+                .path();
+                out.apply_affine(kurbo::Affine::translate(kurbo::Vec2::new(
+                    p.x as f64, p.y as f64,
+                )));
+            }
         };
         out
     }
@@ -502,6 +759,33 @@ impl Feature {
                     .start_point(drawing)
                     + egui::Vec2 { x: *radius, y: 0.0 }
             }
+
+            Feature::SpurGear(
+                _,
+                p_center,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing)
+                    + egui::Vec2 {
+                        x: crate::l::SpurGear {
+                            module: *m,
+                            teeth: *t,
+                            pressure_angle: *pressure_angle,
+                        }
+                        .r_tip(),
+                        y: 0.0,
+                    }
+            }
         }
     }
 
@@ -521,6 +805,32 @@ impl Feature {
                     .unwrap()
                     .start_point(drawing)
                     + egui::Vec2 { x: *radius, y: 0.0 }
+            }
+            Feature::SpurGear(
+                _,
+                p_center,
+                GearInfo {
+                    module: m,
+                    teeth: t,
+                    pressure_angle,
+                    offset: _,
+                },
+                ..,
+            ) => {
+                drawing
+                    .features
+                    .get(*p_center)
+                    .unwrap()
+                    .start_point(drawing)
+                    + egui::Vec2 {
+                        x: crate::l::SpurGear {
+                            module: *m,
+                            teeth: *t,
+                            pressure_angle: *pressure_angle,
+                        }
+                        .r_tip(),
+                        y: 0.0,
+                    }
             }
         }
     }
