@@ -210,6 +210,17 @@ impl<'a> Widget<'a> {
                             pressure_angle,
                             meta,
                         ),
+                        Some(Feature::RegularPoly(meta, _p, n, a)) => {
+                            Widget::show_selection_entry_regular_poly(
+                                ui,
+                                &mut commands,
+                                &mut changed,
+                                &k,
+                                a,
+                                n,
+                                meta,
+                            )
+                        }
                         None => {}
                     }
 
@@ -959,6 +970,62 @@ impl<'a> Widget<'a> {
             });
         });
     }
+
+    fn show_selection_entry_regular_poly(
+        ui: &mut egui::Ui,
+        commands: &mut Vec<ToolResponse>,
+        changed: &mut bool,
+        k: &FeatureKey,
+        apothem: &mut f32,
+        n: &mut usize,
+        meta: &mut FeatureMeta,
+    ) {
+        ui.horizontal(|ui| {
+            let r = ui.available_size();
+            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
+
+            use slotmap::Key;
+            ui.add(
+                egui::Label::new(format!("n-poly {:?}", k.data()))
+                    .wrap(false)
+                    .truncate(true),
+            );
+            if r.x - ui.available_width() < FEATURE_NAME_WIDTH {
+                ui.add_space(FEATURE_NAME_WIDTH - (r.x - ui.available_width()));
+            }
+
+            *changed |= ui
+                .add(egui::Checkbox::without_text(&mut meta.construction))
+                .changed();
+            ui.add(egui::Image::new(CONSTRUCTION_IMG).rounding(5.0));
+
+            if ui.available_width() > r.x / 2. - ui.spacing().item_spacing.x {
+                ui.add_space(ui.available_width() - r.x / 2. - ui.spacing().item_spacing.x);
+            }
+
+            *changed |= ui
+                .add_sized(
+                    [50., text_height * 1.4],
+                    egui::DragValue::new(apothem)
+                        .clamp_range(0.1..=200.0)
+                        .suffix("mm")
+                        .speed(0.2),
+                )
+                .changed();
+            *changed |= ui
+                .add_sized(
+                    [50., text_height * 1.4],
+                    egui::DragValue::new(n).clamp_range(3..=25).speed(1.0),
+                )
+                .changed();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui.button("⊗").clicked() {
+                    commands.push(ToolResponse::Delete(*k));
+                }
+            });
+        });
+    }
+
     fn show_groups_tab<F>(&mut self, ui: &mut egui::Ui, export_save: F)
     where
         F: FnOnce(&'static str, &'static str, Vec<u8>),

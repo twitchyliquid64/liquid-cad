@@ -320,6 +320,23 @@ fn gear_tool_icon(b: egui::Rect, painter: &egui::Painter) {
     );
 }
 
+fn regular_poly_tool_icon(b: egui::Rect, painter: &egui::Painter) {
+    let c = b.center();
+    let layout = painter.layout_no_wrap(
+        "n-poly".into(),
+        egui::FontId::monospace(7.7),
+        egui::Color32::WHITE,
+    );
+
+    painter.galley(
+        c + egui::Vec2 {
+            x: -layout.rect.width() / 2.,
+            y: -layout.rect.height() / 2.,
+        },
+        layout,
+    );
+}
+
 #[derive(Debug, Default, Clone)]
 enum Tool {
     #[default]
@@ -328,6 +345,7 @@ enum Tool {
     Arc(Option<FeatureKey>),
     Circle(Option<FeatureKey>),
     Gear,
+    RegularPoly,
     Fixed,
     Dimension,
     Horizontal,
@@ -346,6 +364,7 @@ impl Tool {
             Tool::Arc(_) => "Create Arc",
             Tool::Circle(_) => "Create Circle",
             Tool::Gear => "Create spur gear",
+            Tool::RegularPoly => "Create regular polygon",
             Tool::Fixed => "Constrain to co-ords",
             Tool::Dimension => "Constrain length/radius",
             Tool::Horizontal => "Constrain horizontal",
@@ -363,6 +382,7 @@ impl Tool {
             Tool::Arc(_) => Some("R"),
             Tool::Circle(_) => Some("C"),
             Tool::Gear => None,
+            Tool::RegularPoly => None,
             Tool::Fixed => Some("S"),
             Tool::Dimension => Some("D"),
             Tool::Horizontal => Some("H"),
@@ -380,6 +400,7 @@ impl Tool {
             Tool::Arc(_) => Some("Creates a circular arc between points.\n\nClick on the first point and then the second to create an arc. A center point will be automatically created."),
             Tool::Circle(_) => Some("Creates a circle around some center point.\n\nClick on the center point, and then again in empty space to create the circle."),
             Tool::Gear => Some("Creates an external spur gear around some center point.\n\nClick on the center point to create the gear."),
+            Tool::RegularPoly => Some("Creates a regular polygon around some center point.\n\nClick on the center point to create the polygon."),
             Tool::Fixed => Some("Constraints a point to be at specific co-ordinates.\n\nClick a point to constrain it to (0,0). Co-ordinates can be changed later in the selection UI."),
             Tool::Dimension => Some("Sets the dimensions of a line or circle.\n\nClick a line/circle to constrain it to its current length/radius respectively. The constrained value can be changed later in the selection UI."),
             Tool::Horizontal => Some("Constrains a line to be horizontal."),
@@ -398,6 +419,7 @@ impl Tool {
             (Tool::Arc(_), Tool::Arc(_)) => true,
             (Tool::Circle(_), Tool::Circle(_)) => true,
             (Tool::Gear, Tool::Gear) => true,
+            (Tool::RegularPoly, Tool::RegularPoly) => true,
             (Tool::Fixed, Tool::Fixed) => true,
             (Tool::Dimension, Tool::Dimension) => true,
             (Tool::Horizontal, Tool::Horizontal) => true,
@@ -417,6 +439,7 @@ impl Tool {
             Tool::Circle(None),
             Tool::Arc(None),
             Tool::Gear,
+            Tool::RegularPoly,
             Tool::Fixed,
             Tool::Dimension,
             Tool::Horizontal,
@@ -673,6 +696,25 @@ impl Tool {
                             k,
                             feature: crate::Feature::Point(..),
                         } => Some(ToolResponse::NewSpurGear(k.clone())),
+                        _ => Some(ToolResponse::SwitchToPointer),
+                    };
+                }
+
+                // Intercept drag events.
+                if response.drag_started_by(egui::PointerButton::Primary)
+                    || response.drag_released_by(egui::PointerButton::Primary)
+                {
+                    return Some(ToolResponse::Handled);
+                }
+                None
+            }
+            Tool::RegularPoly => {
+                if response.clicked() {
+                    return match hover {
+                        Hover::Feature {
+                            k,
+                            feature: crate::Feature::Point(..),
+                        } => Some(ToolResponse::NewRegularPoly(k.clone())),
                         _ => Some(ToolResponse::SwitchToPointer),
                     };
                 }
@@ -1123,6 +1165,11 @@ impl Tool {
                     .clone()
                     .on_hover_text_at_pointer("new gear: click center point");
             }
+            Tool::RegularPoly => {
+                response
+                    .clone()
+                    .on_hover_text_at_pointer("new n-poly: click center point");
+            }
 
             Tool::Fixed => {
                 response.clone().on_hover_text_at_pointer("constrain (x,y)");
@@ -1192,6 +1239,7 @@ impl Tool {
             Tool::Arc(_) => arc_tool_icon,
             Tool::Circle(_) => circle_tool_icon,
             Tool::Gear => gear_tool_icon,
+            Tool::RegularPoly => regular_poly_tool_icon,
             Tool::Fixed => fixed_tool_icon,
             Tool::Dimension => dim_tool_icon,
             Tool::Horizontal => horizontal_tool_icon,

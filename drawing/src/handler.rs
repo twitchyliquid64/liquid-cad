@@ -11,6 +11,7 @@ pub enum ToolResponse {
     NewArc(FeatureKey, FeatureKey),
     NewCircle(FeatureKey, egui::Pos2),
     NewSpurGear(FeatureKey),
+    NewRegularPoly(FeatureKey),
     Delete(FeatureKey),
 
     NewFixedConstraint(FeatureKey),
@@ -127,6 +128,16 @@ impl Handler {
             ToolResponse::NewSpurGear(p_center) => {
                 let g =
                     Feature::SpurGear(FeatureMeta::default(), p_center, super::GearInfo::default());
+
+                if drawing.feature_exists(&g) {
+                    return;
+                }
+
+                drawing.features.insert(g);
+                tools.clear();
+            }
+            ToolResponse::NewRegularPoly(p_center) => {
+                let g = Feature::RegularPoly(FeatureMeta::default(), p_center, 6, 4.0);
 
                 if drawing.feature_exists(&g) {
                     return;

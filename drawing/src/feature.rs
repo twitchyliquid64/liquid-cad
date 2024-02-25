@@ -28,6 +28,7 @@ pub struct SerializedFeature {
     pub x: f32,
     pub y: f32,
     pub r: f32,
+    pub n: Option<usize>,
     pub gear_info: Option<GearInfo>,
 }
 
@@ -57,6 +58,7 @@ pub enum Feature {
     Arc(FeatureMeta, FeatureKey, FeatureKey, FeatureKey), // start, center, end
     Circle(FeatureMeta, FeatureKey, f32),                 // center, radius
     SpurGear(FeatureMeta, FeatureKey, GearInfo),          // center, gear details
+    RegularPoly(FeatureMeta, FeatureKey, usize, f32),     // center, num_sides, apothem
 }
 
 impl Default for Feature {
@@ -67,7 +69,7 @@ impl Default for Feature {
 
 impl PartialEq<Feature> for Feature {
     fn eq(&self, other: &Feature) -> bool {
-        use Feature::{Arc, Circle, LineSegment, Point, SpurGear};
+        use Feature::{Arc, Circle, LineSegment, Point, RegularPoly, SpurGear};
         match (self, other) {
             (Point(_, x1, y1), Point(_, x2, y2)) => x1 == x2 && y1 == y2,
             (LineSegment(_, p00, p01), LineSegment(_, p10, p11)) => {
@@ -99,6 +101,9 @@ impl PartialEq<Feature> for Feature {
                     },
                 ),
             ) => p0 == p1 && (m0 - m1).abs() < 0.005 && (pa0 - pa1).abs() < 0.005 && t0 == t1,
+            (RegularPoly(_, p0, n0, a0, ..), RegularPoly(_, p1, n1, a1, ..)) => {
+                p0 == p1 && n0 == n1 && (a1 - a0).abs() < 0.005
+            }
             _ => false,
         }
     }
@@ -115,6 +120,7 @@ impl Feature {
             Feature::Arc(meta, ..) => meta.construction,
             Feature::Circle(meta, ..) => meta.construction,
             Feature::SpurGear(meta, ..) => meta.construction,
+            Feature::RegularPoly(meta, ..) => meta.construction,
         }
     }
 
@@ -125,6 +131,7 @@ impl Feature {
             Feature::Arc(_, p1, p2, p3) => [Some(*p1), Some(*p2), Some(*p3)],
             Feature::Circle(_, p, ..) => [Some(*p), None, None],
             Feature::SpurGear(_, p, ..) => [Some(*p), None, None],
+            Feature::RegularPoly(_, p, ..) => [Some(*p), None, None],
         }
     }
 
@@ -179,6 +186,11 @@ impl Feature {
                     }
                     .r_tip(),
                 )
+            }
+            Feature::RegularPoly(_, p, n, a, ..) => {
+                let p = drawing.features.get(*p).unwrap();
+                let r = a / (std::f32::consts::PI / *n as f32).cos();
+                p.bb(drawing).expand(r)
             }
         }
     }
@@ -264,6 +276,20 @@ impl Feature {
                 ((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r_pitch / vp.zoom)
                     .powi(2)
                     .min(((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r_tip / vp.zoom).powi(2))
+            }
+
+            Feature::RegularPoly(_, p, n, a, ..) => {
+                let r = a / (std::f32::consts::PI / *n as f32).cos();
+
+                let p = vp.translate_point(match drawing.features.get(*p).unwrap() {
+                    Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                    _ => unreachable!(),
+                });
+                let (x_diff, y_diff) = (hp.x - p.x, hp.y - p.y);
+
+                ((x_diff.powi(2) + y_diff.powi(2)).sqrt() - r / vp.zoom)
+                    .powi(2)
+                    .min(((x_diff.powi(2) + y_diff.powi(2)).sqrt() - a / vp.zoom).powi(2))
             }
         }
     }
@@ -494,6 +520,42 @@ impl Feature {
                     }
                 }
             }
+
+            Feature::RegularPoly(meta, p, n, a, ..) => {
+                let f = drawing.features.get(*p).unwrap();
+                let p = match f {
+                    Feature::Point(_, x1, y1) => {
+                        params.vp.translate_point(egui::Pos2 { x: *x1, y: *y1 })
+                    }
+                    _ => panic!("unexpected subkey type: {:?}", f),
+                };
+                let a = a / params.vp.zoom;
+
+                let stroke = egui::Stroke {
+                    width: 1.,
+                    color: if params.selected {
+                        params.colors.selected
+                    } else if params.hovered {
+                        params.colors.hover
+                    } else if meta.construction {
+                        params.colors.line.gamma_multiply(0.35)
+                    } else {
+                        params.colors.line
+                    },
+                };
+                use std::f32::consts::PI;
+                let r = a / (PI / *n as f32).cos();
+                let a = 2.0 * PI / *n as f32;
+
+                for i in 0..*n {
+                    let x0 = r * (i as f32 * a).cos() + p.x;
+                    let y0 = r * (i as f32 * a).sin() + p.y;
+                    let x1 = r * ((i + 1) as f32 * a).cos() + p.x;
+                    let y1 = r * ((i + 1) as f32 * a).sin() + p.y;
+
+                    painter.line_segment([(x0, y0).into(), (x1, y1).into()], stroke);
+                }
+            }
         }
     }
 
@@ -562,6 +624,18 @@ impl Feature {
                     ..SerializedFeature::default()
                 })
             }
+            Feature::RegularPoly(meta, p, n, a) => {
+                let p_idx = fk_to_idx.get(p).ok_or(())?;
+
+                Ok(SerializedFeature {
+                    kind: "regular_poly".to_string(),
+                    meta: meta.clone(),
+                    using_idx: vec![*p_idx],
+                    r: *a,
+                    n: Some(*n),
+                    ..SerializedFeature::default()
+                })
+            }
         }
     }
 
@@ -613,6 +687,20 @@ impl Feature {
                     sf.meta,
                     *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
                     sf.gear_info.unwrap(),
+                ))
+            }
+            "regular_poly" => {
+                if sf.using_idx.len() < 1 {
+                    return Err(());
+                }
+                if sf.n.is_none() {
+                    return Err(());
+                }
+                Ok(Self::RegularPoly(
+                    sf.meta,
+                    *idx_to_fk.get(&sf.using_idx[0]).ok_or(())?,
+                    sf.n.unwrap(),
+                    sf.r,
                 ))
             }
             _ => Err(()),
@@ -738,6 +826,35 @@ impl Feature {
                     p.x as f64, p.y as f64,
                 )));
             }
+
+            Feature::RegularPoly(_meta, p, n, a, ..) => {
+                let f = drawing.features.get(*p).unwrap();
+                let p = match f {
+                    Feature::Point(_, x1, y1) => egui::Pos2 { x: *x1, y: *y1 },
+                    _ => panic!("unexpected subkey type: {:?}", f),
+                };
+
+                use std::f32::consts::PI;
+                let r = a / (PI / *n as f32).cos();
+                let a = 2.0 * PI / *n as f32;
+
+                for i in 0..(*n + 1) {
+                    let x = r * (i as f32 * a).cos() + p.x;
+                    let y = r * (i as f32 * a).sin() + p.y;
+
+                    if i == 0 {
+                        out.move_to(kurbo::Point {
+                            x: x as f64,
+                            y: y as f64,
+                        });
+                    } else {
+                        out.line_to(kurbo::Point {
+                            x: x as f64,
+                            y: y as f64,
+                        });
+                    }
+                }
+            }
         };
         out
     }
@@ -786,6 +903,15 @@ impl Feature {
                         y: 0.0,
                     }
             }
+
+            Feature::RegularPoly(_, p, n, a) => {
+                // TODO: fixme
+                drawing.features.get(*p).unwrap().start_point(drawing)
+                    + egui::Vec2 {
+                        x: a / (std::f32::consts::PI / *n as f32).cos(),
+                        y: 0.0,
+                    }
+            }
         }
     }
 
@@ -829,6 +955,15 @@ impl Feature {
                             pressure_angle: *pressure_angle,
                         }
                         .r_tip(),
+                        y: 0.0,
+                    }
+            }
+
+            Feature::RegularPoly(_, p, n, a) => {
+                // TODO: fixme
+                drawing.features.get(*p).unwrap().start_point(drawing)
+                    + egui::Vec2 {
+                        x: a / (std::f32::consts::PI / *n as f32).cos(),
                         y: 0.0,
                     }
             }
@@ -897,6 +1032,18 @@ mod tests {
                 ..SerializedFeature::default()
             }),
         );
+        assert_eq!(
+            Feature::RegularPoly(FeatureMeta::default(), point_key, 6, 6.9)
+                .serialize(&HashMap::from([(point_key, 42)])),
+            Ok(SerializedFeature {
+                kind: "regular_poly".to_string(),
+                meta: FeatureMeta::default(),
+                using_idx: vec![42],
+                r: 6.9,
+                n: Some(6),
+                ..SerializedFeature::default()
+            }),
+        );
     }
 
     #[test]
@@ -957,6 +1104,24 @@ mod tests {
             Ok(Feature::Circle(
                 FeatureMeta::default(),
                 FeatureKey::null(),
+                6.9,
+            )),
+        );
+        assert_eq!(
+            Feature::deserialize(
+                SerializedFeature {
+                    kind: "regular_poly".to_string(),
+                    using_idx: vec![1],
+                    r: 6.9,
+                    n: Some(6),
+                    ..SerializedFeature::default()
+                },
+                &HashMap::from([(1, FeatureKey::null())]),
+            ),
+            Ok(Feature::RegularPoly(
+                FeatureMeta::default(),
+                FeatureKey::null(),
+                6,
                 6.9,
             )),
         );
