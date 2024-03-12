@@ -922,8 +922,9 @@ impl<'a> Widget<'a> {
         _pressure_angle: &mut f32,
         meta: &mut FeatureMeta,
     ) {
+        let r = ui.available_size();
+
         ui.horizontal(|ui| {
-            let r = ui.available_size();
             let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
@@ -969,6 +970,13 @@ impl<'a> Widget<'a> {
                 }
             });
         });
+
+        ui.horizontal(|ui| {
+            let aw = ui.available_width();
+            let text_rect = ui.add(egui::Label::new("⏵ Pitch radius").wrap(false)).rect;
+            ui.add_space(aw / 2. - text_rect.width() - 2.0 * ui.spacing().item_spacing.x);
+            ui.label(format!("{}mm", *teeth as f32 * (*module) / 2.0));
+        });
     }
 
     fn show_selection_entry_regular_poly(
@@ -980,9 +988,9 @@ impl<'a> Widget<'a> {
         n: &mut usize,
         meta: &mut FeatureMeta,
     ) {
+        let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
         ui.horizontal(|ui| {
             let r = ui.available_size();
-            let text_height = egui::TextStyle::Body.resolve(ui.style()).size;
 
             use slotmap::Key;
             ui.add(
@@ -1006,16 +1014,10 @@ impl<'a> Widget<'a> {
             *changed |= ui
                 .add_sized(
                     [50., text_height * 1.4],
-                    egui::DragValue::new(apothem)
-                        .clamp_range(0.1..=200.0)
-                        .suffix("mm")
-                        .speed(0.2),
-                )
-                .changed();
-            *changed |= ui
-                .add_sized(
-                    [50., text_height * 1.4],
-                    egui::DragValue::new(n).clamp_range(3..=25).speed(1.0),
+                    egui::DragValue::new(n)
+                        .clamp_range(3..=25)
+                        .speed(1.0)
+                        .suffix(" sides"),
                 )
                 .changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
@@ -1023,6 +1025,23 @@ impl<'a> Widget<'a> {
                     commands.push(ToolResponse::Delete(*k));
                 }
             });
+        });
+
+        ui.horizontal(|ui| {
+            let aw = ui.available_width();
+            let text_rect = ui
+                .add(egui::Label::new("⏵ Radius to flat").wrap(false))
+                .rect;
+            ui.add_space(aw / 2. - text_rect.width() - 2.0 * ui.spacing().item_spacing.x);
+            *changed |= ui
+                .add_sized(
+                    [50., text_height * 1.4],
+                    egui::DragValue::new(apothem)
+                        .clamp_range(0.1..=200.0)
+                        .suffix("mm")
+                        .speed(0.2),
+                )
+                .changed();
         });
     }
 
