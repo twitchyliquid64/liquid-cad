@@ -1,0 +1,40 @@
+name: Deployment
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - created
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    permissions: write-all
+    name: windows
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Update Libs
+        run: cargo install cargo-wix
+      - name: Build
+        run: cd liquid-cad && cargo build --release
+      - name: Build installer
+        run: cd liquid-cad && cargo wix -p liquid-cad --nocapture --no-build
+      - name: Compress
+        run: cd target/wix && ls && Compress-Archive *.msi liquid-cad.msi.zip
+      - name: Upload
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/wix/liquid-cad.msi.zip
+          asset_name: liquid-cad-windows_x86.msi.zip
+          asset_content_type: binary

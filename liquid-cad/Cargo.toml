@@ -39,3 +39,24 @@ opt-level = 2 # fast and small wasm
 # Optimize all dependencies even in debug builds:
 [profile.dev.package."*"]
 opt-level = 2
+
+[package.metadata.bundle]
+name = "Liquid CAD"
+identifier = "com.github.twitchyliquid64.liquid-cad"
+icon = ["../assets/install.png"]
+version = "0.0.1"
+copyright = "Copyright (c) liquid-cad 2024. All rights reserved."
+category = "Developer Tool"
+short_description = "A 2.5D CAD program for rapid prototyping, written in rust."
+license = "MIT"
+osx_minimum_system_version = "10.8"
+osx_url_schemes = ["com.github.twitchyliquid64.liquid-cad"]
+
+[package.metadata.wix]
+dbg-build = false
+dbg-name = false
+name = "Liquid CAD"
+no-build = false
+output = "../target/wix/LiquidCadInstaller.msi"
+version = "0.0.1"
+license = "MIT"
