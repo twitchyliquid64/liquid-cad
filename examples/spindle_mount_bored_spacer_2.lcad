@@ -1,0 +1,422 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 12.020815,
+			y: -12.020815,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 12.020816,
+			y: 12.020815,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -17.0,
+			y: 0.0000014861872,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 20.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 14.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				4,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				3,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				2,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.5,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.5,
+			n: None,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.5,
+			n: None,
+			gear_info: None,
+		),
+	],
+	constraints: [
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				0,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				6,
+			],
+			at: (0.0, 0.0),
+			amt: 14.0,
+			cardinality: None,
+			ref_offset: (
+				x: 213.60925,
+				y: 290.05078,
+				variant: None,
+			),
+		),
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				1,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_angle",
+			meta: (),
+			feature_idx: [
+				9,
+			],
+			at: (0.0, 0.0),
+			amt: -0.7853982,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_angle",
+			meta: (),
+			feature_idx: [
+				8,
+			],
+			at: (0.0, 0.0),
+			amt: 0.7853981,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_angle",
+			meta: (),
+			feature_idx: [
+				7,
+			],
+			at: (0.0, 0.0),
+			amt: -3.1415927,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				9,
+				8,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				9,
+				7,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				9,
+			],
+			at: (0.0, 0.0),
+			amt: 17.0,
+			cardinality: None,
+			ref_offset: (
+				x: -0.000019331688,
+				y: 34.99993,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				10,
+			],
+			at: (0.0, 0.0),
+			amt: 1.5,
+			cardinality: None,
+			ref_offset: (
+				x: 60.109375,
+				y: 55.671875,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				10,
+				12,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				10,
+				11,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				5,
+			],
+			at: (0.0, 0.0),
+			amt: 20.0,
+			cardinality: None,
+			ref_offset: (
+				x: 330.3203,
+				y: 326.3711,
+				variant: None,
+			),
+		),
+	],
+	groups: [
+		(
+			typ: Boundary,
+			name: "Boundary",
+			features_idx: [
+				5,
+			],
+			amt: None,
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "Bearing",
+			features_idx: [
+				6,
+			],
+			amt: None,
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "Mounting holes",
+			features_idx: [
+				10,
+				11,
+				12,
+			],
+			amt: None,
+			bottom: None,
+		),
+	],
+	viewport: (
+		x: -48.076923,
+		y: -25.0,
+		zoom: 0.050607286,
+	),
+	properties: Some((
+		name: "",
+		flatten_tolerance: 0.01,
+		solver_stop_err: 0.00012,
+		solve_continuously: Some(()),
+	)),
+)

@@ -1,0 +1,1427 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -53.54201,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 80.00055,
+			y: -77.11344,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 80.00055,
+			y: 0.48809782,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -12.0,
+			y: -38.54201,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 31.420582,
+			y: -28.091095,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 31.420628,
+			y: -48.53344,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -23.542011,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -77.08402,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 71.42062,
+			y: -48.53344,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 71.42058,
+			y: -77.11344,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 71.420555,
+			y: 0.48814726,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 71.42056,
+			y: -28.091465,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 61.4206,
+			y: -77.113434,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 61.420643,
+			y: -58.533436,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 61.42056,
+			y: 0.4881411,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 61.42057,
+			y: -18.091873,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 80.00045,
+			y: -38.312675,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -38.54201,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				7,
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.505,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				8,
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				2,
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				6,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.505,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				6,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				12,
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				6,
+				8,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				18,
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				0,
+				7,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				9,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				10,
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				10,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				9,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				11,
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				12,
+				11,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				12,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				13,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				14,
+				13,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				15,
+				11,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				16,
+				15,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				14,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				16,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				6,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				14,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				9,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				12,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				16,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				17,
+				18,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				7,
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				3,
+				8,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				9,
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.515,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 5.04,
+			gear_info: None,
+		),
+	],
+	constraints: [
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				20,
+			],
+			at: (0.0, 0.0),
+			amt: 2.505,
+			cardinality: None,
+			ref_offset: (
+				x: 81.80469,
+				y: 48.74997,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				54,
+				29,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				52,
+				29,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "horizontal",
+			meta: (),
+			feature_idx: [
+				25,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				22,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				23,
+				20,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				24,
+			],
+			at: (0.0, 0.0),
+			amt: 30.0,
+			cardinality: Some((TopBottom, true)),
+			ref_offset: (
+				x: 8.3082285,
+				y: 37.4422,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				51,
+				25,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				26,
+				28,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				27,
+			],
+			at: (0.0, 0.0),
+			amt: 12.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 3.8075328,
+				y: 27.245577,
+				variant: None,
+			),
+		),
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				8,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				26,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				28,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				51,
+			],
+			at: (0.0, 0.0),
+			amt: 40.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				41,
+				40,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				30,
+			],
+			at: (0.0, 0.0),
+			amt: 8.58,
+			cardinality: Some((LeftRight, false)),
+			ref_offset: (
+				x: -0.00011946753,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				32,
+			],
+			at: (0.0, 0.0),
+			amt: 28.58,
+			cardinality: Some((TopBottom, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				30,
+				33,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				34,
+				32,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "horizontal",
+			meta: (),
+			feature_idx: [
+				33,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				34,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				40,
+			],
+			at: (0.0, 0.0),
+			amt: 2.515,
+			cardinality: None,
+			ref_offset: (
+				x: -116.453125,
+				y: 48.828125,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				36,
+			],
+			at: (0.0, 0.0),
+			amt: 10.0,
+			cardinality: Some((LeftRight, false)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				37,
+			],
+			at: (0.0, 0.0),
+			amt: 18.58,
+			cardinality: Some((TopBottom, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				38,
+				36,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				39,
+				37,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "horizontal",
+			meta: (),
+			feature_idx: [
+				38,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				39,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				35,
+				40,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				29,
+				40,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 5.04,
+			cardinality: None,
+			ref_offset: (
+				x: 50.226563,
+				y: 90.109375,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				43,
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				47,
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				46,
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				45,
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				44,
+				42,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "point_lerp",
+			meta: (),
+			feature_idx: [
+				22,
+				17,
+			],
+			at: (0.0, 0.0),
+			amt: 0.5,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "point_lerp",
+			meta: (),
+			feature_idx: [
+				24,
+				18,
+			],
+			at: (0.0, 0.0),
+			amt: 0.5,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				48,
+			],
+			at: (0.0, 0.0),
+			amt: 80.0,
+			cardinality: None,
+			ref_offset: (
+				x: 1.5823524,
+				y: 24.882866,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				55,
+				46,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				53,
+				45,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+	],
+	groups: [
+		(
+			typ: Boundary,
+			name: "Boundary",
+			features_idx: [
+				22,
+				50,
+				21,
+				19,
+				49,
+			],
+			amt: Some(41.0),
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "cross slide holes",
+			features_idx: [
+				20,
+				23,
+			],
+			amt: None,
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "gantry plate holes",
+			features_idx: [
+				40,
+				35,
+				41,
+				29,
+				52,
+				54,
+			],
+			amt: None,
+			bottom: None,
+		),
+		(
+			typ: Bore,
+			name: "cross slide bores",
+			features_idx: [
+				43,
+				42,
+			],
+			amt: Some(7.0),
+			bottom: Some(()),
+		),
+		(
+			typ: Bore,
+			name: "Gantry plate bores",
+			features_idx: [
+				44,
+				46,
+				47,
+				45,
+				53,
+				55,
+			],
+			amt: Some(7.0),
+			bottom: None,
+		),
+	],
+	viewport: (
+		x: -57.119385,
+		y: -89.944244,
+		zoom: 0.09768141,
+	),
+	properties: Some((
+		name: "Lathe slide mount",
+		flatten_tolerance: 0.01,
+		solver_stop_err: 0.00006000000000000001,
+		solve_continuously: Some(()),
+	)),
+)

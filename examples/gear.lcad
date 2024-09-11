@@ -1,0 +1,86 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 41.730873,
+			y: -9.469929,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "spur",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: Some((
+				module: 3.0,
+				teeth: 5,
+				pressure_angle: 20.0,
+				offset: 0.0,
+			)),
+		),
+		(
+			kind: "spur",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: Some((
+				module: 3.0,
+				teeth: 23,
+				pressure_angle: 20.0,
+				offset: 0.0,
+			)),
+		),
+	],
+	constraints: [
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				0,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+	],
+	groups: [],
+	viewport: (
+		x: -55.778797,
+		y: -56.34493,
+		zoom: 0.094888665,
+	),
+	properties: None,
+)

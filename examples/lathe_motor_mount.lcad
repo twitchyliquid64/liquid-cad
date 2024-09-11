@@ -1,0 +1,958 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: -20.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -8.0,
+			y: -32.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -8.0,
+			y: 12.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 33.99974,
+			y: -32.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 34.0,
+			y: 12.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -8.0,
+			y: -20.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: -8.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 33.999866,
+			y: -10.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: true,
+			),
+			using_idx: [],
+			x: 31.99952,
+			y: -32.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 31.997963,
+			y: -10.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 41.497456,
+			y: -10.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 31.997456,
+			y: -18.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 31.997456,
+			y: -2.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 22.497892,
+			y: -10.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				1,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.51,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				1,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 2.51,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				3,
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				5,
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				1,
+				6,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				6,
+				2,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				0,
+				7,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				7,
+				3,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				4,
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "arc",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				4,
+				8,
+				5,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				9,
+				4,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				10,
+				9,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				10,
+				8,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 3.2,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				11,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				11,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.59,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				12,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				12,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.59,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				13,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				14,
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				13,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.59,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				14,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 1.59,
+			gear_info: None,
+		),
+		(
+			kind: "circle",
+			meta: (
+				construction: true,
+			),
+			using_idx: [
+				10,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 21.5,
+			gear_info: None,
+		),
+	],
+	constraints: [
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				15,
+			],
+			at: (0.0, 0.0),
+			amt: 20.0,
+			cardinality: Some((TopBottom, false)),
+			ref_offset: (
+				x: -4.6445327,
+				y: -34.398438,
+				variant: None,
+			),
+		),
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				0,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				17,
+				16,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				16,
+			],
+			at: (0.0, 0.0),
+			amt: 2.51,
+			cardinality: None,
+			ref_offset: (
+				x: 62.566406,
+				y: -44.929688,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				18,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "horizontal",
+			meta: (),
+			feature_idx: [
+				20,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				19,
+			],
+			at: (0.0, 0.0),
+			amt: 42.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "line_lengths_equal",
+			meta: (),
+			feature_idx: [
+				19,
+				20,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				22,
+			],
+			at: (0.0, 0.0),
+			amt: 12.0,
+			cardinality: Some((TopBottom, true)),
+			ref_offset: (
+				x: 0.40218425,
+				y: 39.145905,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				21,
+			],
+			at: (0.0, 0.0),
+			amt: 8.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				23,
+			],
+			at: (0.0, 0.0),
+			amt: 8.0,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: 0.53906095,
+				y: 21.664064,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				24,
+			],
+			at: (0.0, 0.0),
+			amt: 12.0,
+			cardinality: Some((TopBottom, false)),
+			ref_offset: (
+				x: -0.9960905,
+				y: -34.589844,
+				variant: None,
+			),
+		),
+		(
+			kind: "point_lerp",
+			meta: (),
+			feature_idx: [
+				25,
+				8,
+			],
+			at: (0.0, 0.0),
+			amt: 0.5,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				27,
+			],
+			at: (0.0, 0.0),
+			amt: 2.0,
+			cardinality: Some((LeftRight, false)),
+			ref_offset: (
+				x: 0.0000015298986,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "horizontal",
+			meta: (),
+			feature_idx: [
+				29,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "vertical",
+			meta: (),
+			feature_idx: [
+				28,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				30,
+			],
+			at: (0.0, 0.0),
+			amt: 3.2,
+			cardinality: None,
+			ref_offset: (
+				x: 23.09375,
+				y: 71.714874,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				31,
+			],
+			at: (0.0, 0.0),
+			amt: 9.5,
+			cardinality: Some((LeftRight, true)),
+			ref_offset: (
+				x: -1.2774664,
+				y: 17.296875,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				33,
+			],
+			at: (0.0, 0.0),
+			amt: 8.0,
+			cardinality: Some((TopBottom, false)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				34,
+				32,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				32,
+			],
+			at: (0.0, 0.0),
+			amt: 1.59,
+			cardinality: None,
+			ref_offset: (
+				x: 60.808594,
+				y: 54.74225,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				35,
+			],
+			at: (0.0, 0.0),
+			amt: 8.0,
+			cardinality: Some((TopBottom, true)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				36,
+			],
+			at: (0.0, 0.0),
+			amt: 9.5,
+			cardinality: Some((LeftRight, false)),
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				32,
+				38,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius_equal",
+			meta: (),
+			feature_idx: [
+				32,
+				37,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+				variant: None,
+			),
+		),
+		(
+			kind: "radius",
+			meta: (),
+			feature_idx: [
+				39,
+			],
+			at: (0.0, 0.0),
+			amt: 21.5,
+			cardinality: None,
+			ref_offset: (
+				x: 326.9922,
+				y: 139.19922,
+				variant: None,
+			),
+		),
+	],
+	groups: [
+		(
+			typ: Boundary,
+			name: "Boundary",
+			features_idx: [
+				19,
+				26,
+				18,
+				20,
+			],
+			amt: Some(5.0),
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "Motor",
+			features_idx: [
+				37,
+				30,
+				32,
+				34,
+				38,
+			],
+			amt: None,
+			bottom: None,
+		),
+		(
+			typ: Hole,
+			name: "2020",
+			features_idx: [
+				17,
+				16,
+			],
+			amt: None,
+			bottom: None,
+		),
+	],
+	viewport: (
+		x: -48.876797,
+		y: -46.54092,
+		zoom: 0.07310069,
+	),
+	properties: Some((
+		name: "Lathe motor mount",
+		flatten_tolerance: 0.015,
+		solver_stop_err: 0.0005,
+		solve_continuously: Some(()),
+	)),
+)
