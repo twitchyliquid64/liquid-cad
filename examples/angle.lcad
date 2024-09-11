@@ -1,0 +1,87 @@
+(
+	features: [
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+		(
+			kind: "pt",
+			meta: (
+				construction: false,
+			),
+			using_idx: [],
+			x: 28.830994,
+			y: -23.136703,
+			r: 0.0,
+		),
+		(
+			kind: "line",
+			meta: (
+				construction: false,
+			),
+			using_idx: [
+				1,
+				0,
+			],
+			x: 0.0,
+			y: 0.0,
+			r: 0.0,
+		),
+	],
+	constraints: [
+		(
+			kind: "fixed",
+			meta: (),
+			feature_idx: [
+				0,
+			],
+			at: (0.0, 0.0),
+			amt: 0.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 0.0,
+			),
+		),
+		(
+			kind: "length",
+			meta: (),
+			feature_idx: [
+				2,
+			],
+			at: (0.0, 0.0),
+			amt: 36.966652,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+			),
+		),
+		(
+			kind: "line_angle",
+			meta: (),
+			feature_idx: [
+				2,
+			],
+			at: (0.0, 0.0),
+			amt: 1.0,
+			cardinality: None,
+			ref_offset: (
+				x: 0.0,
+				y: 35.0,
+			),
+		),
+	],
+	groups: [],
+	viewport: (
+		x: -459.5648,
+		y: -280.0567,
+		zoom: 0.5097694,
+	),
+)
