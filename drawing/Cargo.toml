@@ -20,6 +20,7 @@ truck-modeling.workspace = true
 truck-polymesh.workspace = true
 truck-meshalgo.workspace = true
 truck-topology.workspace = true
+truck-stepio.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tiny-skia = "0.11"

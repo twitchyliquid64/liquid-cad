@@ -290,6 +290,20 @@ pub fn solid_to_obj(s: Solid, tolerance: f64) -> Vec<u8> {
     out
 }
 
+pub fn solid_to_step(s: Solid, tolerance: f64) -> Vec<u8> {
+    let s = s.compress();
+    use truck_stepio::out;
+    let step_string = out::CompleteStepDisplay::new(
+        out::StepModel::from(&s),
+        out::StepHeaderDescriptor {
+            organization_system: "Liquid-CAD".to_owned(),
+            ..Default::default()
+        },
+    );
+
+    step_string.to_string().into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

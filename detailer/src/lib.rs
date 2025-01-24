@@ -1332,6 +1332,34 @@ impl<'a> Widget<'a> {
                     }
                 }
             });
+
+            ui.add_space(12.0);
+
+            ui.horizontal(|ui| {
+                let r = ui.available_size();
+                let text_rect = ui.add(egui::Label::new("B-Rep")).rect;
+                if text_rect.width() < r.x / 2. {
+                    ui.add_space(r.x / 2. - text_rect.width());
+                }
+
+                if ui.add_enabled(self.drawing.groups.len() > 0, egui::Button::new("STEP 📥")).clicked() {
+                    match self.drawing.as_solid() {
+                        Ok(solid) => {
+                            use drawing::l::three_d::*;
+                            export_fn.take().map(|f| f("STEP", "step", solid_to_step(solid, self.drawing.props.flatten_tolerance)));
+                        },
+                        Err(err) => {
+                            self.toasts.add(egui_toast::Toast {
+                                text: format!("Export failed!\n\nErr: {:?}", err).into(),
+                                kind: egui_toast::ToastKind::Error,
+                                options: egui_toast::ToastOptions::default()
+                                    .duration_in_seconds(4.0)
+                                    .show_progress(true)
+                            });
+                        }
+                    }
+                }
+            });
         });
 
         if let Some(idx) = boundary_group_set {
