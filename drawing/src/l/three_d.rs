@@ -127,13 +127,13 @@ pub fn extrude_from_paths(
                     .iter()
                     .map(|e| e.vertex_iter())
                     .flatten()
-                    .fold(-99999.0, |acc: f64, v| acc.max(v.get_point().z));
+                    .fold(-99999.0, |acc: f64, v| acc.max(v.point().z));
                 let top_offset_z = base[top_idx]
                     .absolute_boundaries()
                     .iter()
                     .map(|e| e.vertex_iter())
                     .flatten()
-                    .fold(-99999.0, |acc: f64, v| acc.max(v.get_point().z));
+                    .fold(-99999.0, |acc: f64, v| acc.max(v.point().z));
 
                 match op {
                     CADOp::Hole => {
@@ -261,28 +261,26 @@ pub fn extrude_from_paths(
 }
 
 pub fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
-    use truck_meshalgo::tessellation::MeshableShape;
-    use truck_meshalgo::tessellation::MeshedShape;
+    use truck_meshalgo::tessellation::*;
     let mut mesh = s.triangulation(tolerance).to_polygon();
 
     use truck_meshalgo::filters::OptimizingFilter;
-    mesh.put_together_same_attrs()
+    mesh.put_together_same_attrs(tolerance)
         .remove_degenerate_faces()
         .remove_unused_attrs();
 
     let mut out = Vec::with_capacity(1024);
-    truck_polymesh::stl::write(&mesh, &mut out, truck_polymesh::stl::STLType::Binary).unwrap();
+    truck_polymesh::stl::write(&mesh, &mut out, truck_polymesh::stl::StlType::Binary).unwrap();
 
     out
 }
 
 pub fn solid_to_obj(s: Solid, tolerance: f64) -> Vec<u8> {
-    use truck_meshalgo::tessellation::MeshableShape;
-    use truck_meshalgo::tessellation::MeshedShape;
+    use truck_meshalgo::tessellation::*;
     let mut mesh = s.triangulation(tolerance).to_polygon();
 
     use truck_meshalgo::filters::OptimizingFilter;
-    mesh.put_together_same_attrs()
+    mesh.put_together_same_attrs(tolerance)
         .remove_degenerate_faces()
         .remove_unused_attrs();
 
